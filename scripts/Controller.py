@@ -7,7 +7,8 @@ import time
 from QP_WBC import wbc_controller
 import MPC_Wrapper
 import pybullet as pyb
-from Planner import PyPlanner
+#from Planner import PyPlanner
+from solo3D.Planner import PyPlanner # Planner class from solo3D
 import pinocchio as pin
 
 
