@@ -130,7 +130,7 @@ def control_loop(name_interface, name_interface_clone=None):
     kf_enabled = False
 
     # Enable or disable PyBullet GUI
-    enable_pyb_GUI = False
+    enable_pyb_GUI = True
     if not SIMULATION:
         enable_pyb_GUI = False
 
