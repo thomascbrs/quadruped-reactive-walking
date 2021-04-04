@@ -10,6 +10,7 @@ import tsid
 import utils_mpc
 import FootTrajectoryGenerator as ftg
 import solo3D.TrajectoryGenerator as ft_bezier
+from solo3D.OptimFootstep import OptimFsteps as optim_fsteps
 import libquadruped_reactive_walking as la
 np.set_printoptions(precision=3, linewidth=300)
 
@@ -121,6 +122,9 @@ class PyPlanner:
 
         self.log_debug1 = np.zeros((10001, 3))
         self.log_debug2 = np.zeros((10001, 3))
+
+        # QP for fstep to avoid edges : 
+        self.optim_fsteps = optim_fsteps(self.T_gait , self.h_ref , self.dt , self.g , self.k_feedback )
 
     def create_static(self):
         """Create the matrices used to handle the gait and initialize them to keep the 4 feet in contact
@@ -640,24 +644,25 @@ class PyPlanner:
 
         # # Update desired location of footsteps on the ground
         # self.update_target_footsteps()
-        print("---------------------------------")
-        print("indice k : " , k)
-
 
         self.Cplanner.run_planner(k, q, v, b_vref, np.double(h_estim), np.double(z_average), joystick_code)
         
 
         self.xref = self.Cplanner.get_xref()
-        self.fsteps = self.Cplanner.get_fsteps()
+        #self.fsteps = self.Cplanner.get_fsteps()
 
         # QP optimization 
         # TODO modify fsteps to avoid edges
+        self.fsteps = self.optim_fsteps.run_QP(q, v, vref , self.Cplanner.get_fsteps() , self.gait , self.RPY)
 
         # Update trajectory generator (3D pos, vel, acc)
         # Call the update_trajectory_generator2 specific to Bezier curves
         self.update_trajectory_generator2(k, h_estim, q)        
 
         self.gait = self.Cplanner.get_gait()
+
+        # Update desired location of footsteps on the ground
+        self.update_target_footsteps()
 
 
         #self.goals = self.Cplanner.get_goals()
@@ -742,6 +747,7 @@ class PyPlanner:
         print(self.t_swing)"""
 
         return 0
+
 
     def getRefStates(self, q, v, vref, z_average):
         """Compute the reference trajectory of the CoM for each time step of the
