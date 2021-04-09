@@ -6,14 +6,14 @@ import numpy as np
 import argparse
 from LoggerSensors import LoggerSensors
 from LoggerControl import LoggerControl
-
+from solo3D.tools.Surface import Surface
 
 SIMULATION = True
 LOGGING = False
 PLOTTING = False
 
 if SIMULATION:
-    from PyBulletSimulator import PyBulletSimulator
+    from solo3D.PyBulletSimulator import PyBulletSimulator
 else:
     # from pynput import keyboard
     from solopython.solo12 import Solo12
@@ -99,15 +99,15 @@ def control_loop(name_interface, name_interface_clone=None):
     # PARAMETERS OF THE CONTROLLER #
     ################################
 
-    envID = 0  # Identifier of the environment to choose in which one the simulation will happen
+    envID = 2  # Identifier of the environment to choose in which one the simulation will happen
     velID = 2  # Identifier of the reference velocity profile to choose which one will be sent to the robot
 
     dt_wbc = DT  # Time step of the whole body control
     dt_mpc = 0.02  # Time step of the model predictive control
     k_mpc = int(dt_mpc / dt_wbc)
     t = 0.0  # Time
-    T_gait = 0.32  # Duration of one gait period
-    T_mpc = 0.32   # Duration of the prediction horizon
+    T_gait = 0.48  # Duration of one gait period
+    T_mpc = 0.48   # Duration of the prediction horizon
     N_SIMULATION = 1000  # number of simulated wbc time steps
 
     # Which MPC solver you want to use
@@ -292,6 +292,10 @@ def control_loop(name_interface, name_interface_clone=None):
 
     # Plot estimated computation time for each step for the control architecture
     from matplotlib import pyplot as plt
+
+    controller.planner.logger.plot_feet()
+
+
     plt.figure()
     plt.plot(controller.t_list_filter[1:], 'r+')
     plt.plot(controller.t_list_planner[1:], 'g+')
