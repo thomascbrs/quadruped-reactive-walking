@@ -4,6 +4,68 @@ import matplotlib.pyplot as plt
 import mpl_toolkits.mplot3d as a3
 import math
 
+
+
+def plane_intersect(P1, P2):
+    """ Get the intersection between 2 plan, return Point and direction
+                                            
+:param P1,P2: Plan equalities 
+              np.array([a,b,c,d])
+              ax + by + cz + d = 0
+            
+            
+Returns : 1 point and 1 direction vect of the line of intersection, np.arrays, shape (3,)
+                
+"""
+    
+    P1_normal, P2_normal = P1[:3] ,P2[:3]
+
+    aXb_vec = np.cross(P1_normal, P2_normal)
+
+    A = np.array([P1_normal, P2_normal, aXb_vec])
+    d = np.array([-P1[3], -P2[3], 0.]).reshape(3,1)
+
+    # could add np.linalg.det(A) == 0 test to prevent linalg.solve throwing error
+
+    p_inter = np.linalg.solve(A, d).T
+
+    return p_inter[0], (p_inter + aXb_vec)[0]
+
+def LinePlaneCollision(P, A, B, epsilon=1e-6):
+    """ Get the intersection point between 1 plane and 1 line 
+        
+:param P: Plane equality
+              np.array([a,b,c,d])
+              ax + by + cz + d = 0
+param A,B : 2 points defining the line np.arrays, shape(3,)
+            
+            
+Returns : 1 point,  np.array, shape (3,)
+"""
+    plane_normal = P[:3]
+    if P[0] == 0 :
+        if P[1] == 0 :
+            planePoint = np.array([0,0,-P[-1]/P[2]    ])  # a,b = 0 --> z = -d/c
+        else :
+            planePoint = np.array([0,  -P[-1]/P[1]    ,0   ])  # a,c = 0 --> y = -d/b
+    else : 
+        planePoint = np.array([-P[-1]/P[0],  0.    ,0   ])  # b,c = 0 --> x = -d/a
+    
+   
+        
+    rayDirection = A - B
+    ndotu = plane_normal.dot(rayDirection)
+    if abs(ndotu) < epsilon:
+        raise RuntimeError("no intersection or line is within plane")
+
+    w = A - planePoint
+    si = -plane_normal.dot(w) / ndotu
+    Psi = w + si * rayDirection + planePoint
+    return Psi
+
+
+
+
 class Surface():
     def __init__(self,vertices = np.zeros((3,3)), vertices_inner = None,ineq = None , ineq_vect = None, normal = None, order_bool = False, margin = 0.):
         # Inital surface equations
