@@ -15,6 +15,9 @@ from solo3D.FootTrajectoryGenerator import FootTrajectoryGenerator
 from solo3D.GaitPlanner import GaitPlanner
 from solo3D.LoggerPlanner import LoggerPlanner
 
+from solo3D.FootTrajectoryGeneratorBezier import FootTrajectoryGeneratorBezier
+from solo3D.tools.HeightMap import HeightMap
+
 import libquadruped_reactive_walking as la
 np.set_printoptions(precision=3, linewidth=300)
 
@@ -77,6 +80,11 @@ class PyPlanner:
         self.goals = fsteps_init.copy()  # Store 3D target position for feet
         self.vgoals = np.zeros((3, 4))  # Store 3D target velocity for feet
         self.agoals = np.zeros((3, 4))  # Store 3D target acceleration for feet
+
+        # Load Heightmap 
+        path_ = "solo3D/heightmap/"
+        surface_margin = 0.05
+        self.heightMap = HeightMap(path_ , surface_margin)
        
         # C++ class
         self.Cplanner = la.Planner(dt, dt_tsid, T_gait, T_mpc, k_mpc, on_solo8, h_ref, fsteps_init)
@@ -88,11 +96,13 @@ class PyPlanner:
         self.footStepPlanner = FootStepPlanner(dt,T_gait , h_ref , self.k_feedback , self.g , self.L , on_solo8 , k_mpc)
 
         #FootTrajectoryGenerator
-        self.footTrajectoryGenerator = FootTrajectoryGenerator(T_gait , dt_tsid ,k_mpc ,  fsteps_init)
+        #self.footTrajectoryGenerator = FootTrajectoryGenerator(T_gait , dt_tsid ,k_mpc ,  fsteps_init)
+        self.footTrajectoryGenerator = FootTrajectoryGeneratorBezier(T_gait , dt_tsid ,k_mpc ,  fsteps_init , self.heightMap)
 
         # Gait planner 
         self.gaitPlanner = GaitPlanner(T_gait , self.dt , T_mpc)
         self.gait_test = self.gait
+
 
 
         # Log the value from c++
@@ -183,14 +193,18 @@ class PyPlanner:
         #     print("----------------GAIT PB----------------")
         # if diff_pos != 0 :
         #     print("----------------POS PB----------------")
+        #     print(self.goals_cpp)
+        #     print(self.goals)
         # if diff_vel != 0 :
         #     print("----------------POS VEL----------------")
+        #     print(self.vgoals_cpp)
+        #     print(self.vgoals)
         # if diff_acc != 0 :
         #     print("----------------ACC VEL----------------")
         # if diff_fsteps != 0 :
         #     print("----------------FSTEPS VEL----------------")
-            # if diff_xref != 0 :
-            #     print("----------------XREF VEL----------------")
+        #     if diff_xref != 0 :
+        #         print("----------------XREF VEL----------------")
 
 
         ##########
