@@ -107,13 +107,15 @@ class Controller:
 
         h_ref = self.h_init
         self.q = np.zeros((19, 1))
-        self.q[0:7, 0] = np.array([0.0, 0.0, h_ref, 0.0, 0.0, 0.0, 1.0])
+        robotStartPos = [0., 0., 0.0]
+    
+        self.q[0:7, 0] = np.array([robotStartPos[0], robotStartPos[1], h_ref, 0.0, 0.0, 0.0, 1.0])
         self.q[7:, 0] = q_init
         self.v = np.zeros((18, 1))
         self.b_v = np.zeros((18, 1))
         self.o_v_filt = np.zeros((18, 1))
         self.planner = PyPlanner(dt_mpc, dt_wbc, T_gait, T_mpc,
-                                 k_mpc, on_solo8, h_ref, self.fsteps_init)
+                                 k_mpc, on_solo8, h_ref, self.fsteps_init , N_SIMULATION )
 
         # Wrapper that makes the link with the solver that you want to use for the MPC
         # First argument to True to have PA's MPC, to False to have Thomas's MPC
@@ -170,6 +172,7 @@ class Controller:
         Args:
             device (object): Interface with the masterboard or the simulation
         """
+        print(self.k)
 
         t_start = time.time()
 
@@ -208,7 +211,7 @@ class Controller:
 
         # Run planner
         self.planner.run_planner(self.k, self.k_mpc, self.q[0:7, 0:1],
-                                 self.v[0:6, 0:1].copy(), self.joystick.v_ref, self.q_estim[2, 0], 0.0, self.joystick)
+                                 self.v[0:6, 0:1].copy(), self.joystick.v_ref, self.q_estim[2, 0], 0.0, self.joystick , device )
         t_planner = time.time()
 
         # Process MPC once every k_mpc iterations of TSID
@@ -290,7 +293,7 @@ class Controller:
         if self.k > 10 and self.enable_pyb_GUI:
             # pyb.resetDebugVisualizerCamera(cameraDistance=0.8, cameraYaw=45, cameraPitch=-30,
             #                                cameraTargetPosition=[1.0, 0.3, 0.25])
-            pyb.resetDebugVisualizerCamera(cameraDistance=0.6, cameraYaw=45, cameraPitch=-39.9,
+            pyb.resetDebugVisualizerCamera(cameraDistance=1.5, cameraYaw=215, cameraPitch=-25.9,
                                            cameraTargetPosition=[device.dummyHeight[0], device.dummyHeight[1], 0.0])
 
     def security_check(self):
