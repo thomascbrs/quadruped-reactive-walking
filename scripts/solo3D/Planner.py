@@ -16,6 +16,7 @@ from solo3D.GaitPlanner import GaitPlanner
 from solo3D.LoggerPlanner import LoggerPlanner
 
 from solo3D.FootTrajectoryGeneratorBezier import FootTrajectoryGeneratorBezier
+from solo3D.FootStepPlannerQP import FootStepPlannerQP
 from solo3D.tools.HeightMap import HeightMap
 
 import libquadruped_reactive_walking as la
@@ -83,7 +84,7 @@ class PyPlanner:
 
         # Load Heightmap 
         path_ = "solo3D/heightmap/"
-        surface_margin = 0.05
+        surface_margin = 0.03
         self.heightMap = HeightMap(path_ , surface_margin)
        
         # C++ class
@@ -93,10 +94,11 @@ class PyPlanner:
         self.logger = LoggerPlanner(self.dt , N_SIMULATION)
 
         # FootStepPlanner
-        self.footStepPlanner = FootStepPlanner(dt,T_gait , h_ref , self.k_feedback , self.g , self.L , on_solo8 , k_mpc)
+        # self.footStepPlanner = FootStepPlanner(dt,T_gait , h_ref , self.k_feedback , self.g , self.L , on_solo8 , k_mpc)
+        self.footStepPlanner = FootStepPlannerQP(dt,T_gait , h_ref , self.k_feedback , self.g , self.L , on_solo8 , k_mpc , self.heightMap)
 
         #FootTrajectoryGenerator
-        #self.footTrajectoryGenerator = FootTrajectoryGenerator(T_gait , dt_tsid ,k_mpc ,  fsteps_init)
+        # self.footTrajectoryGenerator = FootTrajectoryGenerator(T_gait , dt_tsid ,k_mpc ,  fsteps_init)
         self.footTrajectoryGenerator = FootTrajectoryGeneratorBezier(T_gait , dt_tsid ,k_mpc ,  fsteps_init , self.heightMap)
 
         # Gait planner 
@@ -154,10 +156,13 @@ class PyPlanner:
         # Move one step further in the gait 
             self.gait = self.gaitPlanner.roll(k , self.fsteps)
 
-        # Compute ref state
-        self.xref = self.footStepPlanner.getRefStates(q, v, vref, z_average)
+        
         # Compute fsteps
         self.fsteps = self.footStepPlanner.compute_footsteps(k,q, v, vref, joystick.reduced,self.gaitPlanner)
+
+        # Compute ref state
+        self.xref = self.footStepPlanner.getRefStates(q, v, vref, z_average)
+
         # Compute foot trajectory
         self.goals , self.vgoals  , self.agoals  = self.footTrajectoryGenerator.update_foot_trajectory( k , self.fsteps, self.gaitPlanner)
 
@@ -165,12 +170,12 @@ class PyPlanner:
         # C++ Planner
         # self.Cplanner.run_planner(k, q, v, b_vref, np.double(h_estim), np.double(z_average), joystick_code)        
 
-        self.xref_cpp = self.Cplanner.get_xref()
-        self.fsteps_cpp = self.Cplanner.get_fsteps()
-        self.gait_cpp = self.Cplanner.get_gait()
-        self.goals_cpp = self.Cplanner.get_goals()
-        self.vgoals_cpp = self.Cplanner.get_vgoals()
-        self.agoals_cpp = self.Cplanner.get_agoals()
+        # self.xref_cpp = self.Cplanner.get_xref()
+        # self.fsteps_cpp = self.Cplanner.get_fsteps()
+        # self.gait_cpp = self.Cplanner.get_gait()
+        # self.goals_cpp = self.Cplanner.get_goals()
+        # self.vgoals_cpp = self.Cplanner.get_vgoals()
+        # self.agoals_cpp = self.Cplanner.get_agoals()
 
         # self.xref = self.Cplanner.get_xref()
         # self.fsteps = self.Cplanner.get_fsteps()
