@@ -21,7 +21,8 @@ class FootTrajectoryGeneratorBezier:
                                    [0.0, 0.0, 0.0, 0.0]])
 
         # Foot trajectory generator
-        self.max_height_feet = 0.05
+        self.max_height_feet = 0.03  # Rgeular height on the ground
+        # self.max_height_switch_surface = 0.03  # height added to the surface height
         self.t_lock_before_touchdown = 0.07
 
         # Gait matrix
@@ -158,19 +159,20 @@ class FootTrajectoryGeneratorBezier:
 
         # coefficients for z (deterministic)
         # Version 2D (z1 = 0)
-        self.Az[6,i_foot] = -h/((t1/2)**3*(t1 - t1/2)**3)
-        self.Az[5,i_foot]  = (3*t1*h)/((t1/2)**3*(t1 - t1/2)**3)
-        self.Az[4,i_foot]  = -(3*t1**2*h)/((t1/2)**3*(t1 - t1/2)**3)
-        self.Az[3,i_foot]  = (t1**3*h)/((t1/2)**3*(t1 - t1/2)**3)
-        self.Az[:3,i_foot] = 0
+        # self.Az[6,i_foot] = -h/((t1/2)**3*(t1 - t1/2)**3)
+        # self.Az[5,i_foot]  = (3*t1*h)/((t1/2)**3*(t1 - t1/2)**3)
+        # self.Az[4,i_foot]  = -(3*t1**2*h)/((t1/2)**3*(t1 - t1/2)**3)
+        # self.Az[3,i_foot]  = (t1**3*h)/((t1/2)**3*(t1 - t1/2)**3)
+        # self.Az[:3,i_foot] = 0
 
         # Version 3D (z1 != 0)
-        # self.Az[6,i_foot] =  (32.*z0 + 32.*z1 - 64.*h)/(t1**6)
-        # self.Az[5,i_foot] = - (102.*z0 + 90.*z1 - 192.*h)/(t1**5)
-        # self.Az[4,i_foot] = (111.*z0 + 81.*z1 - 192.*h)/(t1**4)
-        # self.Az[3,i_foot] = - (42.*z0 + 22.*z1 - 64.*h)/(t1**3)
-        # self.Az[1:3,i_foot] = 0
-        # self.Az[0,i_foot] = z0
+        self.Az[6,i_foot] =  (32.*z0 + 32.*z1 - 64.*h)/(t1**6)
+        self.Az[5,i_foot] = - (102.*z0 + 90.*z1 - 192.*h)/(t1**5)
+        self.Az[4,i_foot] = (111.*z0 + 81.*z1 - 192.*h)/(t1**4)
+        self.Az[3,i_foot] = - (42.*z0 + 22.*z1 - 64.*h)/(t1**3)
+        self.Az[2,i_foot] = 0
+        self.Az[1,i_foot] = 0
+        self.Az[0,i_foot] = z0
 
         return 0
 
@@ -227,10 +229,12 @@ class FootTrajectoryGeneratorBezier:
         if t0 < t1 - self.t_lock_before_touchdown :  
 
             # compute polynoms coefficients for x and y
-            self.updatePolyCoeff_Z(i_foot , self.goals[:, i_foot] , self.vgoals[:, i_foot] , self.agoals[:, i_foot] , self.footsteps_target[:,i_foot] , t0,t1,h )
+            #self.updatePolyCoeff_Z(i_foot , self.goals[:, i_foot] , self.vgoals[:, i_foot] , self.agoals[:, i_foot] , self.footsteps_target[:,i_foot] , t0,t1,h )
 
             # compute polynoms coefficients for x and y
             if self.t0s[i_foot] == 0 or k == 0 :  
+
+                self.updatePolyCoeff_Z(i_foot , self.goals[:, i_foot] , np.zeros(3)  , np.zeros(3) , self.footsteps_target[:,i_foot] , t0,t1,h  + self.footsteps_target[:,i_foot][2])
 
                 self.updatePolyCoeff_XY(i_foot , self.goals[:, i_foot] , np.zeros(3) , np.zeros(3) , self.footsteps_target[:,i_foot] , t0,t1,h ) 
                 
@@ -246,9 +250,6 @@ class FootTrajectoryGeneratorBezier:
                 self.pDs[i_foot].init_vel = delta_t*np.array([self.vgoals[:,i_foot]]).T
                 self.pDs[i_foot].init_acc = (delta_t**2) * np.array([self.agoals[:,i_foot]]).T
 
-            
-
-            # Update inital and final parameters for Bezier curves
             
             self.pDs[i_foot].end_pos   = np.array([self.footsteps_target[:,i_foot]]).T
             self.pDs[i_foot].end_vel = np.array([[0., 0., 0.]]).T
@@ -283,10 +284,16 @@ class FootTrajectoryGeneratorBezier:
 
         t_b = (ev - self.t0_bezier[i_foot])/(t1 -  self.t0_bezier[i_foot] )
         delta_t = t1 - self.t0_bezier[i_foot]
-    
-        self.goals[:, i_foot] = self.fitBeziers[i_foot](t_b)
-        self.vgoals[:, i_foot] =  self.fitBeziers[i_foot].derivate(t_b,1)/delta_t
-        self.agoals[:, i_foot] = self.fitBeziers[i_foot].derivate(t_b,2)/delta_t**2
+
+        # TODO need to fix bug : if surface is modified during the swing phase --> problem
+        # self.goals[:, i_foot] = self.fitBeziers[i_foot](t_b)
+        # self.vgoals[:, i_foot] =  self.fitBeziers[i_foot].derivate(t_b,1)/delta_t
+        # self.agoals[:, i_foot] = self.fitBeziers[i_foot].derivate(t_b,2)/delta_t**2
+
+        
+        self.goals[:, i_foot] = self.evaluatePoly( i_foot , 0 , ev )
+        self.vgoals[:, i_foot] =  self.evaluatePoly( i_foot , 1 , ev )
+        self.agoals[:, i_foot] = self.evaluatePoly( i_foot , 2 , ev )
 
 
 
