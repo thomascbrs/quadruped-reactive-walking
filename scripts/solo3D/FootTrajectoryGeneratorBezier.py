@@ -175,7 +175,7 @@ class FootTrajectoryGeneratorBezier:
         self.Az[0,i_foot] = z0
 
         return 0
-
+ 
     
     def evaluatePoly(self, i_foot , indice ,  t ) :
         '''Evaluate the polynomial curves at t or its derivatives 
