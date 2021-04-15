@@ -83,9 +83,10 @@ class HeightMap():
             height , id_surface = self.heightMap[idx,idy]
 
             if not(np.isnan(id_surface) ) :
-                return height , self.Surfaces[int(id_surface)]
+                return height , int(id_surface)
             else :
                 return 0. , None
         
         else :
             return 0. , None 
+

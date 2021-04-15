@@ -11,6 +11,9 @@ import pybullet as pyb
 from solo3D.Planner import PyPlanner # Planner class from solo3D
 import pinocchio as pin
 
+from solo3D.LoggerPlanner import LoggerPlanner
+
+
 
 class Result:
     """Object to store the result of the control loop
@@ -114,8 +117,7 @@ class Controller:
         self.v = np.zeros((18, 1))
         self.b_v = np.zeros((18, 1))
         self.o_v_filt = np.zeros((18, 1))
-        self.planner = PyPlanner(dt_mpc, dt_wbc, T_gait, T_mpc,
-                                 k_mpc, on_solo8, h_ref, self.fsteps_init , N_SIMULATION )
+        
 
         # Wrapper that makes the link with the solver that you want to use for the MPC
         # First argument to True to have PA's MPC, to False to have Thomas's MPC
@@ -156,6 +158,12 @@ class Controller:
 
         # Interface with the PD+ on the control board
         self.result = Result()
+
+        # Log values for planner 
+        self.loggerPlanner = LoggerPlanner(dt_mpc , N_SIMULATION , T_gait , k_mpc)
+
+        self.planner = PyPlanner(dt_mpc, dt_wbc, T_gait, T_mpc,
+                                 k_mpc, on_solo8, h_ref, self.fsteps_init , N_SIMULATION , self.loggerPlanner)
 
         # Run the control loop once with a dummy device for initialization
         dDevice = dummyDevice()
@@ -199,12 +207,16 @@ class Controller:
                 self.q_estim[:, 0] = pin.integrate(self.solo.model,
                                                    self.q, self.v_estim * self.myController.dt)
                 self.yaw_estim = (utils_mpc.quaternionToRPY(self.q_estim[3:7, 0]))[2, 0]
+                self.roll_estim = (utils_mpc.quaternionToRPY(self.q_estim[3:7, 0]))[0, 0]
+                self.pitch_estim = (utils_mpc.quaternionToRPY(self.q_estim[3:7, 0]))[1, 0]
             else:
                 self.planner.q_static[:, 0] = pin.integrate(self.solo.model,
                                                             self.planner.q_static, self.v_estim * self.myController.dt)
                 self.planner.RPY_static[:, 0:1] = utils_mpc.quaternionToRPY(self.planner.q_static[3:7, 0])
         else:
             self.yaw_estim = 0.0
+            self.roll_estim = 0.0
+            self.pitch_estim = 0.0
             self.q_estim = self.q.copy()
             oMb = pin.SE3(pin.Quaternion(self.q[3:7, 0:1]), self.q[0:3, 0:1])
             self.v_estim = self.v.copy()
@@ -237,9 +249,9 @@ class Controller:
         if not self.planner.is_static:
             self.x_f_wbc[0] = self.q_estim[0, 0]
             self.x_f_wbc[1] = self.q_estim[1, 0]
-            self.x_f_wbc[2] = self.planner.h_ref
-            self.x_f_wbc[3] = 0.0
-            self.x_f_wbc[4] = 0.0
+            self.x_f_wbc[2] = self.q_estim[2, 0]
+            self.x_f_wbc[3] = self.roll_estim
+            self.x_f_wbc[4] = self.pitch_estim
             self.x_f_wbc[5] = self.yaw_estim
         else:  # Sort of position control to avoid slow drift
             self.x_f_wbc[0:3] = self.planner.q_static[0:3, 0]
@@ -282,8 +294,13 @@ class Controller:
         # Logs
         self.log_misc(t_start, t_filter, t_planner, t_mpc, t_wbc)
 
+        # Log 
+        self.loggerPlanner.log_mpc(self.k , self.x_f_mpc)
+
         # Increment loop counter
         self.k += 1
+
+        
 
         return 0.0
 
@@ -299,10 +316,10 @@ class Controller:
     def security_check(self):
 
         if (self.error_flag == 0) and (not self.myController.error) and (not self.joystick.stop):
-            if np.any(np.abs(self.estimator.q_filt[7:, 0]) > self.q_security):
-                self.myController.error = True
-                self.error_flag = 1
-                self.error_value = self.estimator.q_filt[7:, 0] * 180 / 3.1415
+            # if np.any(np.abs(self.estimator.q_filt[7:, 0]) > self.q_security):
+            #     self.myController.error = True
+            #     self.error_flag = 1
+            #     self.error_value = self.estimator.q_filt[7:, 0] * 180 / 3.1415
             if np.any(np.abs(self.estimator.v_secu) > 50):
                 self.myController.error = True
                 self.error_flag = 2

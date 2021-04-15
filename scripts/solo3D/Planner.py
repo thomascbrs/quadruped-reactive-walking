@@ -8,12 +8,12 @@ import math
 import pinocchio as pin
 import tsid
 import utils_mpc
+import pybullet as pyb
 
 # Separate classes for planner 
 from solo3D.FootStepPlanner import FootStepPlanner
 from solo3D.FootTrajectoryGenerator import FootTrajectoryGenerator
 from solo3D.GaitPlanner import GaitPlanner
-from solo3D.LoggerPlanner import LoggerPlanner
 
 from solo3D.FootTrajectoryGeneratorBezier import FootTrajectoryGeneratorBezier
 from solo3D.FootStepPlannerQP import FootStepPlannerQP
@@ -28,7 +28,7 @@ class PyPlanner:
     the user and the current position/velocity of the base in TSID world
     """
 
-    def __init__(self, dt, dt_tsid, T_gait, T_mpc, k_mpc, on_solo8, h_ref, fsteps_init , N_SIMULATION ):
+    def __init__(self, dt, dt_tsid, T_gait, T_mpc, k_mpc, on_solo8, h_ref, fsteps_init , N_SIMULATION , logger):
 
         # Time step of the contact sequence
         self.dt = dt
@@ -91,11 +91,11 @@ class PyPlanner:
         self.Cplanner = la.Planner(dt, dt_tsid, T_gait, T_mpc, k_mpc, on_solo8, h_ref, fsteps_init)
 
         # Log values from planner 
-        self.logger = LoggerPlanner(self.dt , N_SIMULATION)
+        self.logger = logger
 
         # FootStepPlanner
         # self.footStepPlanner = FootStepPlanner(dt,T_gait , h_ref , self.k_feedback , self.g , self.L , on_solo8 , k_mpc)
-        self.footStepPlanner = FootStepPlannerQP(dt,T_gait , h_ref , self.k_feedback , self.g , self.L , on_solo8 , k_mpc , self.heightMap)
+        self.footStepPlanner = FootStepPlannerQP(dt,dt_tsid , T_gait , h_ref , self.k_feedback , self.g , self.L , on_solo8 , k_mpc , self.heightMap)
 
         #FootTrajectoryGenerator
         # self.footTrajectoryGenerator = FootTrajectoryGenerator(T_gait , dt_tsid ,k_mpc ,  fsteps_init)
@@ -167,6 +167,27 @@ class PyPlanner:
         self.goals , self.vgoals  , self.agoals  = self.footTrajectoryGenerator.update_foot_trajectory( k , self.fsteps, self.gaitPlanner)
 
 
+        # if k > 1 : 
+        #     for i_foot in range(4) :
+        #         if self.gait[1,i_foot + 1] == 1 :
+        #             ftps_Ids = device.pyb_sim.ftps_Ids
+        #             # Display the goal position of the feet as green sphere in PyBullet
+        #             pyb.resetBasePositionAndOrientation(ftps_Ids[i_foot],
+        #                                                 posObj=self.goals[:,i_foot],
+        #                                                 ornObj=np.array([0.0, 0.0, 0.0, 1.0]) )
+            
+            # for i_foot in range(4) :
+            #     if self.gait[2,i_foot + 1] == 1 :
+            #         ftps_Ids_deb = device.pyb_sim.ftps_Ids_deb
+            #         # Display the goal position of the feet as green sphere in PyBullet
+            #         goals = self.fsteps[2,3*i_foot +1 , 3*i_foot + 4]
+            #         pyb.resetBasePositionAndOrientation(ftps_Ids_deb[i_foot],
+            #                                             posObj=goals,
+            #                                             ornObj=np.array([0.0, 0.0, 0.0, 1.0]))
+        
+             
+
+        
         # C++ Planner
         # self.Cplanner.run_planner(k, q, v, b_vref, np.double(h_estim), np.double(z_average), joystick_code)        
 
@@ -216,6 +237,7 @@ class PyPlanner:
         # LOGGER 
         ##########
         self.logger.log_feet( k , device , self.goals , self.vgoals, self.agoals, self.fsteps)
+        self.logger.log_state(k , q, v, vref , b_vref , self.RPY ,  self.xref )  #ref , cur
 
         return 0
 

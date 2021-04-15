@@ -1,17 +1,18 @@
 import numpy as np 
 import utils_mpc
 import math
-from solo3D.tools.optimisation import genCost , quadprog_solve_qp
+from solo3D.tools.optimisation import genCost , quadprog_solve_qp , to_least_square
 
 class FootStepPlannerQP:
     ''' Python class to compute the target foot step and the ref state using QP optimisation 
     to avoid edges of surface.
     '''
 
-    def __init__(self , dt , T_gait , h_ref, k_feedback , g , L , on_solo8 , k_mpc , heightMap) :
+    def __init__(self , dt , dt_wbc , T_gait , h_ref, k_feedback , g , L , on_solo8 , k_mpc , heightMap) :
 
         # Time step of the contact sequence
         self.dt = dt
+        self.dt_wbc = dt_wbc 
 
         self.k_mpc = k_mpc
 
@@ -66,11 +67,19 @@ class FootStepPlannerQP:
         self.heightMap = heightMap   
 
         # Coefficients QP
-        self.weight_vref = 0.01
+        self.weight_vref = 0.05
         self.weight_alpha = 1.
 
         # Store optim v_ref
         self.v_ref_qp =  np.zeros((6,1))
+
+        # Store surface selected for the current swing phase
+        self.surface_selected = [None , None , None , None ]
+        self.feet = []
+        self.t0s = np.zeros((4, ))
+        self.t_remaining = 0.
+        self.t_stance = np.zeros((4, ))  # Total duration of current stance phase for each foot
+        self.t_swing = np.zeros((4, ))  # Total duration of current swing phase for each foot
 
 
 
@@ -143,9 +152,6 @@ class FootStepPlannerQP:
         self.xref[6:9, 0:1] = v[0:3, 0:1]
         self.xref[9:12, 0:1] = v[3:6, 0:1]
 
-        # Time steps [0, dt, 2*dt, ...]
-        # to = np.linspace(0, self.T_gait-self.dt, self.n_steps)
-
         # Threshold for gamepad command (since even if you do not touch the joystick it's not 0.0)
         step = 0.05
 
@@ -159,6 +165,71 @@ class FootStepPlannerQP:
 
         self.xref[0, 1:] += self.xref[0, 0]
         self.xref[1, 1:] += self.xref[1, 0]
+
+        ### Update according to heightmap
+        FIT_SIZE_X = 0.2
+        FIT_SIZE_Y = 0.1
+        Z_OFFSET = self.h_ref 
+
+        isInside , i_min, j_min = self.heightMap.find_nearest(q[0, 0:1] - 0.2*FIT_SIZE_X , q[1, 0:1]  - FIT_SIZE_Y )
+        isInside , i_max, j_max = self.heightMap.find_nearest(q[0, 0:1]  + FIT_SIZE_X , q[1, 0:1]  + FIT_SIZE_Y )
+
+        nx = 20
+        ny = 2
+        X = np.linspace(i_min, i_max , nx).astype(int) 
+        Y = np.linspace(j_min, j_max , ny).astype(int) 
+
+
+        n_points = nx * ny 
+        A = np.zeros((n_points, 3))
+        b = np.zeros(n_points)
+        i_pb = 0
+        for i in X:
+            for j in Y:
+                A[i_pb, :] = [self.heightMap.x[i], self.heightMap.y[j], 1.]
+                b[i_pb] = self.heightMap.heightMap[i, j][0]
+                i_pb += 1
+
+        A , b = to_least_square(A , b )
+        result = quadprog_solve_qp(A,b)
+
+
+        # Law for speed and position of roll / pitch
+        # Speed = min ( - K (P_des - P_cur) , rot_max )
+        rot_max = 0.3  # rad.s-1
+        r_des = - np.arctan2(result[1], 1.)
+        p_des = - np.arctan2(result[0], 1.)
+        k_sp = 100 
+        epsilon = 0.01
+
+        print("Desired pitch angle [rad , deg] : " , p_des , " ; " , 57*p_des)
+
+        if r_des != 0 and abs(r_des - self.RPY[0,0]) > epsilon :
+            self.xref[3,1:] = r_des
+            self.xref[9,1:] = np.sign(r_des - self.RPY[0,0] )*min( rot_max  , k_sp*abs(r_des - self.RPY[0,0])  )
+        else : 
+            self.xref[3,1:] = 0.
+            self.xref[9,1:] = 0.
+
+        if p_des != 0 and abs(p_des - self.RPY[1,0]) > epsilon : 
+            self.xref[4,1:] = p_des
+            self.xref[10,1:] = np.sign(p_des - self.RPY[1,0] )*min( rot_max  , k_sp*abs(p_des - self.RPY[1,0])  )
+        else : 
+            self.xref[4,1:] = 0.
+            self.xref[10,1:] = 0.
+
+
+        # Get z
+        isInside , i, j = self.heightMap.find_nearest(q[0, 0:1] , q[1, 0:1])
+
+        # if p_des != 0 :
+        #     Z_OFFSET = self.h_ref - abs(p_des*0.05)
+            
+        for k in range(self.n_steps) :
+            isInside , i, j = self.heightMap.find_nearest(self.xref[0,k+1] , self.xref[1,k+1])
+            self.xref[2 , 1:] = result[0]*self.heightMap.x[i] + result[1]*self.heightMap.y[j] + result[2] + Z_OFFSET           
+        
+
 
         if self.is_static:
             self.xref[0:3, 1:] = self.q_static[0:3, 0:1]
@@ -181,13 +252,23 @@ class FootStepPlannerQP:
             v_ref (6x1 array): desired velocity vector of the flying base in world frame (linear and angular stacked)
         """
         # Get the reference velocity in world frame (given in base frame)
-        self.RPY = utils_mpc.quaternionToRPY(q[3:7, 0])
+        self.RPY = utils_mpc.quaternionToRPY(q_cur[3:7, 0])
 
         # Update intern gait matrix
         self.gait = gaitPlanner.getCurrentGait().astype(int) 
 
         self.fsteps[:, 0] = self.gait[:, 0]
         self.fsteps[:, 1:] = 0.
+
+        self.update_remaining_time( k , gaitPlanner ) 
+        print("\n")
+        print(" k : " , k)
+        print(" k% mpc : " , k%self.k_mpc)
+        print("gait  : " , self.gait[:2, :])
+        print("feet : " , self.feet)
+        print("t0s : " , self.t0s)
+        print("selected surfaces : " , self.surface_selected )
+        print("\n")
 
         i = 1
 
@@ -257,27 +338,37 @@ class FootStepPlannerQP:
 
                     # px = fsteps[i , 1 + 3*j ]
                     # py = fsteps[i , 1 + 3*j + 1]
-                    
-                    # If needed to compute the intial footsteps, that are given by fsteps
-                    px1 , py1 = next_ft[3*j]  , next_ft[3*j+1]   
+                    if i == 1 : # first line --> swing phase
+                        if j in self.feet and (k % self.k_mpc) == 0 and self.t0s[j] == 0. :
+                            # Only modyfying the surface for the flying feet at the beginning of the phase
 
-                    height , id_surface = self.heightMap.getHeight(px1 , py1)            
-                    
-                    if id_surface != None :
-                        # nb inequalities that define the surface
-                        # Ineq matrix : --> -1 because normal vector at the end 
-                        # [[ ineq1            [ x
-                        #   ...                 y       =   ineq vector          
-                        #   ineq 4              z ] 
-                        #   normal eq ]]                        
+                            px1 , py1 = next_ft[3*j]  , next_ft[3*j+1]   
+
+                            height , id_surface = self.heightMap.getHeight(px1 , py1)  
+
+                            self.surface_selected[j] = id_surface
+
+                        id_surface = self.surface_selected[j] 
+                        if id_surface != None :             
+                            
+                            nb_ineq = self.heightMap.Surfaces[id_surface].ineq_vect.shape[0] - 1       
+                            L.append([i,j,id_surface , int(nb_ineq) ])                
+                            # the feet is on a surface 
+                        else :
+                            L.append([i,j, -99, 0 ])
                         
-                        nb_ineq = self.heightMap.Surfaces[id_surface].ineq_vect.shape[0] - 1            
+                    else :         
+                        px1 , py1 = next_ft[3*j]  , next_ft[3*j+1]   
+
+                        height , id_surface = self.heightMap.getHeight(px1 , py1)  
                     
-                        L.append([i,j,id_surface , int(nb_ineq) ])
-                    
-                        # the feet is on a surface 
-                    else :
-                        L.append([i,j, -99, 0 ])
+                        if id_surface != None :                 
+                            
+                            nb_ineq = self.heightMap.Surfaces[id_surface].ineq_vect.shape[0] - 1 
+                            L.append([i,j,id_surface , int(nb_ineq) ])                        
+                            # the feet is on a surface 
+                        else :
+                            L.append([i,j, -99, 0 ])
 
             i += 1
 
@@ -328,7 +419,11 @@ class FootStepPlannerQP:
         next_footstep[0:2, :] += 0.5 * math.sqrt(self.h_ref/self.g) * cross[0:2, 0:1]
 
         # Add shoulders
-        next_footstep[0:2, :] += self.shoulders[0:2, :]
+        # add yaw rotation for test : 
+        c, s = math.cos(self.RPY[1, 0]), math.sin(self.RPY[1, 0])
+        R = np.array([[c, -s, 0], [s, c, 0], [0.0, 0.0, 0.0]])
+
+        next_footstep[0:2, :] += (R @ self.shoulders[0:3, :])[0:2,:] 
 
         return next_footstep
     
@@ -430,5 +525,35 @@ class FootStepPlannerQP:
             next_ft += np.array([res[2+3*indice_L] , res[2+3*indice_L+1] , res[2+3*indice_L+2] ])
 
             self.fsteps[i ,1+ 3*j :1 + 3*j+3 ] = next_ft
+
+        return 0
+
+    def update_remaining_time(self , k , gaitPlanner ) : 
+
+        if (k % self.k_mpc) == 0 :
+            self.feet = []
+            self.t0s = np.zeros((4, ))
+
+            # Indexes of feet in swing phase
+            self.feet = np.where(self.gait[0, 1:] == 0)[0]
+            if len(self.feet) == 0:  # If no foot in swing phase
+                return 0
+            
+            # For each foot in swing phase get remaining duration of the swing phase
+            for i in self.feet :              
+                self.t_swing[i] = gaitPlanner.getPhaseDuration(0,i,0.)   # 0. for swing phase   
+                self.remainingTime = gaitPlanner.getRemainingTime()
+                value =  self.t_swing[i] - (self.remainingTime * self.k_mpc - ((k+1)%self.k_mpc) )*self.dt_wbc - self.dt_wbc
+                self.t0s[i] =   np.max( [value , 0.] ) 
+                
+
+        else :
+            # If no foot in swing phase
+            if len(self.feet) == 0:  # If no foot in swing phase
+                return 0
+
+            # Increment of one time step for feet in swing phase
+            for i in self.feet :
+                self.t0s[i] = np.max(  [self.t0s[i] + self.dt_wbc, 0.0])
 
         return 0
