@@ -83,7 +83,7 @@ class PyPlanner:
         self.agoals = np.zeros((3, 4))  # Store 3D target acceleration for feet
 
         # Load Heightmap 
-        path_ = "solo3D/heightmap/"
+        path_ = "solo3D/objects/object_3/heightmap/"
         surface_margin = 0.03
         self.heightMap = HeightMap(path_ , surface_margin)
        
@@ -164,7 +164,7 @@ class PyPlanner:
         self.xref = self.footStepPlanner.getRefStates(q, v, vref, z_average)
 
         # Compute foot trajectory
-        self.goals , self.vgoals  , self.agoals  = self.footTrajectoryGenerator.update_foot_trajectory( k , self.fsteps, self.gaitPlanner)
+        self.goals , self.vgoals  , self.agoals  = self.footTrajectoryGenerator.update_foot_trajectory( k , self.fsteps, self.gaitPlanner , self.footStepPlanner)
 
 
         # if k > 1 : 
@@ -175,15 +175,19 @@ class PyPlanner:
         #             pyb.resetBasePositionAndOrientation(ftps_Ids[i_foot],
         #                                                 posObj=self.goals[:,i_foot],
         #                                                 ornObj=np.array([0.0, 0.0, 0.0, 1.0]) )
-            
-            # for i_foot in range(4) :
-            #     if self.gait[2,i_foot + 1] == 1 :
-            #         ftps_Ids_deb = device.pyb_sim.ftps_Ids_deb
-            #         # Display the goal position of the feet as green sphere in PyBullet
-            #         goals = self.fsteps[2,3*i_foot +1 , 3*i_foot + 4]
-            #         pyb.resetBasePositionAndOrientation(ftps_Ids_deb[i_foot],
-            #                                             posObj=goals,
-            #                                             ornObj=np.array([0.0, 0.0, 0.0, 1.0]))
+        if k > 1 :
+            for i_foot in range(4) :
+                if self.gait[2,i_foot + 1] == 1 :
+                    ftps_Ids = device.pyb_sim.ftps_Ids
+                    # Display the goal position of the feet as green sphere in PyBullet
+                    goals = self.fsteps[2,3*i_foot +1 : 3*i_foot + 4]
+                    # print("Goals sphere : " , goals)
+                    pyb.resetBasePositionAndOrientation(ftps_Ids[i_foot,0],
+                                                        posObj=goals , 
+                                                        ornObj=np.array([0.0, 0.0, 0.0, 1.0]))
+
+
+        
         
              
 

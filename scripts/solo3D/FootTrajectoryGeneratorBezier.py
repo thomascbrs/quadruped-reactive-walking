@@ -1,5 +1,6 @@
 import numpy as np
 from solo3D.tools.optimisation import genCost , quadprog_solve_qp
+from solo3D.tools.collision_tool import get_intersect_segment , doIntersect_segment
 import eigenpy
 eigenpy.switchToNumpyArray()
 #importing the bezier curve class
@@ -21,7 +22,7 @@ class FootTrajectoryGeneratorBezier:
                                    [0.0, 0.0, 0.0, 0.0]])
 
         # Foot trajectory generator
-        self.max_height_feet = 0.03  # Rgeular height on the ground
+        self.max_height_feet = 0.035  # Rgeular height on the ground
         # self.max_height_switch_surface = 0.03  # height added to the surface height
         self.t_lock_before_touchdown = 0.07
 
@@ -51,9 +52,9 @@ class FootTrajectoryGeneratorBezier:
         # Bezier parameters
 
         #dimension of our problem (here 3 as our curve is 3D)
-        self.N_int = 10 # Number of points in the least square problem
+        self.N_int = 12 # Number of points in the least square problem
         self.dim = 3
-        self.degree = 6  # Degree of the Bezier curve to match the polys
+        self.degree = 8  # Degree of the Bezier curve to match the polys
         self.pDs = []
         self.problems = []
         self.variableBeziers = []
@@ -64,6 +65,11 @@ class FootTrajectoryGeneratorBezier:
         self.res = []
 
         self.t0_bezier = np.zeros((4,))
+
+        self.new_surface = np.array([-99,-99,-99,-99])
+        self.past_surface = np.array([-99,-99,-99,-99])
+        self.ineq = [0]*4 
+        self.ineq_vect = [0]*4
        
 
         # A bezier curve for each foot
@@ -232,11 +238,46 @@ class FootTrajectoryGeneratorBezier:
             #self.updatePolyCoeff_Z(i_foot , self.goals[:, i_foot] , self.vgoals[:, i_foot] , self.agoals[:, i_foot] , self.footsteps_target[:,i_foot] , t0,t1,h )
 
             # compute polynoms coefficients for x and y
-            if self.t0s[i_foot] == 0 or k == 0 :  
+            if self.t0s[i_foot] < 10e-4  or k == 0 :  
 
-                self.updatePolyCoeff_Z(i_foot , self.goals[:, i_foot] , np.zeros(3)  , np.zeros(3) , self.footsteps_target[:,i_foot] , t0,t1,h  + self.footsteps_target[:,i_foot][2])
+                
+                if self.new_surface[i_foot] != -99 : 
+                    self.updatePolyCoeff_Z(i_foot , self.goals[:, i_foot] , np.zeros(3)  , np.zeros(3) , self.footsteps_target[:,i_foot] , t0,t1,0.03  + self.footsteps_target[:,i_foot][2])
+                else : 
+                    self.updatePolyCoeff_Z(i_foot , self.goals[:, i_foot] , np.zeros(3)  , np.zeros(3) , self.footsteps_target[:,i_foot] , t0,t1,h  + self.footsteps_target[:,i_foot][2])
 
                 self.updatePolyCoeff_XY(i_foot , self.goals[:, i_foot] , np.zeros(3) , np.zeros(3) , self.footsteps_target[:,i_foot] , t0,t1,h ) 
+
+                # New swing phase --> ineq surface 
+                # Inequalities : 
+                # Selected surface for arriving point : 
+                if self.past_surface[i_foot] != self.new_surface[i_foot] :
+                    id_surface = self.new_surface[i_foot]
+                    surface = self.heightMap.Surfaces[id_surface] 
+                    nb_vert = surface.vertices.shape[0]
+                    vert = surface.vertices
+
+                    P1 = self.goals[:2,i_foot]
+                    P2 = self.footsteps_target[:2,i_foot]
+
+                    for k in range(nb_vert) : 
+                        Q1 = np.array([vert[k,0] , vert[k,1]])
+                        if k < nb_vert - 1 :         
+                            Q2 = np.array([vert[k+1,0] , vert[k+1,1]])
+                        else : 
+                            Q2 = np.array([vert[0,0] , vert[0,1]])
+
+                        if doIntersect_segment(P1 , P2 , Q1 , Q2 ) :
+                            P_r = get_intersect_segment(P1, P2, Q1, Q2)                            
+
+
+                            # Should be sorted
+                            self.ineq[i_foot] = surface.ineq[k,:]
+                            self.ineq_vect[i_foot] = surface.ineq_vect[k] 
+
+                else :
+                    self.ineq[i_foot] = 0
+                    self.ineq_vect[i_foot] = 0 
                 
 
                 self.pDs[i_foot].init_pos = np.array([self.goals[0,i_foot],   self.goals[1,i_foot],   self.evaluatePoly(i_foot , 0 , t0)[2]  ]).T
@@ -266,13 +307,50 @@ class FootTrajectoryGeneratorBezier:
             # t polynomial curve : t0 --> t1
             ptsTime = [(self.evaluatePoly(i_foot , 0 , t0 + (t1-t0)*t_b ),t_b) for t_b in np.linspace(0,1,self.N_int)]
 
+           
+            xt , yt , zt = self.evaluatePoly(i_foot , 0 , t0 )         
+            if np.sum(abs(self.ineq[i_foot])) != 0 and zt < self.footsteps_target[2,i_foot]: # No surface switch or already overpass the critical point
+    
+                vb = self.variableBeziers[i_foot]
+                ineqMatrix = []
+                ineqVector = []
+                t_margin = 0.1 # 10% around the limit point !inferior to 1/nb point in linspace
+                z_margin = self.footsteps_target[2,i_foot]*0.1 # 10% around the limit height
+                # margin_x = 0.00
+                margin_x = 0.008
+                
+                t_stop = 0.
+
+
+                for ts in np.linspace(0,1,20) :
+                    xt , yt , zt = self.evaluatePoly(i_foot , 0 , t0 + (t1-t0)*ts ) 
+
+                    
+                    if ts < t_stop + t_margin :                        
+                        if zt < self.footsteps_target[2,i_foot] + z_margin  :
+                            t_stop = ts
+                            
+                        t_curve = ts 
+                        wayPoint = vb(ts)
+                        ineqMatrix.append(-self.ineq[i_foot] @ wayPoint.B())
+                        ineqVector.append( self.ineq[i_foot] @ wayPoint.c() - self.ineq_vect[i_foot] - margin_x )
+
+
+                ineqMatrix = np.array(ineqMatrix)
+                ineqVector = np.array(ineqVector)
+              
+            else : 
+                ineqMatrix = None 
+                ineqVector = None
+
             # RUN QP optimization
 
             A, b = genCost(self.variableBeziers[i_foot], ptsTime)
             #regularization matrix 
             reg = np.identity(A.shape[1]) * 0.00
             # self.res = quadprog_solve_qp(A+reg, b,  G=self.ineqMatrix, h = self.ineqVector )
-            self.res[i_foot] = quadprog_solve_qp(A+reg, b).reshape((-1,1))
+            #self.res[i_foot] = quadprog_solve_qp(A+reg, b , G=None, h = None  ).reshape((-1,1))
+            self.res[i_foot] = quadprog_solve_qp(A+reg, b , G=ineqMatrix, h = ineqVector  ).reshape((-1,1))
 
             self.fitBeziers[i_foot] = self.variableBeziers[i_foot].evaluate(self.res[i_foot] ) 
 
@@ -286,14 +364,14 @@ class FootTrajectoryGeneratorBezier:
         delta_t = t1 - self.t0_bezier[i_foot]
 
         # TODO need to fix bug : if surface is modified during the swing phase --> problem
-        # self.goals[:, i_foot] = self.fitBeziers[i_foot](t_b)
-        # self.vgoals[:, i_foot] =  self.fitBeziers[i_foot].derivate(t_b,1)/delta_t
-        # self.agoals[:, i_foot] = self.fitBeziers[i_foot].derivate(t_b,2)/delta_t**2
+        self.goals[:, i_foot] = self.fitBeziers[i_foot](t_b)
+        self.vgoals[:, i_foot] =  self.fitBeziers[i_foot].derivate(t_b,1)/delta_t
+        self.agoals[:, i_foot] = self.fitBeziers[i_foot].derivate(t_b,2)/delta_t**2
 
         
-        self.goals[:, i_foot] = self.evaluatePoly( i_foot , 0 , ev )
-        self.vgoals[:, i_foot] =  self.evaluatePoly( i_foot , 1 , ev )
-        self.agoals[:, i_foot] = self.evaluatePoly( i_foot , 2 , ev )
+        # self.goals[:, i_foot] = self.evaluatePoly( i_foot , 0 , ev )
+        # self.vgoals[:, i_foot] =  self.evaluatePoly( i_foot , 1 , ev )
+        # self.agoals[:, i_foot] = self.evaluatePoly( i_foot , 2 , ev )
 
 
 
@@ -305,7 +383,7 @@ class FootTrajectoryGeneratorBezier:
         return 0
 
 
-    def update_foot_trajectory(self, k , fsteps , gaitPlanner):
+    def update_foot_trajectory(self, k , fsteps , gaitPlanner , fstepsPlanner):
 
         self.gait = gaitPlanner.getCurrentGait() 
         
@@ -347,9 +425,28 @@ class FootTrajectoryGeneratorBezier:
             for i in self.feet :
                 self.t0s[i] = np.max(  [self.t0s[i] + self.dt_wbc, 0.0])
             
-        
+       
+
+        # Update new surface and past if t0 == 0 (new swing phase)
+        if (k % self.k_mpc) == 0  :
+            for i_foot in range(4) : 
+                if self.t0s[i_foot] < 10e-6 :
+                    self.past_surface[i_foot] = self.new_surface[i_foot]
+                    if fstepsPlanner.surface_selected[i_foot] != None :
+                        self.new_surface[i_foot] = fstepsPlanner.surface_selected[i_foot]
+                    else : 
+                        self.new_surface[i_foot] = -99  
+
+        # print("\n")
+        # print("t0 : " , self.t0s )
+        # print("past_surface : " , self.past_surface )  
+        # print("new_surface : " , self.new_surface )       
+        # print("ftsep target : " , self.footsteps_target)
+        # print("position init : " , self.goals)
+        # print("\n")
         
         for i in self.feet :
+            
             self.updateFootPosition(k,i)
 
 

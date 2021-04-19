@@ -177,7 +177,7 @@ class pybullet_simulator:
         
         if envID == 2 :
             #pyb.setAdditionalSearchPath("/home/corberes/Bureau/edin/my_quad_reactive/quadruped-reactive-walking/scripts/solo3D/objects/")
-            path_mesh = "solo3D/objects/meshes/"
+            path_mesh = "solo3D/objects/object_3/meshes/"
             for elt in os.listdir(path_mesh) :
                 name_object = path_mesh + elt
            
