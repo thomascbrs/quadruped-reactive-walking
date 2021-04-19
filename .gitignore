@@ -134,3 +134,8 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# Video log
+scripts/tmp/*
+scripts/solo3D/objects/object_2/*
+scripts/solo3D/objects/object_3/*
