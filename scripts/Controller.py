@@ -316,18 +316,19 @@ class Controller:
     def security_check(self):
 
         if (self.error_flag == 0) and (not self.myController.error) and (not self.joystick.stop):
+            pass
             # if np.any(np.abs(self.estimator.q_filt[7:, 0]) > self.q_security):
             #     self.myController.error = True
             #     self.error_flag = 1
             #     self.error_value = self.estimator.q_filt[7:, 0] * 180 / 3.1415
-            if np.any(np.abs(self.estimator.v_secu) > 50):
-                self.myController.error = True
-                self.error_flag = 2
-                self.error_value = self.estimator.v_secu
-            if np.any(np.abs(self.myController.tau_ff) > 8):
-                self.myController.error = True
-                self.error_flag = 3
-                self.error_value = self.myController.tau_ff
+            # if np.any(np.abs(self.estimator.v_secu) > 50):
+            #     self.myController.error = True
+            #     self.error_flag = 2
+            #     self.error_value = self.estimator.v_secu
+            # if np.any(np.abs(self.myController.tau_ff) > 8):
+            #     self.myController.error = True
+            #     self.error_flag = 3
+            #     self.error_value = self.myController.tau_ff
 
         # If something wrong happened in TSID controller we stick to a security controller
         if self.myController.error or self.joystick.stop:

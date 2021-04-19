@@ -11,7 +11,6 @@ from solo3D.tools.Surface import Surface
 SIMULATION = True
 LOGGING = False
 PLOTTING = False
-
 if SIMULATION:
     from solo3D.PyBulletSimulator import PyBulletSimulator
 else:
