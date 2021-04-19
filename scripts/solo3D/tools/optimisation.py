@@ -1,6 +1,7 @@
 import quadprog
 from numpy import array, hstack, vstack
 import numpy as np
+import time 
 
 def to_least_square(A, b):
     return np.dot(A.T, A), - np.dot(A.T, b)

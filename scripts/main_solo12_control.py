@@ -107,7 +107,7 @@ def control_loop(name_interface, name_interface_clone=None):
     t = 0.0  # Time
     T_gait = 0.48  # Duration of one gait period
     T_mpc = 0.48   # Duration of the prediction horizon
-    N_SIMULATION = 1000  # number of simulated wbc time steps
+    N_SIMULATION = 6000  # number of simulated wbc time steps
 
     # Which MPC solver you want to use
     # True to have PA's MPC, to False to have Thomas's MPC

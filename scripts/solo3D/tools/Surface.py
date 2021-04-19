@@ -3,7 +3,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import mpl_toolkits.mplot3d as a3
 import math
-
+from scipy.spatial import ConvexHull
 
 
 def plane_intersect(P1, P2):

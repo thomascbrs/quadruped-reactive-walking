@@ -167,7 +167,7 @@ class FootStepPlannerQP:
         self.xref[1, 1:] += self.xref[1, 0]
 
         ### Update according to heightmap
-        FIT_SIZE_X = 0.2
+        FIT_SIZE_X = 0.3
         FIT_SIZE_Y = 0.1
         Z_OFFSET = self.h_ref 
 
@@ -197,8 +197,8 @@ class FootStepPlannerQP:
         # Law for speed and position of roll / pitch
         # Speed = min ( - K (P_des - P_cur) , rot_max )
         rot_max = 0.3  # rad.s-1
-        r_des = - np.arctan2(result[1], 1.)
-        p_des = - np.arctan2(result[0], 1.)
+        r_des = - 0.9*np.arctan2(result[1], 1.)
+        p_des = - 0.9*np.arctan2(result[0], 1.)
         k_sp = 100 
         epsilon = 0.01
 

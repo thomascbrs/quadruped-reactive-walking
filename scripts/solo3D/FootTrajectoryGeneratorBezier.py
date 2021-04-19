@@ -70,6 +70,7 @@ class FootTrajectoryGeneratorBezier:
         self.past_surface = np.array([-99,-99,-99,-99])
         self.ineq = [0]*4 
         self.ineq_vect = [0]*4
+        self.x_margin = [0.008]*4
        
 
         # A bezier curve for each foot
@@ -275,6 +276,10 @@ class FootTrajectoryGeneratorBezier:
                             self.ineq[i_foot] = surface.ineq[k,:]
                             self.ineq_vect[i_foot] = surface.ineq_vect[k] 
 
+                            # x margin :
+                            xt , yt , zt = self.evaluatePoly(i_foot , 0 , t0 )   
+                            self.x_margin[i_foot] = min(0.008 , abs(P_r[0] -  xt ))
+
                 else :
                     self.ineq[i_foot] = 0
                     self.ineq_vect[i_foot] = 0 
@@ -308,16 +313,17 @@ class FootTrajectoryGeneratorBezier:
             ptsTime = [(self.evaluatePoly(i_foot , 0 , t0 + (t1-t0)*t_b ),t_b) for t_b in np.linspace(0,1,self.N_int)]
 
            
-            xt , yt , zt = self.evaluatePoly(i_foot , 0 , t0 )         
+            xt , yt , zt = self.evaluatePoly(i_foot , 0 , t0 )   
+               
             if np.sum(abs(self.ineq[i_foot])) != 0 and zt < self.footsteps_target[2,i_foot]: # No surface switch or already overpass the critical point
     
                 vb = self.variableBeziers[i_foot]
                 ineqMatrix = []
                 ineqVector = []
-                t_margin = 0.1 # 10% around the limit point !inferior to 1/nb point in linspace
+                t_margin = 0.15 # 10% around the limit point !inferior to 1/nb point in linspace
                 z_margin = self.footsteps_target[2,i_foot]*0.1 # 10% around the limit height
                 # margin_x = 0.00
-                margin_x = 0.008
+                margin_x = self.x_margin[i_foot]
                 
                 t_stop = 0.
 

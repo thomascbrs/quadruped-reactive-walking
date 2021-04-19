@@ -83,7 +83,7 @@ class PyPlanner:
         self.agoals = np.zeros((3, 4))  # Store 3D target acceleration for feet
 
         # Load Heightmap 
-        path_ = "solo3D/objects/object_3/heightmap/"
+        path_ = "solo3D/objects/object_4/heightmap/"
         surface_margin = 0.03
         self.heightMap = HeightMap(path_ , surface_margin)
        

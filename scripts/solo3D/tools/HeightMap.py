@@ -4,7 +4,7 @@ import pickle
 
 class HeightMap():
 
-    def __init__(self , path = "solo3D/heightmap/" , margin = 0.01) :
+    def __init__(self , path = "solo3D/objects/object_3/heightmap/" , margin = 0.01) :
         ''' Load the heighMap and compute the distance margin for edges
         Args :
         - path (str) : path where the files are located
@@ -29,10 +29,12 @@ class HeightMap():
         # Find a way to automatically generate bounds for x and y
         self.Nx = self.heightMap.shape[0]
         self.Ny = self.heightMap.shape[1]
-        self.x_bounds = [-2. , 4.]
+        # self.x_bounds = [-2. , 4.]  # object 1 
+        # self.y_bounds = [-2. , 1.]
+        self.x_bounds = [-1. , 3.]  # object 1 
         self.y_bounds = [-2. , 1.]
-        self.x = np.linspace(-2.0,4.0,self.Nx)
-        self.y = np.linspace(-2.0,1.0,self.Ny)
+        self.x = np.linspace(self.x_bounds[0],self.x_bounds[1],self.Nx)
+        self.y = np.linspace(self.y_bounds[0],self.y_bounds[1],self.Ny)
 
 
 
