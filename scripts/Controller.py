@@ -12,6 +12,8 @@ from solopython.utils.viewerClient import viewerClient, NonBlockingViewerFromRob
 import libquadruped_reactive_walking as lqrw
 
 from  solo3D.GaitPlanner import GaitPlanner
+from  solo3D.FootStepPlannerQP import FootStepPlannerQP
+from solo3D.tools.HeightMap import HeightMap
 
 class Result:
     """Object to store the result of the control loop
@@ -185,7 +187,14 @@ class Controller:
 
         # Gait planner 
         self.gaitPlanner = GaitPlanner(T_gait , dt_mpc , T_mpc)
-        self.gait_python = self.gait
+        self.gait_py = self.gait.getCurrentGait()
+        self.fsteps_py = np.full((self.gait_py.shape[0], 13), np.nan)
+
+        # Load Heightmap 
+        path_ = "solo3D/objects/object_4/heightmap/"
+        surface_margin = 0.03
+        self.heightMap = HeightMap(path_ , surface_margin)
+        self.footStepPlannerQP = FootStepPlannerQP(dt_mpc,dt_wbc , T_gait , self.h_ref , on_solo8 , k_mpc , self.heightMap )
 
 
         self.compute(dDevice)
@@ -279,14 +288,24 @@ class Controller:
         gait = self.gait.getCurrentGait()
 
         # solo3D 
-        self.gaitPlanner.updateGait(self.k  , self.k_mpc , fsteps )
-        self.gait_python = self.gaitPlanner.getCurrentGait()
+        self.gaitPlanner.updateGait(self.k  , self.k_mpc , self.fsteps_py )
+        self.gait_py = self.gaitPlanner.getCurrentGait()
 
-        diff_gait = np.sum((self.gait_python - gait ) > 10e-5 )
+        # Compute fsteps
+        self.fsteps_py = self.footStepPlannerQP.compute_footsteps(self.k,self.q, self.v, o_v_ref, self.joystick.reduced,self.gaitPlanner)
         
-        if diff_gait != 0 :
-            print(self.gait_python[:4,:] )
-            print(gait[:4,:])
+        # xref 
+        xref_py = self.footStepPlannerQP.getRefStates(self.q, self.v, o_v_ref, 0.)
+
+        
+
+        diff_gait = np.sum((self.gait_py - gait ) > 10e-5 )
+        diff_xref = np.sum((xref_py - xref ) > 10e-5 )
+        
+        if diff_xref != 0 :
+            print("\n")
+            print(xref_py)
+            print(xref)
         
 
         t_planner = time.time()
@@ -301,7 +320,7 @@ class Controller:
         # Process MPC once every k_mpc iterations of TSID
         if (self.k % self.k_mpc) == 0:
             try:
-                self.mpc_wrapper.solve(self.k, xref, fsteps, gait)
+                self.mpc_wrapper.solve(self.k, xref_py, fsteps, gait)
             except ValueError:
                 print("MPC Problem")
 

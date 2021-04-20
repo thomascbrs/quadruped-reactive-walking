@@ -404,9 +404,7 @@ class GaitPlanner:
             else :
                 self.desired_gait[j-1,0] -= 1
         return 0
-    
-    def getCurrentGait(self) :
-        return self.gait
+
 
                 
         
