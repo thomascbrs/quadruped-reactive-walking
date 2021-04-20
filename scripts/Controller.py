@@ -345,8 +345,8 @@ class Controller:
         # if not self.gait.getIsStatic():  Not used for now
         self.x_f_wbc[0] = self.q_estim[0, 0]
         self.x_f_wbc[1] = self.q_estim[1, 0]
-        self.x_f_wbc[2] = self.q_estim[2, 0]
-        self.x_f_wbc[3] = self.h_ref
+        self.x_f_wbc[2] = xref[2,1]
+        self.x_f_wbc[3] = self.roll_estim
         self.x_f_wbc[4] = self.pitch_estim
         self.x_f_wbc[5] = self.yaw_estim
         # else:  # Sort of position control to avoid slow drift
