@@ -20,7 +20,8 @@ LOGGING = False
 PLOTTING = False
 
 if SIMULATION:
-    from PyBulletSimulator import PyBulletSimulator
+    # from PyBulletSimulator import PyBulletSimulator
+    from solo3D.PyBulletSimulator import PyBulletSimulator
 else:
     # from pynput import keyboard
     from solopython.solo12 import Solo12
@@ -106,7 +107,7 @@ def control_loop(name_interface, name_interface_clone=None):
     # PARAMETERS OF THE CONTROLLER #
     ################################
 
-    envID = 0  # Identifier of the environment to choose in which one the simulation will happen
+    envID = 2  # Identifier of the environment to choose in which one the simulation will happen
     velID = 2  # Identifier of the reference velocity profile to choose which one will be sent to the robot
 
     dt_wbc = DT  # Time step of the whole body control

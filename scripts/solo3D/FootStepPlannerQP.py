@@ -99,8 +99,8 @@ class FootStepPlannerQP:
             vref (6x1 array): desired velocity vector of the flying base in world frame (linear and angular stacked)
         """
         # Update Vref with optimised speed
-        # vref[0,0] =  self.v_ref_qp[0,0]
-        # vref[1,0] =  self.v_ref_qp[1,0] 
+        vref[0,0] =  self.v_ref_qp[0,0]
+        vref[1,0] =  self.v_ref_qp[1,0] 
 
 
         # Get the reference velocity in world frame (given in base frame)
@@ -340,7 +340,9 @@ class FootStepPlannerQP:
                     # px = fsteps[i , 1 + 3*j ]
                     # py = fsteps[i , 1 + 3*j + 1]
                     if i == 1 : # first line --> swing phase
-                        if j in self.feet and (k % self.k_mpc) == 0 and self.t0s[j] == 0. :
+                        print("\n")
+                        print("t0s QP : " , self.t0s)
+                        if j in self.feet and (k % self.k_mpc) == 0 and self.t0s[j] < 10e-4 :
                             # Only modyfying the surface for the flying feet at the beginning of the phase
 
                             px1 , py1 = next_ft[3*j]  , next_ft[3*j+1]   
@@ -376,7 +378,9 @@ class FootStepPlannerQP:
         # The number of new contact
         # L = [  [x =1,y=0  ,  surface_id  , nb ineq in surface]  ]  --> First variable in gait[1,0]  (gait of size 4, not the nb iteration in first row !!)
 
-        #self.run_optimisation(np.array(L) ,q_cur, v_cur, v_ref , dx , dy)
+        print(L)
+
+        self.run_optimisation(np.array(L) ,q_cur, v_cur, v_ref , dx , dy)
 
         # print(self.fsteps[0:2, 2::3])
         return self.fsteps
@@ -523,8 +527,8 @@ class FootStepPlannerQP:
             next_ft = (np.dot(self.R[:, :, i-1], np.resize(next_fstep_tmp[:,j] , (3,1) ) ) + q_tmp +
                             np.array([[dx[i-1]], [dy[i-1]], [0.0]])).ravel(order='F')
             
-            #next_ft += np.array([res[2+3*indice_L] , res[2+3*indice_L+1] , res[2+3*indice_L+2] ])
-            next_ft += np.array([0., 0. , res[2+3*indice_L+2] ])
+            next_ft += np.array([res[2+3*indice_L] , res[2+3*indice_L+1] , res[2+3*indice_L+2] ])
+            # next_ft += np.array([0., 0. , res[2+3*indice_L+2] ])
 
             self.fsteps[i ,1+ 3*j :1 + 3*j+3 ] = next_ft
 

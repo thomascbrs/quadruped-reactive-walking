@@ -11,8 +11,9 @@ import pinocchio as pin
 from solopython.utils.viewerClient import viewerClient, NonBlockingViewerFromRobot
 import libquadruped_reactive_walking as lqrw
 
-from  solo3D.GaitPlanner import GaitPlanner
-from  solo3D.FootStepPlannerQP import FootStepPlannerQP
+from solo3D.GaitPlanner import GaitPlanner
+from solo3D.FootStepPlannerQP import FootStepPlannerQP
+from solo3D.FootTrajectoryGeneratorBezier import FootTrajectoryGeneratorBezier
 from solo3D.tools.HeightMap import HeightMap
 
 class Result:
@@ -120,20 +121,20 @@ class Controller:
         #self.planner = PyPlanner(dt_mpc, dt_wbc, T_gait, T_mpc,
         #                         k_mpc, on_solo8, self.h_ref, self.fsteps_init)
 
-        self.statePlanner = lqrw.StatePlanner()
-        self.statePlanner.initialize(dt_mpc, T_mpc, self.h_ref)
+        # self.statePlanner = lqrw.StatePlanner()
+        # self.statePlanner.initialize(dt_mpc, T_mpc, self.h_ref)
 
-        self.gait = lqrw.Gait()
-        self.gait.initialize(dt_mpc, T_gait, T_mpc)
+        # self.gait = lqrw.Gait()
+        # self.gait.initialize(dt_mpc, T_gait, T_mpc)
 
         shoulders = np.zeros((3, 4))
         shoulders[0, :] = [0.1946, 0.1946, -0.1946, -0.1946]
         shoulders[1, :] = [0.14695, -0.14695, 0.14695, -0.14695]
-        self.footstepPlanner = lqrw.FootstepPlanner()
-        self.footstepPlanner.initialize(dt_mpc, T_mpc, self.h_ref, shoulders.copy(), self.gait)
+        # self.footstepPlanner = lqrw.FootstepPlanner()
+        # self.footstepPlanner.initialize(dt_mpc, T_mpc, self.h_ref, shoulders.copy(), self.gait)
 
-        self.footTrajectoryGenerator = lqrw.FootTrajectoryGenerator()
-        self.footTrajectoryGenerator.initialize(0.05, 0.07, self.fsteps_init.copy(), shoulders.copy(), dt_wbc, k_mpc, self.gait)
+        # self.footTrajectoryGenerator = lqrw.FootTrajectoryGenerator()
+        # self.footTrajectoryGenerator.initialize(0.05, 0.07, self.fsteps_init.copy(), shoulders.copy(), dt_wbc, k_mpc, self.gait)
 
         # Wrapper that makes the link with the solver that you want to use for the MPC
         # First argument to True to have PA's MPC, to False to have Thomas's MPC
@@ -184,18 +185,16 @@ class Controller:
         dDevice.baseOrientation = np.array([0.0, 0.0, 0.0, 1.0])
 
         # Solo3D python class 
-
-        # Gait planner 
-        self.gaitPlanner = GaitPlanner(T_gait , dt_mpc , T_mpc)
-        self.gait_py = self.gait.getCurrentGait()
-        self.fsteps_py = np.full((self.gait_py.shape[0], 13), np.nan)
+        self.gait = np.zeros((20, 5))
+        self.fsteps = np.full((self.gait.shape[0], 13), np.nan)
 
         # Load Heightmap 
         path_ = "solo3D/objects/object_4/heightmap/"
         surface_margin = 0.03
         self.heightMap = HeightMap(path_ , surface_margin)
+        self.gaitPlanner = GaitPlanner(T_gait , dt_mpc , T_mpc)
         self.footStepPlannerQP = FootStepPlannerQP(dt_mpc,dt_wbc , T_gait , self.h_ref , on_solo8 , k_mpc , self.heightMap )
-
+        self.footTrajectoryGenerator = FootTrajectoryGeneratorBezier(T_gait , dt_wbc ,k_mpc ,  self.fsteps_init , self.heightMap)
 
         self.compute(dDevice)
 
@@ -214,9 +213,12 @@ class Controller:
         self.joystick.update_v_ref(self.k, self.velID)
 
         # Process state estimator
-        self.estimator.run_filter(self.k, self.gait.getCurrentGait()[0, 1:],
+        # self.estimator.run_filter(self.k, self.gait.getCurrentGait()[0, 1:],
+        #                           device, self.footTrajectoryGenerator.getFootPosition(),
+        #                           self.gait.getCurrentGait()[0, 0])
+        self.estimator.run_filter(self.k, self.gaitPlanner.getCurrentGait()[0, 1:],
                                   device, self.footTrajectoryGenerator.getFootPosition(),
-                                  self.gait.getCurrentGait()[0, 0])
+                                  self.gaitPlanner.getCurrentGait()[0, 0])
         t_filter = time.time()
 
         # Update state for the next iteration of the whole loop
@@ -230,26 +232,30 @@ class Controller:
             # Update estimated position of the robot
             self.v_estim[0:3, 0:1] = oMb.rotation.transpose() @ self.joystick.v_ref[0:3, 0:1]
             self.v_estim[3:6, 0:1] = oMb.rotation.transpose() @ self.joystick.v_ref[3:6, 0:1]
-            if not self.gait.getIsStatic():
-                self.q_estim[:, 0] = pin.integrate(self.solo.model,
-                                                   self.q, self.v_estim * self.myController.dt)
-                self.yaw_estim = (utils_mpc.quaternionToRPY(self.q_estim[3:7, 0]))[2, 0]
-            else:
-                self.planner.q_static[:] = pin.integrate(self.solo.model,
-                                                            self.planner.q_static, self.v_estim * self.myController.dt)
-                self.planner.RPY_static[:, 0:1] = utils_mpc.quaternionToRPY(self.planner.q_static[3:7, 0])
+            # if not self.gait.getIsStatic(): Not used for now
+            self.q_estim[:, 0] = pin.integrate(self.solo.model,
+                                                self.q, self.v_estim * self.myController.dt)
+            self.yaw_estim = (utils_mpc.quaternionToRPY(self.q_estim[3:7, 0]))[2, 0]
+            self.roll_estim = (utils_mpc.quaternionToRPY(self.q_estim[3:7, 0]))[0, 0]
+            self.pitch_estim = (utils_mpc.quaternionToRPY(self.q_estim[3:7, 0]))[1, 0]
+            # else:
+            #     self.planner.q_static[:] = pin.integrate(self.solo.model,
+            #                                                 self.planner.q_static, self.v_estim * self.myController.dt)
+            #     self.planner.RPY_static[:, 0:1] = utils_mpc.quaternionToRPY(self.planner.q_static[3:7, 0])
         else:
             self.yaw_estim = 0.0
+            self.roll_estim = 0.0
+            self.pitch_estim = 0.0
             self.q_estim = self.q.copy()
             oMb = pin.SE3(pin.Quaternion(self.q[3:7, 0:1]), self.q[0:3, 0:1])
             self.v_estim = self.v.copy()
 
         # Update gait
-        self.gait.updateGait(self.k, self.k_mpc, self.q[0:7, 0:1], self.joystick.joystick_code)
+        # self.gait.updateGait(self.k, self.k_mpc, self.q[0:7, 0:1], self.joystick.joystick_code)
 
         # Update footsteps if new contact phase
-        if(self.k % self.k_mpc == 0 and self.k != 0 and self.gait.isNewPhase()):  
-            self.footstepPlanner.updateNewContact()
+        # if(self.k % self.k_mpc == 0 and self.k != 0 and self.gait.isNewPhase()):  
+        #     self.footstepPlanner.updateNewContact()
 
         """// Get the reference velocity in world frame (given in base frame)
         Eigen::Quaterniond quat(q(6, 0), q(3, 0), q(4, 0), q(5, 0));  // w, x, y, z
@@ -266,11 +272,11 @@ class Controller:
         o_v_ref[3:6, 0:1] = oMb.rotation @ self.joystick.v_ref[3:6, 0:1]
 
         # Compute target footstep based on current and reference velocities
-        targetFootstep = self.footstepPlanner.computeTargetFootstep(self.q[0:7, 0:1], self.v[0:6, 0:1].copy(), o_v_ref)
+        # targetFootstep = self.footstepPlanner.computeTargetFootstep(self.q[0:7, 0:1], self.v[0:6, 0:1].copy(), o_v_ref)
 
         # Update pos, vel and acc references for feet
         # TODO: Make update take as parameters current gait, swing phase duration and remaining time
-        self.footTrajectoryGenerator.update(self.k, targetFootstep)
+        # self.footTrajectoryGenerator.update(self.k, targetFootstep)
 
         # Retrieve data from C++ planner
         # TODO
@@ -281,31 +287,29 @@ class Controller:
         self.agoals = self.planner.get_agoals()"""
 
         # Run state planner (outputs the reference trajectory of the CoM / base)
-        self.statePlanner.computeRefStates(self.q[0:7, 0:1], self.v[0:6, 0:1].copy(), o_v_ref, 0.0)
+        # self.statePlanner.computeRefStates(self.q[0:7, 0:1], self.v[0:6, 0:1].copy(), o_v_ref, 0.0)
         # Result can be retrieved with self.statePlanner.getXReference()
-        xref = self.statePlanner.getXReference()
-        fsteps = self.footstepPlanner.getFootsteps()
-        gait = self.gait.getCurrentGait()
+        # xref = self.statePlanner.getXReference()
+        # fsteps = self.footstepPlanner.getFootsteps()
+        # gait = self.gait.getCurrentGait()
 
-        # solo3D 
-        self.gaitPlanner.updateGait(self.k  , self.k_mpc , self.fsteps_py )
-        self.gait_py = self.gaitPlanner.getCurrentGait()
+        ################
+        # solo3D python
+        ################ 
+        self.gaitPlanner.updateGait(self.k  , self.k_mpc , self.fsteps )
+        self.gait = self.gaitPlanner.getCurrentGait()
 
         # Compute fsteps
-        self.fsteps_py = self.footStepPlannerQP.compute_footsteps(self.k,self.q, self.v, o_v_ref, self.joystick.reduced,self.gaitPlanner)
+        self.fsteps = self.footStepPlannerQP.compute_footsteps(self.k,self.q, self.v, o_v_ref, self.joystick.reduced,self.gaitPlanner)
         
         # xref 
-        xref_py = self.footStepPlannerQP.getRefStates(self.q, self.v, o_v_ref, 0.)
-
+        xref = self.footStepPlannerQP.getRefStates(self.q, self.v, o_v_ref, 0.)
         
+        # Compute foot trajectory
+        self.footTrajectoryGenerator.update_foot_trajectory( self.k , self.fsteps, self.gaitPlanner , self.footStepPlannerQP)
 
-        diff_gait = np.sum((self.gait_py - gait ) > 10e-5 )
-        diff_xref = np.sum((xref_py - xref ) > 10e-5 )
-        
-        if diff_xref != 0 :
-            print("\n")
-            print(xref_py)
-            print(xref)
+        fsteps = self.fsteps
+        gait = self.gait
         
 
         t_planner = time.time()
@@ -320,7 +324,8 @@ class Controller:
         # Process MPC once every k_mpc iterations of TSID
         if (self.k % self.k_mpc) == 0:
             try:
-                self.mpc_wrapper.solve(self.k, xref_py, fsteps, gait)
+                # self.mpc_wrapper.solve(self.k, xref_py, fsteps, gait)
+                self.mpc_wrapper.solve(self.k, xref, fsteps, gait)
             except ValueError:
                 print("MPC Problem")
 
@@ -337,16 +342,16 @@ class Controller:
 
         # Target state for the whole body control
         self.x_f_wbc = (self.x_f_mpc[:, 0]).copy()
-        if not self.gait.getIsStatic():
-            self.x_f_wbc[0] = self.q_estim[0, 0]
-            self.x_f_wbc[1] = self.q_estim[1, 0]
-            self.x_f_wbc[2] = self.h_ref
-            self.x_f_wbc[3] = 0.0
-            self.x_f_wbc[4] = 0.0
-            self.x_f_wbc[5] = self.yaw_estim
-        else:  # Sort of position control to avoid slow drift
-            self.x_f_wbc[0:3] = self.planner.q_static[0:3, 0]
-            self.x_f_wbc[3:6] = self.planner.RPY_static[:, 0]
+        # if not self.gait.getIsStatic():  Not used for now
+        self.x_f_wbc[0] = self.q_estim[0, 0]
+        self.x_f_wbc[1] = self.q_estim[1, 0]
+        self.x_f_wbc[2] = self.q_estim[2, 0]
+        self.x_f_wbc[3] = self.h_ref
+        self.x_f_wbc[4] = self.pitch_estim
+        self.x_f_wbc[5] = self.yaw_estim
+        # else:  # Sort of position control to avoid slow drift
+        #     self.x_f_wbc[0:3] = self.planner.q_static[0:3, 0]
+        #     self.x_f_wbc[3:6] = self.planner.RPY_static[:, 0]
         self.x_f_wbc[6:12] = xref[6:, 1]
 
         self.estimator.x_f_mpc = self.x_f_wbc.copy()  # For logging
@@ -361,6 +366,11 @@ class Controller:
             self.b_v[6:, 0] = self.v[6:, 0]
 
             # Run InvKin + WBC QP
+            # self.myController.compute(self.q, self.b_v, self.x_f_wbc[:12],
+            #                           self.x_f_wbc[12:], gait[0, 1:],
+            #                           self.footTrajectoryGenerator.getFootPosition(),
+            #                           self.footTrajectoryGenerator.getFootVelocity(),
+            #                           self.footTrajectoryGenerator.getFootAcceleration())
             self.myController.compute(self.q, self.b_v, self.x_f_wbc[:12],
                                       self.x_f_wbc[12:], gait[0, 1:],
                                       self.footTrajectoryGenerator.getFootPosition(),
@@ -405,24 +415,43 @@ class Controller:
         if self.k > 10 and self.enable_pyb_GUI:
             # pyb.resetDebugVisualizerCamera(cameraDistance=0.8, cameraYaw=45, cameraPitch=-30,
             #                                cameraTargetPosition=[1.0, 0.3, 0.25])
-            pyb.resetDebugVisualizerCamera(cameraDistance=0.6, cameraYaw=45, cameraPitch=-39.9,
+            pyb.resetDebugVisualizerCamera(cameraDistance=1.5, cameraYaw=215, cameraPitch=-25.9,
                                            cameraTargetPosition=[device.dummyHeight[0], device.dummyHeight[1], 0.0])
+        if self.k > 1 :
+            goals = self.footTrajectoryGenerator.getFootPosition()
+            # for i_foot in range(4) :
+            #     if self.gait[1,i_foot + 1] == 1 :
+            #         ftps_Ids = device.pyb_sim.ftps_Ids_deb  
+            #         # Display the goal position of the feet as green sphere in PyBullet
+            #         pyb.resetBasePositionAndOrientation(ftps_Ids[i_foot],
+            #                                             posObj=goals[:,i_foot],
+            #                                             ornObj=np.array([0.0, 0.0, 0.0, 1.0]) )
+
+
+            for i_foot in range(4) :
+                if self.gait[2,i_foot + 1] == 1 :
+                    ftps_Ids_deb = device.pyb_sim.ftps_Ids_deb
+                    # Display the goal position of the feet as green sphere in PyBullet
+                    goals = self.fsteps[2,3*i_foot +1 : 3*i_foot + 4]
+                    pyb.resetBasePositionAndOrientation(ftps_Ids_deb[i_foot],
+                                                        posObj=goals,
+                                                        ornObj=np.array([0.0, 0.0, 0.0, 1.0]))
 
     def security_check(self):
 
-        if (self.error_flag == 0) and (not self.myController.error) and (not self.joystick.stop):
-            if np.any(np.abs(self.estimator.q_filt[7:, 0]) > self.q_security):
-                self.myController.error = True
-                self.error_flag = 1
-                self.error_value = self.estimator.q_filt[7:, 0] * 180 / 3.1415
-            if np.any(np.abs(self.estimator.v_secu) > 50):
-                self.myController.error = True
-                self.error_flag = 2
-                self.error_value = self.estimator.v_secu
-            if np.any(np.abs(self.myController.tau_ff) > 8):
-                self.myController.error = True
-                self.error_flag = 3
-                self.error_value = self.myController.tau_ff
+        # if (self.error_flag == 0) and (not self.myController.error) and (not self.joystick.stop):
+        #     if np.any(np.abs(self.estimator.q_filt[7:, 0]) > self.q_security):
+        #         self.myController.error = True
+        #         self.error_flag = 1
+        #         self.error_value = self.estimator.q_filt[7:, 0] * 180 / 3.1415
+        #     if np.any(np.abs(self.estimator.v_secu) > 50):
+        #         self.myController.error = True
+        #         self.error_flag = 2
+        #         self.error_value = self.estimator.v_secu
+        #     if np.any(np.abs(self.myController.tau_ff) > 8):
+        #         self.myController.error = True
+        #         self.error_flag = 3
+        #         self.error_value = self.myController.tau_ff
 
         # If something wrong happened in TSID controller we stick to a security controller
         if self.myController.error or self.joystick.stop:
