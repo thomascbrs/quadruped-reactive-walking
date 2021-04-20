@@ -11,6 +11,8 @@ import pinocchio as pin
 from solopython.utils.viewerClient import viewerClient, NonBlockingViewerFromRobot
 import libquadruped_reactive_walking as lqrw
 
+from  solo3D.GaitPlanner import GaitPlanner
+
 class Result:
     """Object to store the result of the control loop
     It contains what is sent to the robot (gains, desired positions and velocities,
@@ -178,7 +180,17 @@ class Controller:
         dDevice.baseLinearAcceleration = np.zeros(3)
         dDevice.baseAngularVelocity = np.zeros(3)
         dDevice.baseOrientation = np.array([0.0, 0.0, 0.0, 1.0])
+
+        # Solo3D python class 
+
+        # Gait planner 
+        self.gaitPlanner = GaitPlanner(T_gait , dt_mpc , T_mpc)
+        self.gait_python = self.gait
+
+
         self.compute(dDevice)
+
+        
 
     def compute(self, device):
         """Run one iteration of the main control loop
@@ -265,6 +277,17 @@ class Controller:
         xref = self.statePlanner.getXReference()
         fsteps = self.footstepPlanner.getFootsteps()
         gait = self.gait.getCurrentGait()
+
+        # solo3D 
+        self.gaitPlanner.updateGait(self.k  , self.k_mpc , fsteps )
+        self.gait_python = self.gaitPlanner.getCurrentGait()
+
+        diff_gait = np.sum((self.gait_python - gait ) > 10e-5 )
+        
+        if diff_gait != 0 :
+            print(self.gait_python[:4,:] )
+            print(gait[:4,:])
+        
 
         t_planner = time.time()
 
