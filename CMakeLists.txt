@@ -86,11 +86,11 @@ add_project_dependency(pinocchio REQUIRED)
 # Link pinocchio library
 TARGET_LINK_LIBRARIES(${PROJECT_NAME} PUBLIC pinocchio::pinocchio)
 
-# Find parametric curves library and headers
-add_project_dependency(curves REQUIRED)
+# Find parametric ndcurves library and headers
+add_project_dependency(ndcurves REQUIRED)
 
-# Link parametric curves library
-target_link_libraries(${PROJECT_NAME} PUBLIC curves::curves)
+# Link parametric ndcurves library
+target_link_libraries(${PROJECT_NAME} PUBLIC ndcurves::ndcurves)
 
 # Find eiquadprog library and headers
 add_project_dependency(eiquadprog REQUIRED)

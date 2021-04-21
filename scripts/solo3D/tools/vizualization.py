@@ -1,7 +1,7 @@
 import numpy as np
 import pybullet as pyb
 import pybullet_data
-import time
+from time import perf_counter as clock
 import pinocchio as pin
 from solo3D.tools.geometry import EulerToQuaternion
 
@@ -55,7 +55,7 @@ class PybVisualizationTraj():
 
             if k % self.refresh == 0 :  
 
-                t_init = time.clock()
+                t_init = clock()
 
                 # Update target trajectory, current and next phase
                 self.updateTargetTrajectory()
@@ -63,7 +63,7 @@ class PybVisualizationTraj():
                 # Update refrence trajectory
                 self.updateRefTrajectory()
 
-                t_end = time.clock() - t_init
+                t_end = clock() - t_init
                 print("Time for update pybullet = " ,  t_end )
 
         return 0

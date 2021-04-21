@@ -5,7 +5,8 @@ import pickle
 import matplotlib.pyplot as plt
 import mpl_toolkits.mplot3d as a3
 import hppfcl
-import time
+from time import perf_counter as clock
+
 from scipy.spatial import ConvexHull
 
 from solo3D.tools.Surface import Surface
@@ -17,7 +18,7 @@ import trimesh
 
 
 
-t_init = time.clock()
+t_init = clock()
 
 Nx = 400
 Ny = 400
