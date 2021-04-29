@@ -116,7 +116,7 @@ def control_loop(name_interface, name_interface_clone=None):
     t = 0.0  # Time
     T_gait = 0.32  # Duration of one gait period
     T_mpc = 0.32   # Duration of the prediction horizon
-    N_SIMULATION = 12000  # number of simulated wbc time steps
+    N_SIMULATION = 1200  # number of simulated wbc time steps
 
     # Which MPC solver you want to use
     # True to have PA's MPC, to False to have Thomas's MPC
@@ -204,12 +204,12 @@ def control_loop(name_interface, name_interface_clone=None):
 
         # Check that the initial position of actuators is not too far from the
         # desired position of actuators to avoid breaking the robot
-        if (t <= 10 * DT):
-            if np.max(np.abs(controller.result.q_des - device.q_mes)) > 0.15:
-                print("DIFFERENCE: ", controller.result.q_des - device.q_mes)
-                print("q_des: ", controller.result.q_des)
-                print("q_mes: ", device.q_mes)
-                break
+        # if (t <= 10 * DT):
+        #     if np.max(np.abs(controller.result.q_des - device.q_mes)) > 0.15:
+        #         print("DIFFERENCE: ", controller.result.q_des - device.q_mes)
+        #         print("q_des: ", controller.result.q_des)
+        #         print("q_mes: ", device.q_mes)
+        #         break
 
         # Set desired quantities for the actuators
         device.SetDesiredJointPDgains(controller.result.P, controller.result.D)
@@ -229,30 +229,31 @@ def control_loop(name_interface, name_interface_clone=None):
         """if ((device.cpt % 100) == 0):
             device.Print()"""
 
-        """import os
-        from matplotlib import pyplot as plt
-        import pybullet as pyb
-        if (t == 0.0):
-            cpt_frames = 0
-            step = 10
-        if (cpt_frames % step) == 0:
-            if (cpt_frames % 1000):
-                print(cpt_frames)
-            img = pyb.getCameraImage(width=1920, height=1080, renderer=pyb.ER_BULLET_HARDWARE_OPENGL)
-            if cpt_frames == 0:
-                newpath = r'/tmp/recording'
-                if not os.path.exists(newpath):
-                    os.makedirs(newpath)
-            if (int(cpt_frames/step) < 10):
-                plt.imsave('/tmp/recording/frame_000'+str(int(cpt_frames/step))+'.png', img[2])
-            elif int(cpt_frames/step) < 100:
-                plt.imsave('/tmp/recording/frame_00'+str(int(cpt_frames/step))+'.png', img[2])
-            elif int(cpt_frames/step) < 1000:
-                plt.imsave('/tmp/recording/frame_0'+str(int(cpt_frames/step))+'.png', img[2])
-            else:
-                plt.imsave('/tmp/recording/frame_'+str(int(cpt_frames/step))+'.png', img[2])
+        # import os
+        # from matplotlib import pyplot as plt
+        # import pybullet as pyb
+        # newpath = r'/home/corberes/Bureau/edin/my_quad_reactive/tmp/recording/'
+        # if (t == 0.0):
+        #     cpt_frames = 0
+        #     step = 2
+        # if (cpt_frames % step) == 0:
+        #     if (cpt_frames % 1000):
+        #         print(cpt_frames)
+        #     img = pyb.getCameraImage(width=1920, height=1080, renderer=pyb.ER_BULLET_HARDWARE_OPENGL)
+        #     if cpt_frames == 0:
+                
+        #         if not os.path.exists(newpath):
+        #             os.makedirs(newpath)
+        #     if (int(cpt_frames/step) < 10):
+        #         plt.imsave(newpath + 'frame_000'+str(int(cpt_frames/step))+'.png', img[2])
+        #     elif int(cpt_frames/step) < 100:
+        #         plt.imsave(newpath + 'frame_00'+str(int(cpt_frames/step))+'.png', img[2])
+        #     elif int(cpt_frames/step) < 1000:
+        #         plt.imsave(newpath + 'frame_0'+str(int(cpt_frames/step))+'.png', img[2])
+        #     else:
+        #         plt.imsave(newpath + 'frame_'+str(int(cpt_frames/step))+'.png', img[2])
 
-        cpt_frames += 1"""
+        # cpt_frames += 1
 
         t += DT  # Increment loop time
 
@@ -334,6 +335,9 @@ def control_loop(name_interface, name_interface_clone=None):
         elif (controller.error_flag == 3):
             print("-- FEEDFORWARD TORQUES TOO HIGH ERROR --")
         print(controller.error_value)
+
+    # Plot figure relative to planner values
+    controller.loggerPlanner.plot_feet()
 
     print("End of script")
     quit()
