@@ -26,7 +26,7 @@ void FootTrajectoryGenerator::initialize(double const maxHeightIn,
                                          MatrixN const& initialFootPosition,
                                          double const& dt_tsid_in,
                                          int const& k_mpc_in,
-                                         Gait & gaitIn)
+                                         Gait& gaitIn)
 {
     dt_tsid = dt_tsid_in;
     k_mpc = k_mpc_in;
@@ -113,7 +113,7 @@ void FootTrajectoryGenerator::update(int k, MatrixN const& targetFootstep)
         feet.clear();
         for (int i = 0; i < 4; i++)
         {
-            if (gait_->getCurrentGait()(0, 1 + i) == 0)
+            if (gait_->getCurrentGait()(0, i) == 0)
                 feet.push_back(i);
         }
         // If no foot in swing phase

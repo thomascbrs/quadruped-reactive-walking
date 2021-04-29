@@ -239,12 +239,16 @@ class Estimator:
         N_simulation (int): maximum number of iterations of the main control loop
         h_init (float): initial height of the robot base
         kf_enabled (bool): False for complementary filter, True for simple Kalman filter
+        perfectEstimator (bool): If we are using a perfect estimator (direct simulator data)
     """
 
-    def __init__(self, dt, N_simulation, h_init=0.22294615, kf_enabled=False):
+    def __init__(self, dt, N_simulation, h_init=0.22294615, kf_enabled=False, perfectEstimator=False):
 
         # Sample frequency
         self.dt = dt
+
+        # If the IMU is perfect
+        self.perfectEstimator = perfectEstimator
 
         # Filtering estimated linear velocity
         fc = 50.0  # Cut frequency
@@ -456,16 +460,20 @@ class Estimator:
 
         return 0
 
-    def run_filter(self, k, feet_status, device, goals, remaining_steps=0):
+    def run_filter(self, k, gait, device, goals):
         """Run the complementary filter to get the filtered quantities
 
         Args:
             k (int): Number of inv dynamics iterations since the start of the simulation
-            feet_status (4x0 array): Current contact state of feet
+            gait (4xN array): Contact state of feet (gait matrix)
             device (object): Interface with the masterboard or the simulation
             goals (3x4 array): Target locations of feet on the ground
-            remaining_steps (int): Remaining MPC steps for the current gait phase
         """
+
+        feet_status = gait[0, :].copy()  # Current contact state of feet
+        remaining_steps = 1  # Remaining MPC steps for the current gait phase
+        while (np.array_equal(feet_status, gait[remaining_steps, :])):
+            remaining_steps += 1
 
         # Update IMU data
         self.get_data_IMU(device)
@@ -581,13 +589,18 @@ class Estimator:
 
         # Output filtered position vector (19 x 1)
         self.q_filt[0:3, 0] = self.filt_lin_pos
+        if self.perfectEstimator:  # Base height directly from PyBullet
+            self.q_filt[2, 0] = device.dummyPos[2] - 0.0155  # Minus feet radius
         self.q_filt[3:7, 0] = self.filt_ang_pos
-        self.q_filt[7:, 0] = self.actuators_pos
+        self.q_filt[7:, 0] = self.actuators_pos  # Actuators pos are already directly from PyBullet
 
         # Output filtered velocity vector (18 x 1)
-        self.v_filt[0:3, 0] = (1 - self.alpha_v) * self.v_filt[0:3, 0] + self.alpha_v * self.filt_lin_vel
-        self.v_filt[3:6, 0] = self.filt_ang_vel
-        self.v_filt[6:, 0] = self.actuators_vel
+        if self.perfectEstimator:  # Linear velocities directly from PyBullet
+            self.v_filt[0:3, 0] = (1 - self.alpha_v) * self.v_filt[0:3, 0] + self.alpha_v * device.b_baseVel
+        else:
+            self.v_filt[0:3, 0] = (1 - self.alpha_v) * self.v_filt[0:3, 0] + self.alpha_v * self.filt_lin_vel
+        self.v_filt[3:6, 0] = self.filt_ang_vel  # Angular velocities are already directly from PyBullet
+        self.v_filt[6:, 0] = self.actuators_vel  # Actuators velocities are already directly from PyBullet
 
         ###
 
@@ -603,7 +616,6 @@ class Estimator:
         self.q_filt[2, 0] -= z_min"""
 
         ###
-
 
         # Output filtered actuators velocity for security checks
         self.v_secu[:] = (1 - self.alpha_secu) * self.actuators_vel + self.alpha_secu * self.v_secu[:]

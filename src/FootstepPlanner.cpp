@@ -8,13 +8,13 @@ FootstepPlanner::FootstepPlanner()
     , nextFootstep_(Matrix34::Zero())
     , footsteps_()
     , Rz(Matrix3::Zero())
-    , dt_cum(VectorN::Zero(N0_gait))
-    , yaws(VectorN::Zero(N0_gait))
-    , dx(VectorN::Zero(N0_gait))
-    , dy(VectorN::Zero(N0_gait))
+    , dt_cum()
+    , yaws()
+    , dx()
+    , dy()
     , q_tmp(Vector3::Zero())
     , q_dxdy(Vector3::Zero())
-    , RPY(Vector3::Zero())
+    , RPY_(Vector3::Zero())
     , b_v(Vector3::Zero())
     , b_vref(Vector6::Zero())
 {
@@ -25,7 +25,8 @@ void FootstepPlanner::initialize(double dt_in,
                                  double T_mpc_in,
                                  double h_ref_in,
                                  MatrixN const& shouldersIn,
-                                 Gait & gaitIn)
+                                 Gait& gaitIn,
+                                 int N_gait)
 {
     dt = dt_in;
     T_mpc = T_mpc_in;
@@ -35,19 +36,29 @@ void FootstepPlanner::initialize(double dt_in,
     currentFootstep_ = shouldersIn.block(0, 0, 3, 4);
     gait_ = &gaitIn;
     targetFootstep_ = shouldersIn;
-    footsteps_.fill(Matrix34::Zero());
+    dt_cum = VectorN::Zero(N_gait);
+    yaws = VectorN::Zero(N_gait);
+    dx = VectorN::Zero(N_gait);
+    dy = VectorN::Zero(N_gait);
+    for (int i = 0; i < N_gait; i++)
+    {
+        footsteps_.push_back(Matrix34::Zero());
+    }
     Rz(2, 2) = 1.0;
 }
 
-void FootstepPlanner::compute_footsteps(VectorN const& q, Vector6 const& v, Vector6 const& vref)
+void FootstepPlanner::computeFootsteps(VectorN const& q, Vector6 const& v, Vector6 const& vref)
 {
-    footsteps_.fill(Matrix34::Zero());
+    for (uint i = 0; i < footsteps_.size(); i++)
+    {
+        footsteps_[i] = Matrix34::Zero();
+    }
     MatrixN gait = gait_->getCurrentGait();
 
     // Set current position of feet for feet in stance phase
     for (int j = 0; j < 4; j++)
     {
-        if (gait(0, 1 + j) == 1.0)
+        if (gait(0, j) == 1.0)
         {
             footsteps_[0].col(j) = currentFootstep_.col(j);
         }
@@ -55,18 +66,18 @@ void FootstepPlanner::compute_footsteps(VectorN const& q, Vector6 const& v, Vect
 
     // Cumulative time by adding the terms in the first column (remaining number of timesteps)
     // Get future yaw yaws compared to current position
-    dt_cum(0) = gait(0, 0) * dt;
-    yaws(0) = vref(5) * dt_cum(0) + RPY(2);
-    for (int j = 1; j < N0_gait; j++)
+    dt_cum(0) = dt;
+    yaws(0) = vref(5) * dt_cum(0) + RPY_(2);
+    for (uint j = 1; j < footsteps_.size(); j++)
     {
-        dt_cum(j) = dt_cum(j - 1) + gait(j) * dt;
-        yaws(j) = vref(5) * dt_cum(j) + RPY(2);
+        dt_cum(j) = gait.row(j).isZero() ? dt_cum(j - 1) : dt_cum(j - 1) + dt;
+        yaws(j) = vref(5) * dt_cum(j) + RPY_(2);
     }
 
     // Displacement following the reference velocity compared to current position
     if (vref(5, 0) != 0)
     {
-        for (int j = 0; j < N0_gait; j++)
+        for (uint j = 0; j < footsteps_.size(); j++)
         {
             dx(j) = (v(0) * std::sin(vref(5) * dt_cum(j)) + v(1) * (std::cos(vref(5) * dt_cum(j)) - 1.0)) / vref(5);
             dy(j) = (v(1) * std::sin(vref(5) * dt_cum(j)) - v(0) * (std::cos(vref(5) * dt_cum(j)) - 1.0)) / vref(5);
@@ -74,7 +85,7 @@ void FootstepPlanner::compute_footsteps(VectorN const& q, Vector6 const& v, Vect
     }
     else
     {
-        for (int j = 0; j < N0_gait; j++)
+        for (uint j = 0; j < footsteps_.size(); j++)
         {
             dx(j) = v(0) * dt_cum(j);
             dy(j) = v(1) * dt_cum(j);
@@ -88,12 +99,12 @@ void FootstepPlanner::compute_footsteps(VectorN const& q, Vector6 const& v, Vect
 
     // Update the footstep matrix depending on the different phases of the gait (swing & stance)
     int i = 1;
-    while (gait(i, 0) != 0)
+    while (!gait.row(i).isZero())
     {
         // Feet that were in stance phase and are still in stance phase do not move
         for (int j = 0; j < 4; j++)
         {
-            if (gait(i - 1, 1 + j) * gait(i, 1 + j) > 0)
+            if (gait(i - 1, j) * gait(i, j) > 0)
             {
                 footsteps_[i].col(j) = footsteps_[i - 1].col(j);
             }
@@ -106,13 +117,13 @@ void FootstepPlanner::compute_footsteps(VectorN const& q, Vector6 const& v, Vect
         // Feet that were in swing phase and are now in stance phase need to be updated
         for (int j = 0; j < 4; j++)
         {
-            if ((1 - gait(i - 1, 1 + j)) * gait(i, 1 + j) > 0)
+            if ((1 - gait(i - 1, j)) * gait(i, j) > 0)
             {
                 // Offset to the future position
                 q_dxdy << dx(i - 1, 0), dy(i - 1, 0), 0.0;
 
                 // Get future desired position of footsteps
-                compute_next_footstep(i, j);
+                computeNextFootstep(i, j);
 
                 // Get desired position of footstep compared to current position
                 double c = std::cos(yaws(i - 1));
@@ -126,7 +137,7 @@ void FootstepPlanner::compute_footsteps(VectorN const& q, Vector6 const& v, Vect
     }
 }
 
-void FootstepPlanner::compute_next_footstep(int i, int j)
+void FootstepPlanner::computeNextFootstep(int i, int j)
 {
     nextFootstep_ = Matrix34::Zero();
 
@@ -156,7 +167,7 @@ void FootstepPlanner::compute_next_footstep(int i, int j)
     nextFootstep_.row(2) = Vector4::Zero().transpose();
 }
 
-void FootstepPlanner::update_target_footsteps()
+void FootstepPlanner::updateTargetFootsteps()
 {
     for (int i = 0; i < 4; i++)
     {
@@ -174,31 +185,29 @@ MatrixN FootstepPlanner::computeTargetFootstep(VectorN const& q,
                                                Vector6 const& b_vref)
 {
     // Get the reference velocity in world frame (given in base frame)
-    Eigen::Quaterniond quat(q(6), q(3), q(4), q(5));  // w, x, y, z
-    RPY << pinocchio::rpy::matrixToRpy(quat.toRotationMatrix());
+    quat_ = {q(6), q(3), q(4), q(5)};  // w, x, y, z
+    RPY_ << pinocchio::rpy::matrixToRpy(quat_.toRotationMatrix());
 
-    double c = std::cos(RPY(2));
-    double s = std::sin(RPY(2));
+    double c = std::cos(RPY_(2));
+    double s = std::sin(RPY_(2));
     Rz.topLeftCorner<2, 2>() << c, -s, s, c;
 
     Vector6 vref = b_vref;
     vref.head(3) = Rz * b_vref.head(3);
-    
 
     // Compute the desired location of footsteps over the prediction horizon
-    compute_footsteps(q, v, vref);
+    computeFootsteps(q, v, vref);
 
     // Update desired location of footsteps on the ground
-    update_target_footsteps();
+    updateTargetFootsteps();
     return targetFootstep_;
 }
 
-void FootstepPlanner::updateNewContact() // Gait const& gait) // MaxtrixN const& currentGait)
+void FootstepPlanner::updateNewContact()
 {
-    // Entering new contact phase, store positions of feet that are now in contact
     for (int i = 0; i < 4; i++)
     {
-        if (gait_->getCurrentGaitCoeff(0, 1 + i) == 1.0)   //if (currentGait(0, 1 + i) == 1.0)
+        if (gait_->getCurrentGaitCoeff(0, i) == 1.0)
         {
             currentFootstep_.col(i) = (footsteps_[1]).col(i);
         }
@@ -208,15 +217,14 @@ void FootstepPlanner::updateNewContact() // Gait const& gait) // MaxtrixN const&
 MatrixN FootstepPlanner::getFootsteps() { return vectorToMatrix(footsteps_); }
 MatrixN FootstepPlanner::getTargetFootsteps() { return targetFootstep_; }
 
-MatrixN FootstepPlanner::vectorToMatrix(std::array<Matrix34, N0_gait> const& array)
+MatrixN FootstepPlanner::vectorToMatrix(std::vector<Matrix34> const& array)
 {
-    MatrixN M = MatrixN::Zero(N0_gait, 13);
-    M.col(0) = gait_->getCurrentGait().col(0);
-    for (int i = 0; i < N0_gait; i++)
+    MatrixN M = MatrixN::Zero(array.size(), 12);
+    for (uint i = 0; i < array.size(); i++)
     {
         for (int j = 0; j < 4; j++)
         {
-            M.row(i).segment<3>(1 + 3 * j) = array[i].col(j);
+            M.row(i).segment<3>(3 * j) = array[i].col(j);
         }
     }
     return M;

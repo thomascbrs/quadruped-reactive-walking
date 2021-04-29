@@ -1,6 +1,6 @@
 #include "qrw/MPC.hpp"
 
-MPC::MPC(double dt_in, int n_steps_in, double T_gait_in) {
+MPC::MPC(double dt_in, int n_steps_in, double T_gait_in, int N_gait) {
   dt = dt_in;
   n_steps = n_steps_in;
   T_gait = T_gait_in;
@@ -10,6 +10,8 @@ MPC::MPC(double dt_in, int n_steps_in, double T_gait_in) {
   S_gait = Eigen::Matrix<int, Eigen::Dynamic, 1>::Zero(12 * n_steps, 1);
   warmxf = Eigen::Matrix<double, Eigen::Dynamic, 1>::Zero(12 * n_steps * 2, 1);
   x_f_applied = Eigen::MatrixXd::Zero(24, n_steps);
+
+  gait = Eigen::Matrix<int, Eigen::Dynamic, 4>::Zero(N_gait, 4);
 
   // Predefined variables
   mass = 2.50000279f;
@@ -28,7 +30,7 @@ MPC::MPC(double dt_in, int n_steps_in, double T_gait_in) {
   osqp_set_default_settings(settings);
 }
 
-MPC::MPC() { MPC(0.02, 32, 0.64); }
+MPC::MPC() { }
 
 /*
 Create the constraint matrices of the MPC (M.X = N and L.X <= K)
@@ -415,8 +417,8 @@ int MPC::update_ML(Eigen::MatrixXd fsteps) {
   int j = 0;
   int k_cum = 0;
   // Iterate over all phases of the gait
-  while (gait(j, 0) != 0) {
-    for (int k = k_cum; k < (k_cum + gait(j, 0)); k++) {
+  while (!gait.row(j).isZero()) {
+    for (int k = k_cum; k < (k_cum + 1); k++) {
       // Get inverse of the inertia matrix for time step k
       double c = cos(xref(5, k));
       double s = sin(xref(5, k));
@@ -427,7 +429,7 @@ int MPC::update_ML(Eigen::MatrixXd fsteps) {
 
       // Get skew-symetric matrix for each foothold
       // Eigen::Map<Eigen::Matrix<double, 3, 4>> fsteps_tmp((fsteps.block(j, 1, 1, 12)).data(), 3, 4);
-      footholds_tmp = fsteps.block(j, 1, 1, 12);
+      footholds_tmp = fsteps.row(j); // block(j, 1, 1, 12);
       // footholds = footholds_tmp.reshaped(3, 4);
       Eigen::Map<Eigen::MatrixXd> footholds_bis(footholds_tmp.data(), 3, 4);
 
@@ -443,7 +445,7 @@ int MPC::update_ML(Eigen::MatrixXd fsteps) {
       }
     }
 
-    k_cum += gait(j, 0);
+    k_cum++;
     j++;
   }
 
@@ -656,20 +658,16 @@ N is the number of time step in the prediction horizon.
 */
 int MPC::construct_S() {
   int i = 0;
-  int k = 0;
 
-  Eigen::Matrix<int, 20, 5> inv_gait = Eigen::Matrix<int, 20, 5>::Ones() - gait;
-  while (gait(i, 0) != 0) {
+  inv_gait = Eigen::Matrix<int, Eigen::Dynamic, 4>::Ones(gait.rows(), 4) - gait;
+  while (!gait.row(i).isZero()) {
     // S_gait.block(k*12, 0, gait[i, 0]*12, 1) = (1 - (gait.block(i, 1, 1, 4)).transpose()).replicate<gait[i, 0], 1>()
     // not finished;
-    for (int a = 0; a < gait(i, 0); a++) {
-      for (int b = 0; b < 4; b++) {
-        for (int c = 0; c < 3; c++) {
-          S_gait(k * 12 + 12 * a + 3 * b + c, 0) = inv_gait(i, 1 + b);
-        }
+    for (int b = 0; b < 4; b++) {
+      for (int c = 0; c < 3; c++) {
+        S_gait(i * 12 + 3 * b + c, 0) = inv_gait(i, b);
       }
     }
-    k += gait(i, 0);
     i++;
   }
 
@@ -680,21 +678,19 @@ int MPC::construct_S() {
 Reconstruct the gait matrix based on the fsteps matrix since only the last one is received by the MPC
 */
 int MPC::construct_gait(Eigen::MatrixXd fsteps_in) {
-  // First column is identical
-  gait.col(0) = fsteps_in.col(0).cast<int>();
 
   int k = 0;
-  while (gait(k, 0) != 0) {
+  while (!fsteps_in.row(k).isZero()) {
     for (int i = 0; i < 4; i++) {
-      if (fsteps_in(k, 1 + i * 3) == 0.0) {
-        gait(k, 1 + i) = 0;
+      if (fsteps_in(k, i * 3) == 0.0) {
+        gait(k, i) = 0;
       } else {
-        gait(k, 1 + i) = 1;
+        gait(k, i) = 1;
       }
     }
     k++;
   }
-  gait.row(k) << 0, 0, 0, 0, 0;
+  gait.row(k) << 0, 0, 0, 0;
   return 0;
 }
 
@@ -769,16 +765,12 @@ void MPC::save_dns_matrix(double *M, int size, std::string filename) {
 }
 
 Eigen::MatrixXd MPC::get_gait() {
-  // Eigen::MatrixXd tmp = Eigen::MatrixXd::Zero(20, 5);
-  // tmp.block(0, 0, 20, 5) = gait.block(0, 0, 20, 5);
   Eigen::MatrixXd tmp;
   tmp = gait.cast<double>();
   return tmp;
 }
 
 Eigen::MatrixXd MPC::get_Sgait() {
-  // Eigen::MatrixXd tmp = Eigen::MatrixXd::Zero(12 * n_steps, 1);
-  // tmp.col(0) = S_gait.col(0);
   Eigen::MatrixXd tmp;
   tmp = S_gait.cast<double>();
   return tmp;

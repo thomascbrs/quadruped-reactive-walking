@@ -55,7 +55,7 @@ class dummyDevice:
 class Controller:
 
     def __init__(self, q_init, envID, velID, dt_wbc, dt_mpc, k_mpc, t, T_gait, T_mpc, N_SIMULATION, type_MPC,
-                 pyb_feedback, on_solo8, use_flat_plane, predefined_vel, enable_pyb_GUI, kf_enabled):
+                 use_flat_plane, predefined_vel, enable_pyb_GUI, kf_enabled, N_gait, isSimulation):
         """Function that runs a simulation scenario based on a reference velocity profile, an environment and
         various parameters to define the gait
 
@@ -70,12 +70,12 @@ class Controller:
             T_mpc (float): duration of mpc prediction horizon
             N_SIMULATION (int): number of iterations of inverse dynamics during the simulation
             type_mpc (bool): True to have PA's MPC, False to have Thomas's MPC
-            pyb_feedback (bool): whether PyBullet feedback is enabled or not
-            on_solo8 (bool): whether we are working on solo8 or not
             use_flat_plane (bool): to use either a flat ground or a rough ground
             predefined_vel (bool): to use either a predefined velocity profile or a gamepad
             enable_pyb_GUI (bool): to display PyBullet GUI or not
             kf_enabled (bool): complementary filter (False) or kalman filter (True)
+            N_gait (int): number of spare lines in the gait matrix
+            isSimulation (bool): if we are in simulation mode
         """
 
         ########################################################################
@@ -103,12 +103,18 @@ class Controller:
         '''if self.enable_gepetto_viewer:
             self.view = viewerClient()'''
 
+        # Enable/Disable perfect estimator
+        perfectEstimator = False
+        if not isSimulation:
+            perfectEstimator = False  # Cannot use perfect estimator if we are running on real robot
+
         # Initialisation of the solo model/data and of the Gepetto viewer
         self.solo, self.fsteps_init, self.h_init = utils_mpc.init_robot(q_init, self.enable_gepetto_viewer)
 
         # Create Joystick, FootstepPlanner, Logger and Interface objects
         self.joystick, self.logger, self.estimator = utils_mpc.init_objects(
-            dt_wbc, dt_mpc, N_SIMULATION, k_mpc, T_gait, type_MPC, predefined_vel, self.h_init, kf_enabled)
+            dt_wbc, dt_mpc, N_SIMULATION, k_mpc, T_gait, type_MPC, predefined_vel, self.h_init, kf_enabled,
+            perfectEstimator)
 
         # Enable/Disable hybrid control
         self.enable_hybrid_control = True
@@ -120,29 +126,31 @@ class Controller:
         self.v = np.zeros((18, 1))
         self.b_v = np.zeros((18, 1))
         self.o_v_filt = np.zeros((18, 1))
-        #self.planner = PyPlanner(dt_mpc, dt_wbc, T_gait, T_mpc,
-        #                         k_mpc, on_solo8, self.h_ref, self.fsteps_init)
 
         # self.statePlanner = lqrw.StatePlanner()
         # self.statePlanner.initialize(dt_mpc, T_mpc, self.h_ref)
 
         # self.gait = lqrw.Gait()
-        # self.gait.initialize(dt_mpc, T_gait, T_mpc)
+        # self.gait.initialize(dt_mpc, T_gait, T_mpc, N_gait)
+
+        """from IPython import embed
+        embed()"""
 
         shoulders = np.zeros((3, 4))
         shoulders[0, :] = [0.1946, 0.1946, -0.1946, -0.1946]
         shoulders[1, :] = [0.14695, -0.14695, 0.14695, -0.14695]
         # self.footstepPlanner = lqrw.FootstepPlanner()
-        # self.footstepPlanner.initialize(dt_mpc, T_mpc, self.h_ref, shoulders.copy(), self.gait)
+        # self.footstepPlanner.initialize(dt_mpc, T_mpc, self.h_ref, shoulders.copy(), self.gait, N_gait)
 
         # self.footTrajectoryGenerator = lqrw.FootTrajectoryGenerator()
-        # self.footTrajectoryGenerator.initialize(0.05, 0.07, self.fsteps_init.copy(), shoulders.copy(), dt_wbc, k_mpc, self.gait)
+        # self.footTrajectoryGenerator.initialize(0.05, 0.07, self.fsteps_init.copy(), shoulders.copy(),
+        #                                         dt_wbc, k_mpc, self.gait)
 
         # Wrapper that makes the link with the solver that you want to use for the MPC
         # First argument to True to have PA's MPC, to False to have Thomas's MPC
-        self.enable_multiprocessing = True
+        self.enable_multiprocessing = False
         self.mpc_wrapper = MPC_Wrapper.MPC_Wrapper(type_MPC, dt_mpc, np.int(T_mpc/dt_mpc),
-                                                   k_mpc, T_mpc, self.q, self.enable_multiprocessing)
+                                                   k_mpc, T_mpc, N_gait, self.q, self.enable_multiprocessing)
 
         # ForceMonitor to display contact forces in PyBullet with red lines
         # import ForceMonitor
@@ -161,8 +169,6 @@ class Controller:
         self.T_mpc = T_mpc
         self.N_SIMULATION = N_SIMULATION
         self.type_MPC = type_MPC
-        self.pyb_feedback = pyb_feedback
-        self.on_solo8 = on_solo8
         self.use_flat_plane = use_flat_plane
         self.predefined_vel = predefined_vel
         self.enable_pyb_GUI = enable_pyb_GUI
@@ -185,7 +191,9 @@ class Controller:
         dDevice.baseLinearAcceleration = np.zeros(3)
         dDevice.baseAngularVelocity = np.zeros(3)
         dDevice.baseOrientation = np.array([0.0, 0.0, 0.0, 1.0])
-
+        dDevice.dummyPos = np.array([0.0, 0.0, q_init[2]])
+        dDevice.b_baseVel = np.zeros(3)
+        
         # Solo3D python class 
         self.gait = np.zeros((20, 5))
         self.fsteps = np.full((self.gait.shape[0], 13), np.nan)
@@ -219,9 +227,8 @@ class Controller:
         self.joystick.update_v_ref(self.k, self.velID)
 
         # Process state estimator
-        # self.estimator.run_filter(self.k, self.gait.getCurrentGait()[0, 1:],
-        #                           device, self.footTrajectoryGenerator.getFootPosition(),
-        #                           self.gait.getCurrentGait()[0, 0])
+        # self.estimator.run_filter(self.k, self.gait.getCurrentGait(),
+        #                           device, self.footTrajectoryGenerator.getFootPosition())
         self.estimator.run_filter(self.k, self.gaitPlanner.getCurrentGait()[0, 1:],
                                   device, self.footTrajectoryGenerator.getFootPosition(),
                                   self.gaitPlanner.getCurrentGait()[0, 0])
@@ -238,15 +245,18 @@ class Controller:
             # Update estimated position of the robot
             self.v_estim[0:3, 0:1] = oMb.rotation.transpose() @ self.joystick.v_ref[0:3, 0:1]
             self.v_estim[3:6, 0:1] = oMb.rotation.transpose() @ self.joystick.v_ref[3:6, 0:1]
-            # if not self.gait.getIsStatic(): Not used for now
+            # if not self.gait.getIsStatic():
             self.q_estim[:, 0] = pin.integrate(self.solo.model,
                                                 self.q, self.v_estim * self.myController.dt)
             self.yaw_estim = (utils_mpc.quaternionToRPY(self.q_estim[3:7, 0]))[2, 0]
             self.roll_estim = (utils_mpc.quaternionToRPY(self.q_estim[3:7, 0]))[0, 0]
             self.pitch_estim = (utils_mpc.quaternionToRPY(self.q_estim[3:7, 0]))[1, 0]
+            #     self.q_estim[:, 0] = pin.integrate(self.solo.model,
+            #                                        self.q, self.v_estim * self.myController.dt)
+            #     self.yaw_estim = (utils_mpc.quaternionToRPY(self.q_estim[3:7, 0]))[2, 0]
             # else:
             #     self.planner.q_static[:] = pin.integrate(self.solo.model,
-            #                                                 self.planner.q_static, self.v_estim * self.myController.dt)
+            #                                              self.planner.q_static, self.v_estim * self.myController.dt)
             #     self.planner.RPY_static[:, 0:1] = utils_mpc.quaternionToRPY(self.planner.q_static[3:7, 0])
         else:
             self.yaw_estim = 0.0
@@ -260,7 +270,7 @@ class Controller:
         # self.gait.updateGait(self.k, self.k_mpc, self.q[0:7, 0:1], self.joystick.joystick_code)
 
         # Update footsteps if new contact phase
-        # if(self.k % self.k_mpc == 0 and self.k != 0 and self.gait.isNewPhase()):  
+        # if(self.k % self.k_mpc == 0 and self.k != 0 and self.gait.isNewPhase()):
         #     self.footstepPlanner.updateNewContact()
 
         """// Get the reference velocity in world frame (given in base frame)
@@ -293,11 +303,11 @@ class Controller:
         self.agoals = self.planner.get_agoals()"""
 
         # Run state planner (outputs the reference trajectory of the CoM / base)
-        # self.statePlanner.computeRefStates(self.q[0:7, 0:1], self.v[0:6, 0:1].copy(), o_v_ref, 0.0)
-        # Result can be retrieved with self.statePlanner.getXReference()
-        # xref = self.statePlanner.getXReference()
+        # self.statePlanner.computeReferenceStates(self.q[0:7, 0:1], self.v[0:6, 0:1].copy(), o_v_ref, 0.0)
+        # # Result can be retrieved with self.statePlanner.getReferenceStates()
+        # xref = self.statePlanner.getReferenceStates()
         # fsteps = self.footstepPlanner.getFootsteps()
-        # gait = self.gait.getCurrentGait()
+        # cgait = self.gait.getCurrentGait()
 
         ################
         # solo3D python
@@ -330,20 +340,14 @@ class Controller:
         # Process MPC once every k_mpc iterations of TSID
         if (self.k % self.k_mpc) == 0:
             try:
-                # self.mpc_wrapper.solve(self.k, xref_py, fsteps, gait)
+                # self.mpc_wrapper.solve(self.k, xref, fsteps, cgait)
                 self.mpc_wrapper.solve(self.k, xref, fsteps, gait)
             except ValueError:
                 print("MPC Problem")
 
         # Retrieve reference contact forces
-        if self.enable_multiprocessing or (self.k == 0):
-            # Check if the MPC has outputted a new result
-            self.x_f_mpc = self.mpc_wrapper.get_latest_result()
-        else:
-            print("TODO: Check non multiprocessing mode.")
-            self.joystick.stop = True
-            # if (self.k % self.k_mpc) == 2:  # Mimic a 4 ms delay
-            #     self.f_applied = self.mpc_wrapper.get_latest_result()
+        self.x_f_mpc = self.mpc_wrapper.get_latest_result()
+
         t_mpc = time.time()
 
         # Target state for the whole body control
@@ -361,8 +365,6 @@ class Controller:
         #     self.x_f_wbc[3:6] = self.planner.RPY_static[:, 0]
         self.x_f_wbc[6:12] = xref[6:, 1]
 
-        self.estimator.x_f_mpc = self.x_f_wbc.copy()  # For logging
-
         # Whole Body Control
         # If nothing wrong happened yet in the WBC controller
         if (not self.myController.error) and (not self.joystick.stop):
@@ -379,7 +381,7 @@ class Controller:
             #                           self.footTrajectoryGenerator.getFootVelocity(),
             #                           self.footTrajectoryGenerator.getFootAcceleration())
             self.myController.compute(self.q, self.b_v, self.x_f_wbc[:12],
-                                      self.x_f_wbc[12:], gait[0, 1:],
+                                      self.x_f_wbc[12:], cgait[0, :],
                                       self.footTrajectoryGenerator.getFootPosition(),
                                       self.footTrajectoryGenerator.getFootVelocity(),
                                       self.footTrajectoryGenerator.getFootAcceleration())
@@ -399,11 +401,11 @@ class Controller:
                 print("###")
                 #print(self.q.ravel())
                 print(self.myController.tau_ff)"""
-    
+
         t_wbc = time.time()
 
         # Security check
-        self.security_check() # WARNING ENABLE AGAIN
+        self.security_check()
 
         # Update PyBullet camera
         self.pyb_camera(device)

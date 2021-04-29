@@ -14,7 +14,7 @@
 #include "pinocchio/math/rpy.hpp"
 #include "qrw/Gait.hpp"
 #include "qrw/Types.h"
-
+#include <vector>
 
 // Order of feet/legs: FL, FR, HL, HR
 
@@ -43,7 +43,8 @@ public:
                     double T_mpc_in,
                     double h_ref_in,
                     MatrixN const& shouldersIn,
-                    Gait & gaitIn);
+                    Gait& gaitIn,
+                    int N_gait);
 
     ////////////////////////////////////////////////////////////////////////////////////////////////
     ///
@@ -51,7 +52,6 @@ public:
     ///
     ////////////////////////////////////////////////////////////////////////////////////////////////
     ~FootstepPlanner() {}
-
 
     ////////////////////////////////////////////////////////////////////////////////////////////////
     ///
@@ -88,7 +88,7 @@ private:
     /// \param[in] vref desired velocity vector of the flying base in world frame(linear and angular stacked)
     ///
     ////////////////////////////////////////////////////////////////////////////////////////////////
-    void compute_footsteps(VectorN const& q, Vector6 const& v, Vector6 const& vref);
+    void computeFootsteps(VectorN const& q, Vector6 const& v, Vector6 const& vref);
 
     ////////////////////////////////////////////////////////////////////////////////////////////////
     ///
@@ -100,18 +100,18 @@ private:
     /// \retval Matrix with the next footstep positions
     ///
     ////////////////////////////////////////////////////////////////////////////////////////////////
-    void compute_next_footstep(int i, int j);
+    void computeNextFootstep(int i, int j);
 
     ////////////////////////////////////////////////////////////////////////////////////////////////
     ///
     /// \brief Update desired location of footsteps using information coming from the footsteps planner
     ///
     ////////////////////////////////////////////////////////////////////////////////////////////////
-    void update_target_footsteps();
+    void updateTargetFootsteps();
 
-    MatrixN vectorToMatrix(std::array<Matrix34, N0_gait> const& array);
+    MatrixN vectorToMatrix(std::vector<Matrix34> const& array);
 
-    Gait* gait_; // Gait object to hold the gait informations
+    Gait* gait_;  // Gait object to hold the gait informations
 
     double dt;      // Time step of the contact sequence (time step of the MPC)
     double T_gait;  // Gait period
@@ -131,7 +131,7 @@ private:
     Matrix34 currentFootstep_;  // Feet matrix in world frame
     Matrix34 nextFootstep_;     // Feet matrix in world frame
     Matrix34 targetFootstep_;
-    std::array<Matrix34, N0_gait> footsteps_;
+    std::vector<Matrix34> footsteps_;
 
     Matrix3 Rz;  // Predefined matrices for compute_footstep function
     VectorN dt_cum;
@@ -141,10 +141,10 @@ private:
 
     Vector3 q_tmp;
     Vector3 q_dxdy;
-    Vector3 RPY;
+    Vector3 RPY_;
+    Eigen::Quaterniond quat_;
     Vector3 b_v;
     Vector6 b_vref;
-
 };
 
 #endif  // FOOTSTEPPLANNER_H_INCLUDED

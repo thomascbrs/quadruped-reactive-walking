@@ -32,7 +32,7 @@ class MPC_Wrapper:
         multiprocessing (bool): Enable/Disable running the MPC with another process
     """
 
-    def __init__(self, mpc_type, dt, n_steps, k_mpc, T_gait, q_init, multiprocessing=False):
+    def __init__(self, mpc_type, dt, n_steps, k_mpc, T_gait, N_gait, q_init, multiprocessing=False):
 
         self.f_applied = np.zeros((12,))
         self.not_first_iter = False
@@ -43,6 +43,7 @@ class MPC_Wrapper:
         self.dt = dt
         self.n_steps = n_steps
         self.T_gait = T_gait
+        self.N_gait = N_gait
         self.gait_memory = np.zeros(4)
 
         self.mpc_type = mpc_type
@@ -50,14 +51,14 @@ class MPC_Wrapper:
         if multiprocessing:  # Setup variables in the shared memory
             self.newData = Value('b', False)
             self.newResult = Value('b', False)
-            self.dataIn = Array('d', [0.0] * (1 + (np.int(self.n_steps)+1) * 12 + 13*20))
+            self.dataIn = Array('d', [0.0] * (1 + (np.int(self.n_steps)+1) * 12 + 12*self.N_gait))
             self.dataOut = Array('d', [0] * 24 * (np.int(self.n_steps)))
-            self.fsteps_future = np.zeros((20, 13))
+            self.fsteps_future = np.zeros((self.N_gait, 12))
             self.running = Value('b', True)
         else:
             # Create the new version of the MPC solver object
             if mpc_type:
-                self.mpc = MPC.MPC(dt, n_steps, T_gait)
+                self.mpc = MPC.MPC(dt, n_steps, T_gait, self.N_gait)
             else:
                 self.mpc = MPC_crocoddyl.MPC_crocoddyl(
                     dt=dt, T_mpc=T_gait, mu=0.9, inner=False, linearModel=True, n_period=int((dt * n_steps)/T_gait))
@@ -75,27 +76,29 @@ class MPC_Wrapper:
 
         Args:
             k (int): Number of inv dynamics iterations since the start of the simulation
-            fstep_planner (object): FootstepPlanner object of the control loop
+            xref (12xN): Desired state vector for the whole prediction horizon
+            fsteps (12xN array): the [x, y, z]^T desired position of each foot for each time step of the horizon
+            gait (4xN array): Contact state of feet (gait matrix)
         """
 
         if self.multiprocessing:  # Run in parallel process
             self.run_MPC_asynchronous(k, xref, fsteps)
         else:  # Run in the same process than main loop
-            self.run_MPC_synchronous(k, fstep_planner)
+            self.run_MPC_synchronous(k, xref, fsteps)
 
         if k > 2:
             self.last_available_result[12:(12+self.n_steps), :] = np.roll(self.last_available_result[12:(12+self.n_steps), :], -1, axis=1)
 
         pt = 0
-        while (gait[pt, 0] != 0):
+        while (np.any(gait[pt, :])):
             pt += 1
-        if k > 2 and not np.array_equal(gait[0, 1:], gait[pt-1, 1:]):
-            mass = 2.5  # Todo: grab from URDF?
-            nb_ctc = np.sum(gait[pt-1, 1:])
+        if k > 2 and not np.array_equal(gait[0, :], gait[pt-1, :]):
+            mass = 2.5  # TODO: grab from URDF?
+            nb_ctc = np.sum(gait[pt-1, :])
             F = 9.81 * mass / nb_ctc
             self.last_available_result[12:, self.n_steps-1] = np.zeros(12)
             for i in range(4):
-                if (gait[pt-1, 1+i] == 1):
+                if (gait[pt-1, i] == 1):
                     self.last_available_result[12+3*i+2, self.n_steps-1] = F
 
         return 0
@@ -122,12 +125,13 @@ class MPC_Wrapper:
             self.not_first_iter = True
             return self.last_available_result
 
-    def run_MPC_synchronous(self, k, fstep_planner):
+    def run_MPC_synchronous(self, k, xref, fsteps):
         """Run the MPC (synchronous version) to get the desired contact forces for the feet currently in stance phase
 
         Args:
             k (int): Number of inv dynamics iterations since the start of the simulation
-            fstep_planner (object): FootstepPlanner object of the control loop
+            xref (12xN): Desired state vector for the whole prediction horizon
+            fsteps (12xN array): the [x, y, z]^T desired position of each foot for each time step of the horizon
         """
 
         # Run the MPC to get the reference forces and the next predicted state
@@ -135,11 +139,9 @@ class MPC_Wrapper:
 
         if self.mpc_type:
             # OSQP MPC
-            # Replace NaN values by 0.0 (shared memory cannot handle np.nan)
-            fstep_planner.fsteps_mpc[np.isnan(fstep_planner.fsteps_mpc)] = 0.0
-            self.mpc.run(np.int(k), fstep_planner.xref.copy(), fstep_planner.fsteps_mpc.copy())
+            self.mpc.run(np.int(k), xref.copy(), fsteps.copy())
         else:
-            # Crocoddyl MPC
+            # Crocoddyl MPC (TODO: Adapt)
             self.mpc.solve(k, fstep_planner)
 
         # Output of the MPC
@@ -191,7 +193,7 @@ class MPC_Wrapper:
                 # Reshaping 1-dimensional data
                 k = int(kf[0])
                 xref = np.reshape(xref_1dim, (12, self.n_steps+1))
-                fsteps = np.reshape(fsteps_1dim, (20, 13))
+                fsteps = np.reshape(fsteps_1dim, (self.N_gait, 12))
 
                 # Create the MPC object of the parallel process during the first iteration
                 if k == 0:
@@ -249,7 +251,7 @@ class MPC_Wrapper:
         """
 
         # Sizes of the different variables that are stored in the C-type array
-        sizes = [0, 1, (np.int(self.n_steps)+1) * 12, 13*20]
+        sizes = [0, 1, (np.int(self.n_steps)+1) * 12, 12*self.N_gait]
         csizes = np.cumsum(sizes)
 
         # Return decompressed variables in a list
@@ -274,7 +276,7 @@ class MPC_Wrapper:
         footstep when a new phase is created.
 
         Args:
-            fsteps (13x20 array): the remaining number of steps of each phase of the gait (first column)
+            fsteps (13xN_gait array): the remaining number of steps of each phase of the gait (first column)
             and the [x, y, z]^T desired position of each foot for each phase of the gait (12 other columns)
         """
 

@@ -7,6 +7,7 @@
 #include "qrw/FootstepPlanner.hpp"
 #include "qrw/FootTrajectoryGenerator.hpp"
 #include "qrw/QPWBC.hpp"
+#include "qrw/Params.hpp"
 
 #include <boost/python.hpp>
 #include <eigenpy/eigenpy.hpp>
@@ -20,7 +21,7 @@ struct MPCPythonVisitor : public bp::def_visitor<MPCPythonVisitor<MPC>>
     void visit(PyClassMPC& cl) const
     {
         cl.def(bp::init<>(bp::arg(""), "Default constructor."))
-            .def(bp::init<double, int, double>(bp::args("dt_in", "n_steps_in", "T_gait_in"),
+            .def(bp::init<double, int, double, int>(bp::args("dt_in", "n_steps_in", "T_gait_in", "N_gait"),
                                                "Constructor with parameters."))
 
             // Run MPC from Python
@@ -52,13 +53,14 @@ struct StatePlannerPythonVisitor : public bp::def_visitor<StatePlannerPythonVisi
     {
         cl.def(bp::init<>(bp::arg(""), "Default constructor."))
 
-            .def("getXReference", &StatePlanner::getXReference, "Get xref matrix.\n")
+            .def("getReferenceStates", &StatePlanner::getReferenceStates, "Get xref matrix.\n")
+            .def("getNSteps", &StatePlanner::getNSteps, "Get number of steps in prediction horizon.\n")
 
             .def("initialize", &StatePlanner::initialize, bp::args("dt_in", "T_mpc_in", "h_ref_in"),
                  "Initialize StatePlanner from Python.\n")
 
             // Run StatePlanner from Python
-            .def("computeRefStates", &StatePlanner::computeRefStates, bp::args("q", "v", "b_vref", "z_average"),
+            .def("computeReferenceStates", &StatePlanner::computeReferenceStates, bp::args("q", "v", "b_vref", "z_average"),
                  "Run StatePlanner from Python.\n");
     }
 
@@ -86,7 +88,7 @@ struct GaitPythonVisitor : public bp::def_visitor<GaitPythonVisitor<Gait>>
             .def("isNewPhase", &Gait::isNewPhase, "Get newPhase_ boolean.\n")
             .def("getIsStatic", &Gait::getIsStatic, "Get is_static_ boolean.\n")
 
-            .def("initialize", &Gait::initialize, bp::args("dt_in", "T_gait_in", "T_mpc_in"),
+            .def("initialize", &Gait::initialize, bp::args("dt_in", "T_gait_in", "T_mpc_in", "N_gait"),
                  "Initialize Gait from Python.\n")
 
             // Update current gait matrix from Python
@@ -120,7 +122,7 @@ struct FootstepPlannerPythonVisitor : public bp::def_visitor<FootstepPlannerPyth
 
             .def("getFootsteps", &FootstepPlanner::getFootsteps, "Get footsteps_ matrix.\n")
 
-            .def("initialize", &FootstepPlanner::initialize, bp::args("dt_in", "T_mpc_in", "h_ref_in", "shouldersIn", "gaitIn"),
+            .def("initialize", &FootstepPlanner::initialize, bp::args("dt_in", "T_mpc_in", "h_ref_in", "shouldersIn", "gaitIn", "N_gait"),
                  "Initialize FootstepPlanner from Python.\n")
 
             // Compute target location of footsteps from Python
@@ -206,6 +208,9 @@ struct InvKinPythonVisitor : public bp::def_visitor<InvKinPythonVisitor<InvKin>>
 
 void exposeInvKin() { InvKinPythonVisitor<InvKin>::expose(); }
 
+/////////////////////////////////
+/// Binding QPWBC class
+/////////////////////////////////
 template <typename QPWBC>
 struct QPWBCPythonVisitor : public bp::def_visitor<QPWBCPythonVisitor<QPWBC>>
 {
@@ -229,9 +234,55 @@ struct QPWBCPythonVisitor : public bp::def_visitor<QPWBCPythonVisitor<QPWBC>>
         ENABLE_SPECIFIC_MATRIX_TYPE(matXd);
     }
 };
-
 void exposeQPWBC() { QPWBCPythonVisitor<QPWBC>::expose(); }
 
+/////////////////////////////////
+/// Binding Params class
+/////////////////////////////////
+template <typename Params>
+struct ParamsPythonVisitor : public bp::def_visitor<ParamsPythonVisitor<Params>>
+{
+    template <class PyClassParams>
+    void visit(PyClassParams& cl) const
+    {
+        cl.def(bp::init<>(bp::arg(""), "Default constructor."))
+
+            .def("initialize", &Params::initialize, bp::args("file_path"),
+                 "Initialize Params from Python.\n")
+
+            // Read Params from Python
+            .def_readwrite("interface", &Params::interface)
+            .def_readwrite("SIMULATION", &Params::SIMULATION)
+            .def_readwrite("LOGGING", &Params::LOGGING)
+            .def_readwrite("PLOTTING", &Params::PLOTTING)
+            .def_readwrite("dt_wbc", &Params::dt_wbc)
+            .def_readwrite("N_gait", &Params::N_gait)
+            .def_readwrite("envID", &Params::envID)
+            .def_readwrite("velID", &Params::velID)
+            .def_readwrite("dt_mpc", &Params::dt_mpc)
+            .def_readwrite("T_gait", &Params::T_gait)
+            .def_readwrite("T_mpc", &Params::T_mpc)
+            .def_readwrite("N_SIMULATION", &Params::N_SIMULATION)
+            .def_readwrite("type_MPC", &Params::type_MPC)
+            .def_readwrite("use_flat_plane", &Params::use_flat_plane)
+            .def_readwrite("predefined_vel", &Params::predefined_vel)
+            .def_readwrite("kf_enabled", &Params::kf_enabled)
+            .def_readwrite("enable_pyb_GUI", &Params::enable_pyb_GUI);
+
+    }
+
+    static void expose()
+    {
+        bp::class_<Params>("Params", bp::no_init).def(ParamsPythonVisitor<Params>());
+
+        ENABLE_SPECIFIC_MATRIX_TYPE(MatrixN);
+    }
+};
+void exposeParams() { ParamsPythonVisitor<Params>::expose(); }
+
+/////////////////////////////////
+/// Exposing classes
+/////////////////////////////////
 BOOST_PYTHON_MODULE(libquadruped_reactive_walking)
 {
     boost::python::def("add", gepetto::example::add);
@@ -246,4 +297,5 @@ BOOST_PYTHON_MODULE(libquadruped_reactive_walking)
     exposeFootTrajectoryGenerator();
     exposeInvKin();
     exposeQPWBC();
+    exposeParams();
 }
