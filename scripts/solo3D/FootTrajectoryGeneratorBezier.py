@@ -7,6 +7,10 @@ eigenpy.switchToNumpyArray()
 from curves import (bezier)
 from curves.optimization import (problem_definition, setup_control_points)
 from curves.optimization import constraint_flag
+import pybullet as pyb
+import pinocchio as pin
+from example_robot_data import load
+
 
 class FootTrajectoryGeneratorBezier:
 
@@ -24,7 +28,7 @@ class FootTrajectoryGeneratorBezier:
         # Foot trajectory generator
         self.max_height_feet = 0.035  # Rgeular height on the ground
         # self.max_height_switch_surface = 0.03  # height added to the surface height
-        self.t_lock_before_touchdown = 0.07
+        self.t_lock_before_touchdown = 0.03
 
         # Gait matrix
         self.gait = np.zeros((20, 5))
@@ -52,9 +56,9 @@ class FootTrajectoryGeneratorBezier:
         # Bezier parameters
 
         #dimension of our problem (here 3 as our curve is 3D)
-        self.N_int = 12 # Number of points in the least square problem
+        self.N_int = 15 # Number of points in the least square problem
         self.dim = 3
-        self.degree = 8  # Degree of the Bezier curve to match the polys
+        self.degree = 7  # Degree of the Bezier curve to match the polys
         self.pDs = []
         self.problems = []
         self.variableBeziers = []
@@ -69,8 +73,12 @@ class FootTrajectoryGeneratorBezier:
         self.new_surface = np.array([-99,-99,-99,-99])
         self.past_surface = np.array([-99,-99,-99,-99])
         self.ineq = [0]*4 
-        self.ineq_vect = [0]*4
-        self.x_margin = [0.008]*4
+        self.ineq_vect = [0]*4        
+        self.x_margin_max = 0.02
+        self.x_margin = [self.x_margin_max]*4
+        self.t_stop = [0.]*4
+        self.t_margin = 0.15  # 1 % of the curve after critical point
+        self.z_margin = 0.01  # 1 % of the height of the obstacle around the critical point
        
 
         # A bezier curve for each foot
@@ -96,7 +104,11 @@ class FootTrajectoryGeneratorBezier:
             self.fitBeziers.append( self.variableBeziers[-1].evaluate(np.zeros((res_size,1)) ) )
             self.res.append(np.zeros((res_size,1)))
 
-       
+        
+        # Load the URDF model to get Pinocchio data and model structures
+        robot = load('solo12')
+        self.data = robot.data.copy()  # for velocity estimation (forward kinematics)
+        self.model = robot.model.copy()  # for velocity estimation (forward kinematics)      
 
 
     
@@ -252,6 +264,9 @@ class FootTrajectoryGeneratorBezier:
                 # New swing phase --> ineq surface 
                 # Inequalities : 
                 # Selected surface for arriving point : 
+
+                self.t_stop[i_foot] = 0.
+
                 if self.past_surface[i_foot] != self.new_surface[i_foot] :
                     id_surface = self.new_surface[i_foot]
                     surface = self.heightMap.Surfaces[id_surface] 
@@ -276,9 +291,8 @@ class FootTrajectoryGeneratorBezier:
                             self.ineq[i_foot] = surface.ineq[k,:]
                             self.ineq_vect[i_foot] = surface.ineq_vect[k] 
 
-                            # x margin :
-                            xt , yt , zt = self.evaluatePoly(i_foot , 0 , t0 )   
-                            self.x_margin[i_foot] = min(0.008 , abs(P_r[0] -  xt ))
+                            # If foot position already closer than margin
+                            self.x_margin[i_foot] = max( min(self.x_margin_max , abs(P_r[0] -  P1[0] ) - 0.001) , 0. )
 
                 else :
                     self.ineq[i_foot] = 0
@@ -313,37 +327,63 @@ class FootTrajectoryGeneratorBezier:
             ptsTime = [(self.evaluatePoly(i_foot , 0 , t0 + (t1-t0)*t_b ),t_b) for t_b in np.linspace(0,1,self.N_int)]
 
            
-            xt , yt , zt = self.evaluatePoly(i_foot , 0 , t0 )   
+            xt , yt , zt = self.evaluatePoly(i_foot , 0 , t0 )  
+            t_margin = self.t_margin*t1 # 10% around the limit point !inferior to 1/nb point in linspace 
                
-            if np.sum(abs(self.ineq[i_foot])) != 0 and zt < self.footsteps_target[2,i_foot]: # No surface switch or already overpass the critical point
+            if np.sum(abs(self.ineq[i_foot])) != 0 and ( (zt < self.footsteps_target[2,i_foot]) or (self.t0s[i_foot] < self.t_stop[i_foot] + t_margin)  ) and self.x_margin[i_foot] != 0.: # No surface switch or already overpass the critical point
+
+                # Modify (should not be used) x_margin during flight, if problem during flight
+                id_surface = self.new_surface[i_foot]
+                surface = self.heightMap.Surfaces[id_surface] 
+                nb_vert = surface.vertices.shape[0]
+                vert = surface.vertices
+
+                P1 = self.goals[:2,i_foot]
+                P2 = self.footsteps_target[:2,i_foot]
+
+                for k in range(nb_vert) : 
+                    Q1 = np.array([vert[k,0] , vert[k,1]])
+                    if k < nb_vert - 1 :         
+                        Q2 = np.array([vert[k+1,0] , vert[k+1,1]])
+                    else : 
+                        Q2 = np.array([vert[0,0] , vert[0,1]])
+
+                    if doIntersect_segment(P1 , P2 , Q1 , Q2 ) :
+                        P_r = get_intersect_segment(P1, P2, Q1, Q2) 
+                        # x margin :
+                        # xt , yt , zt = self.evaluatePoly(i_foot , 0 , t0 )   
+                        self.x_margin[i_foot] =  max( min(self.x_margin_max , abs(P_r[0] -  P1[0] ) - 0.001) , 0. )
+                        
     
                 vb = self.variableBeziers[i_foot]
                 ineqMatrix = []
                 ineqVector = []
-                t_margin = 0.15 # 10% around the limit point !inferior to 1/nb point in linspace
-                z_margin = self.footsteps_target[2,i_foot]*0.1 # 10% around the limit height
-                # margin_x = 0.00
-                margin_x = self.x_margin[i_foot]
                 
-                t_stop = 0.
-
+                z_margin = self.footsteps_target[2,i_foot]*self.z_margin # 10% around the limit height
+                margin_x = self.x_margin[i_foot]                
+                ct = 0
 
                 for ts in np.linspace(0,1,20) :
                     xt , yt , zt = self.evaluatePoly(i_foot , 0 , t0 + (t1-t0)*ts ) 
 
                     
-                    if ts < t_stop + t_margin :                        
+                    if  t0 + (t1-t0)*ts < self.t_stop[i_foot] + t_margin :                        
                         if zt < self.footsteps_target[2,i_foot] + z_margin  :
-                            t_stop = ts
+                            self.t_stop[i_foot] = t0 + (t1-t0)*ts
+                            print("ts : " , ts)
                             
                         t_curve = ts 
                         wayPoint = vb(ts)
                         ineqMatrix.append(-self.ineq[i_foot] @ wayPoint.B())
-                        ineqVector.append( self.ineq[i_foot] @ wayPoint.c() - self.ineq_vect[i_foot] - margin_x )
+                        ineqVector.append( self.ineq[i_foot] @ wayPoint.c() - self.ineq_vect[i_foot] - ( margin_x + ct) )
+                        ct += 0.00
 
-
-                ineqMatrix = np.array(ineqMatrix)
-                ineqVector = np.array(ineqVector)
+                if len(ineqVector) == 0 : 
+                    ineqMatrix = None 
+                    ineqVector = None
+                else : 
+                    ineqMatrix = np.array(ineqMatrix)
+                    ineqVector = np.array(ineqVector)
               
             else : 
                 ineqMatrix = None 
@@ -354,9 +394,11 @@ class FootTrajectoryGeneratorBezier:
             A, b = genCost(self.variableBeziers[i_foot], ptsTime)
             #regularization matrix 
             reg = np.identity(A.shape[1]) * 0.00
-            # self.res = quadprog_solve_qp(A+reg, b,  G=self.ineqMatrix, h = self.ineqVector )
-            #self.res[i_foot] = quadprog_solve_qp(A+reg, b , G=None, h = None  ).reshape((-1,1))
-            self.res[i_foot] = quadprog_solve_qp(A+reg, b , G=ineqMatrix, h = ineqVector  ).reshape((-1,1))
+
+            try : 
+                self.res[i_foot] = quadprog_solve_qp(A+reg, b , G=ineqMatrix, h = ineqVector  ).reshape((-1,1))
+            except :
+                print("ERROR QP : CONSTRAINT NO CONSISTENT") 
 
             self.fitBeziers[i_foot] = self.variableBeziers[i_foot].evaluate(self.res[i_foot] ) 
 
@@ -389,10 +431,9 @@ class FootTrajectoryGeneratorBezier:
         return 0
 
 
-    def update_foot_trajectory(self, k , fsteps , gaitPlanner , fstepsPlanner):
+    def update_foot_trajectory(self, k , fsteps , gaitPlanner , fstepsPlanner , device , q_filt , v_filt):
 
-        self.gait = gaitPlanner.getCurrentGait() 
-        
+        self.gait = gaitPlanner.getCurrentGait()         
 
         # Update foot target 
         self.footsteps_target = np.zeros((3, 4))
@@ -403,6 +444,51 @@ class FootTrajectoryGeneratorBezier:
                 index += 1 
             self.footsteps_target[:, i] = fsteps[index, (1+i*3):(4+i*3)]
 
+        # Update current position : Pybullet feedback, directly
+        ##########################
+
+        # linkId = [3, 7 ,11 ,15]
+        # if k != 0 : 
+        #     links = pyb.getLinkStates(device.pyb_sim.robotId, linkId , computeForwardKinematics=True , computeLinkVelocity=True )
+
+        #     for j in range(4) :
+        #         self.goals[:,j] = np.array(links[j][4])[:]   # pos frame world for feet
+        #         self.goals[2,j] -= 0.016988                  #  Z offset due to position of frame in object
+        #         self.vgoals[:,j] = np.array(links[j][6])     # vel frame world for feet
+
+
+
+        # Update current position : Pybullet feedback, with forward dynamics
+        ##########################
+
+        if k > 0 :    # Dummy device for k == 0
+            qmes = np.zeros((19,1))
+            revoluteJointIndices = [0, 1, 2, 4, 5, 6, 8, 9, 10, 12, 13, 14]
+            jointStates = pyb.getJointStates(device.pyb_sim.robotId, revoluteJointIndices)
+            baseState = pyb.getBasePositionAndOrientation(device.pyb_sim.robotId)
+            qmes[:3,0] = baseState[0]
+            qmes[3:7,0] = baseState[1]
+            qmes[7:,0] = [state[0] for state in jointStates]         
+            pin.forwardKinematics(self.model, self.data, qmes, v_filt)
+        else : 
+            pin.forwardKinematics(self.model, self.data, q_filt, v_filt)
+
+
+        # Update current position : Estimator feedback, with forward dynamics
+        ##########################
+
+        # pin.forwardKinematics(self.model, self.data, q_filt, v_filt)
+
+
+        contactFrameId = [ 10 , 18 , 26 , 34 ]   # = [ FL , FR , HL , HR]
+
+        for j in range(4) : 
+            framePlacement = pin.updateFramePlacement( self.model, self.data, contactFrameId[j])    # = solo.data.oMf[18].translation
+            frameVelocity = pin.getFrameVelocity(self.model, self.data, contactFrameId[j], pin.ReferenceFrame.LOCAL)
+            
+            self.goals[:,j] = framePlacement.translation[:]
+            self.goals[2,j] -= 0.016988                     # Pybullet offset on Z
+            # self.vgoals[:,j] = frameVelocity.linear       # velocity feedback not working
 
 
         if (k % self.k_mpc) == 0 :
@@ -442,23 +528,10 @@ class FootTrajectoryGeneratorBezier:
                         self.new_surface[i_foot] = fstepsPlanner.surface_selected[i_foot]
                     else : 
                         self.new_surface[i_foot] = -99  
-
-        print("sf selected" , fstepsPlanner.surface_selected)
-        print("new surface : " , self.new_surface)
-    
-
-        # print("\n")
-        # print("t0 : " , self.t0s )
-        # print("past_surface : " , self.past_surface )  
-        # print("new_surface : " , self.new_surface )       
-        # print("ftsep target : " , self.footsteps_target)
-        # print("position init : " , self.goals)
-        # print("\n")
         
         for i in self.feet :
             
             self.updateFootPosition(k,i)
-
 
         return 0
 

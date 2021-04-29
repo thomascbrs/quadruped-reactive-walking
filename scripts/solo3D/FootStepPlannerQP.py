@@ -67,7 +67,7 @@ class FootStepPlannerQP:
         self.heightMap = heightMap   
 
         # Coefficients QP
-        self.weight_vref = 0.05
+        self.weight_vref = 0.06
         self.weight_alpha = 1.
 
         # Store optim v_ref
@@ -136,7 +136,7 @@ class FootStepPlannerQP:
         #self.xref[0, 1:] += q[0, 0]
         #self.xref[1, 1:] += q[1, 0]
 
-        self.xref[5, 1:] += self.RPY[2, 0]
+        #self.xref[5, 1:] += self.RPY[2, 0]
 
         # Desired height is supposed constant
         self.xref[2, 1:] = self.h_ref + z_average
@@ -197,8 +197,8 @@ class FootStepPlannerQP:
         # Law for speed and position of roll / pitch
         # Speed = min ( - K (P_des - P_cur) , rot_max )
         rot_max = 0.3  # rad.s-1
-        r_des = - 0.9*np.arctan2(result[1], 1.)
-        p_des = - 0.9*np.arctan2(result[0], 1.)
+        r_des = - 1.05*np.arctan2(result[1], 1.)
+        p_des = - 1.05*np.arctan2(result[0], 1.)
         k_sp = 100 
         epsilon = 0.01
 
@@ -222,8 +222,8 @@ class FootStepPlannerQP:
         # Get z
         isInside , i, j = self.heightMap.find_nearest(q[0, 0:1] , q[1, 0:1])
 
-        # if p_des != 0 :
-        #     Z_OFFSET = self.h_ref - abs(p_des*0.05)
+        if p_des != 0 :
+            Z_OFFSET = self.h_ref - abs(p_des*0.05)
             
         for k in range(self.n_steps) :
             isInside , i, j = self.heightMap.find_nearest(self.xref[0,k+1] , self.xref[1,k+1])
@@ -340,8 +340,7 @@ class FootStepPlannerQP:
                     # px = fsteps[i , 1 + 3*j ]
                     # py = fsteps[i , 1 + 3*j + 1]
                     if i == 1 : # first line --> swing phase
-                        print("\n")
-                        print("t0s QP : " , self.t0s)
+                        
                         if j in self.feet and (k % self.k_mpc) == 0 and self.t0s[j] < 10e-4 :
                             # Only modyfying the surface for the flying feet at the beginning of the phase
 

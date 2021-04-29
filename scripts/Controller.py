@@ -16,6 +16,8 @@ from solo3D.FootStepPlannerQP import FootStepPlannerQP
 from solo3D.FootTrajectoryGeneratorBezier import FootTrajectoryGeneratorBezier
 from solo3D.tools.HeightMap import HeightMap
 
+from solo3D.LoggerPlanner import LoggerPlanner
+
 class Result:
     """Object to store the result of the control loop
     It contains what is sent to the robot (gains, desired positions and velocities,
@@ -190,11 +192,15 @@ class Controller:
 
         # Load Heightmap 
         path_ = "solo3D/objects/object_4/heightmap/"
-        surface_margin = 0.03
+        surface_margin = 0.05
         self.heightMap = HeightMap(path_ , surface_margin)
         self.gaitPlanner = GaitPlanner(T_gait , dt_mpc , T_mpc)
         self.footStepPlannerQP = FootStepPlannerQP(dt_mpc,dt_wbc , T_gait , self.h_ref , on_solo8 , k_mpc , self.heightMap )
         self.footTrajectoryGenerator = FootTrajectoryGeneratorBezier(T_gait , dt_wbc ,k_mpc ,  self.fsteps_init , self.heightMap)
+
+
+        # Log values for planner 
+        self.loggerPlanner = LoggerPlanner(dt_mpc , N_SIMULATION , T_gait , k_mpc)
 
         self.compute(dDevice)
 
@@ -306,10 +312,10 @@ class Controller:
         xref = self.footStepPlannerQP.getRefStates(self.q, self.v, o_v_ref, 0.)
         
         # Compute foot trajectory
-        self.footTrajectoryGenerator.update_foot_trajectory( self.k , self.fsteps, self.gaitPlanner , self.footStepPlannerQP)
+        self.footTrajectoryGenerator.update_foot_trajectory( self.k , self.fsteps, self.gaitPlanner , self.footStepPlannerQP , device , self.q , self.v)
 
         fsteps = self.fsteps
-        gait = self.gait
+        gait = self.gait         
         
 
         t_planner = time.time()
@@ -345,7 +351,8 @@ class Controller:
         # if not self.gait.getIsStatic():  Not used for now
         self.x_f_wbc[0] = self.q_estim[0, 0]
         self.x_f_wbc[1] = self.q_estim[1, 0]
-        self.x_f_wbc[2] = xref[2,1]
+        # Get Z value using next xref
+        self.x_f_wbc[2] = - (self.dt_mpc - self.dt_wbc)* (xref[2,2] - xref[2,1])/self.dt_mpc  + xref[2,1]
         self.x_f_wbc[3] = self.roll_estim
         self.x_f_wbc[4] = self.pitch_estim
         self.x_f_wbc[5] = self.yaw_estim
@@ -404,6 +411,14 @@ class Controller:
         # Logs
         self.log_misc(t_start, t_filter, t_planner, t_mpc, t_wbc)
 
+        # Log 
+        self.loggerPlanner.log_mpc(self.k , self.x_f_mpc)
+        self.loggerPlanner.log_feet(self.k , device , self.footTrajectoryGenerator.getFootPosition(),
+                                      self.footTrajectoryGenerator.getFootVelocity(),
+                                      self.footTrajectoryGenerator.getFootAcceleration(), fsteps , 
+                                      self.q , self.v  )
+        self.loggerPlanner.log_state(self.k , self.q[:7], self.v[:6], o_v_ref , self.joystick.v_ref[0:6, 0:1] , oMb.rotation ,  xref )
+
         # Increment loop counter
         self.k += 1
 
@@ -415,8 +430,9 @@ class Controller:
         if self.k > 10 and self.enable_pyb_GUI:
             # pyb.resetDebugVisualizerCamera(cameraDistance=0.8, cameraYaw=45, cameraPitch=-30,
             #                                cameraTargetPosition=[1.0, 0.3, 0.25])
-            pyb.resetDebugVisualizerCamera(cameraDistance=1.5, cameraYaw=215, cameraPitch=-25.9,
-                                           cameraTargetPosition=[device.dummyHeight[0], device.dummyHeight[1], 0.0])
+            # pyb.resetDebugVisualizerCamera(cameraDistance=1.5, cameraYaw=215, cameraPitch=-25.9,
+            #                                cameraTargetPosition=[device.dummyHeight[0], device.dummyHeight[1], 0.0])
+            pass
         if self.k > 1 :
             goals = self.footTrajectoryGenerator.getFootPosition()
             # for i_foot in range(4) :
@@ -429,10 +445,10 @@ class Controller:
 
 
             for i_foot in range(4) :
-                if self.gait[2,i_foot + 1] == 1 :
+                if self.gait[1,i_foot + 1] == 1 :
                     ftps_Ids_deb = device.pyb_sim.ftps_Ids_deb
                     # Display the goal position of the feet as green sphere in PyBullet
-                    goals = self.fsteps[2,3*i_foot +1 : 3*i_foot + 4]
+                    goals = self.fsteps[1,3*i_foot +1 : 3*i_foot + 4]
                     pyb.resetBasePositionAndOrientation(ftps_Ids_deb[i_foot],
                                                         posObj=goals,
                                                         ornObj=np.array([0.0, 0.0, 0.0, 1.0]))
