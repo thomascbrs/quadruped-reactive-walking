@@ -18,6 +18,8 @@ from solo3D.tools.HeightMap import HeightMap
 
 from solo3D.LoggerPlanner import LoggerPlanner
 
+from solo3D.tools.vizualization import PybVisualizationTraj
+
 class Result:
     """Object to store the result of the control loop
     It contains what is sent to the robot (gains, desired positions and velocities,
@@ -104,7 +106,7 @@ class Controller:
             self.view = viewerClient()'''
 
         # Enable/Disable perfect estimator
-        perfectEstimator = False
+        perfectEstimator = True
         if not isSimulation:
             perfectEstimator = False  # Cannot use perfect estimator if we are running on real robot
 
@@ -127,11 +129,11 @@ class Controller:
         self.b_v = np.zeros((18, 1))
         self.o_v_filt = np.zeros((18, 1))
 
-        # self.statePlanner = lqrw.StatePlanner()
-        # self.statePlanner.initialize(dt_mpc, T_mpc, self.h_ref)
+        self.statePlanner = lqrw.StatePlanner()
+        self.statePlanner.initialize(dt_mpc, T_mpc, self.h_ref)
 
-        # self.gait = lqrw.Gait()
-        # self.gait.initialize(dt_mpc, T_gait, T_mpc, N_gait)
+        self.gait = lqrw.Gait()
+        self.gait.initialize(dt_mpc, T_gait, T_mpc, N_gait)
 
         """from IPython import embed
         embed()"""
@@ -139,12 +141,12 @@ class Controller:
         shoulders = np.zeros((3, 4))
         shoulders[0, :] = [0.1946, 0.1946, -0.1946, -0.1946]
         shoulders[1, :] = [0.14695, -0.14695, 0.14695, -0.14695]
-        # self.footstepPlanner = lqrw.FootstepPlanner()
-        # self.footstepPlanner.initialize(dt_mpc, T_mpc, self.h_ref, shoulders.copy(), self.gait, N_gait)
+        self.footstepPlanner = lqrw.FootstepPlanner()
+        self.footstepPlanner.initialize(dt_mpc, T_mpc, self.h_ref, shoulders.copy(), self.gait, N_gait)
 
-        # self.footTrajectoryGenerator = lqrw.FootTrajectoryGenerator()
-        # self.footTrajectoryGenerator.initialize(0.05, 0.07, self.fsteps_init.copy(), shoulders.copy(),
-        #                                         dt_wbc, k_mpc, self.gait)
+        self.footTrajectoryGenerator = lqrw.FootTrajectoryGenerator()
+        self.footTrajectoryGenerator.initialize(0.05, 0.07, self.fsteps_init.copy(), shoulders.copy(),
+                                                dt_wbc, k_mpc, self.gait)
 
         # Wrapper that makes the link with the solver that you want to use for the MPC
         # First argument to True to have PA's MPC, to False to have Thomas's MPC
@@ -194,21 +196,24 @@ class Controller:
         dDevice.dummyPos = np.array([0.0, 0.0, q_init[2]])
         dDevice.b_baseVel = np.zeros(3)
         
-        # Solo3D python class 
-        self.gait = np.zeros((20, 5))
-        self.fsteps = np.full((self.gait.shape[0], 13), np.nan)
+        # # Solo3D python class 
+        # self.gait = np.zeros((20, 5))
+        # self.fsteps = np.full((self.gait.shape[0], 13), np.nan)
 
-        # Load Heightmap 
-        path_ = "solo3D/objects/object_4/heightmap/"
-        surface_margin = 0.05
-        self.heightMap = HeightMap(path_ , surface_margin)
-        self.gaitPlanner = GaitPlanner(T_gait , dt_mpc , T_mpc)
-        self.footStepPlannerQP = FootStepPlannerQP(dt_mpc,dt_wbc , T_gait , self.h_ref , on_solo8 , k_mpc , self.heightMap )
-        self.footTrajectoryGenerator = FootTrajectoryGeneratorBezier(T_gait , dt_wbc ,k_mpc ,  self.fsteps_init , self.heightMap)
+        # # Load Heightmap 
+        # path_ = "solo3D/objects/object_4/heightmap/"
+        # surface_margin = 0.05
+        # self.heightMap = HeightMap(path_ , surface_margin)
+        # self.gaitPlanner = GaitPlanner(T_gait , dt_mpc , T_mpc)
+        # self.footStepPlannerQP = FootStepPlannerQP(dt_mpc,dt_wbc , T_gait , self.h_ref , k_mpc , self.heightMap )
+        # self.footTrajectoryGenerator = FootTrajectoryGeneratorBezier(T_gait , dt_wbc ,k_mpc ,  self.fsteps_init , self.heightMap)
+
+        # # sphere traj pyb 
+        # self.pybVisualizationTraj = PybVisualizationTraj(self.footTrajectoryGenerator)
 
 
-        # Log values for planner 
-        self.loggerPlanner = LoggerPlanner(dt_mpc , N_SIMULATION , T_gait , k_mpc)
+        # # Log values for planner 
+        # self.loggerPlanner = LoggerPlanner(dt_mpc , N_SIMULATION , T_gait , k_mpc)
 
         self.compute(dDevice)
 
@@ -227,11 +232,10 @@ class Controller:
         self.joystick.update_v_ref(self.k, self.velID)
 
         # Process state estimator
-        # self.estimator.run_filter(self.k, self.gait.getCurrentGait(),
+        self.estimator.run_filter(self.k, self.gait.getCurrentGait(),
+                                  device, self.footTrajectoryGenerator.getFootPosition())
+        # self.estimator.run_filter(self.k, self.gaitPlanner.getCurrentGait()[:, 1:],
         #                           device, self.footTrajectoryGenerator.getFootPosition())
-        self.estimator.run_filter(self.k, self.gaitPlanner.getCurrentGait()[0, 1:],
-                                  device, self.footTrajectoryGenerator.getFootPosition(),
-                                  self.gaitPlanner.getCurrentGait()[0, 0])
         t_filter = time.time()
 
         # Update state for the next iteration of the whole loop
@@ -267,11 +271,11 @@ class Controller:
             self.v_estim = self.v.copy()
 
         # Update gait
-        # self.gait.updateGait(self.k, self.k_mpc, self.q[0:7, 0:1], self.joystick.joystick_code)
+        self.gait.updateGait(self.k, self.k_mpc, self.q[0:7, 0:1], self.joystick.joystick_code)
 
         # Update footsteps if new contact phase
-        # if(self.k % self.k_mpc == 0 and self.k != 0 and self.gait.isNewPhase()):
-        #     self.footstepPlanner.updateNewContact()
+        if(self.k % self.k_mpc == 0 and self.k != 0 and self.gait.isNewPhase()):
+            self.footstepPlanner.updateNewContact()
 
         """// Get the reference velocity in world frame (given in base frame)
         Eigen::Quaterniond quat(q(6, 0), q(3, 0), q(4, 0), q(5, 0));  // w, x, y, z
@@ -288,11 +292,11 @@ class Controller:
         o_v_ref[3:6, 0:1] = oMb.rotation @ self.joystick.v_ref[3:6, 0:1]
 
         # Compute target footstep based on current and reference velocities
-        # targetFootstep = self.footstepPlanner.computeTargetFootstep(self.q[0:7, 0:1], self.v[0:6, 0:1].copy(), o_v_ref)
+        targetFootstep = self.footstepPlanner.computeTargetFootstep(self.q[0:7, 0:1], self.v[0:6, 0:1].copy(), o_v_ref)
 
         # Update pos, vel and acc references for feet
         # TODO: Make update take as parameters current gait, swing phase duration and remaining time
-        # self.footTrajectoryGenerator.update(self.k, targetFootstep)
+        self.footTrajectoryGenerator.update(self.k, targetFootstep)
 
         # Retrieve data from C++ planner
         # TODO
@@ -303,29 +307,29 @@ class Controller:
         self.agoals = self.planner.get_agoals()"""
 
         # Run state planner (outputs the reference trajectory of the CoM / base)
-        # self.statePlanner.computeReferenceStates(self.q[0:7, 0:1], self.v[0:6, 0:1].copy(), o_v_ref, 0.0)
-        # # Result can be retrieved with self.statePlanner.getReferenceStates()
-        # xref = self.statePlanner.getReferenceStates()
-        # fsteps = self.footstepPlanner.getFootsteps()
-        # cgait = self.gait.getCurrentGait()
+        self.statePlanner.computeReferenceStates(self.q[0:7, 0:1], self.v[0:6, 0:1].copy(), o_v_ref, 0.0)
+        # Result can be retrieved with self.statePlanner.getReferenceStates()
+        xref = self.statePlanner.getReferenceStates()
+        fsteps = self.footstepPlanner.getFootsteps()
+        cgait = self.gait.getCurrentGait()
 
         ################
         # solo3D python
         ################ 
-        self.gaitPlanner.updateGait(self.k  , self.k_mpc , self.fsteps )
-        self.gait = self.gaitPlanner.getCurrentGait()
+        # self.gaitPlanner.updateGait(self.k  , self.k_mpc , self.fsteps )
+        # self.gait = self.gaitPlanner.getCurrentGait()
 
         # Compute fsteps
-        self.fsteps = self.footStepPlannerQP.compute_footsteps(self.k,self.q, self.v, o_v_ref, self.joystick.reduced,self.gaitPlanner)
+        # self.fsteps = self.footStepPlannerQP.compute_footsteps(self.k,self.q, self.v, o_v_ref, self.joystick.reduced,self.gaitPlanner)
         
         # xref 
-        xref = self.footStepPlannerQP.getRefStates(self.q, self.v, o_v_ref, 0.)
+        # xref = self.footStepPlannerQP.getRefStates(self.q, self.v, o_v_ref, 0.)
         
         # Compute foot trajectory
-        self.footTrajectoryGenerator.update_foot_trajectory( self.k , self.fsteps, self.gaitPlanner , self.footStepPlannerQP , device , self.q , self.v)
+        # self.footTrajectoryGenerator.update_foot_trajectory( self.k , self.fsteps, self.gaitPlanner , self.footStepPlannerQP , device , self.q , self.v)
 
-        fsteps = self.fsteps
-        gait = self.gait         
+        # fsteps = self.fsteps
+        # gait = self.gait         
         
 
         t_planner = time.time()
@@ -335,13 +339,12 @@ class Controller:
             from IPython import embed
             embed()"""
 
-        # self.planner.setGait(self.planner.gait)
 
         # Process MPC once every k_mpc iterations of TSID
         if (self.k % self.k_mpc) == 0:
             try:
                 # self.mpc_wrapper.solve(self.k, xref, fsteps, cgait)
-                self.mpc_wrapper.solve(self.k, xref, fsteps, gait)
+                self.mpc_wrapper.solve(self.k, xref, fsteps, cgait)
             except ValueError:
                 print("MPC Problem")
 
@@ -414,12 +417,12 @@ class Controller:
         self.log_misc(t_start, t_filter, t_planner, t_mpc, t_wbc)
 
         # Log 
-        self.loggerPlanner.log_mpc(self.k , self.x_f_mpc)
-        self.loggerPlanner.log_feet(self.k , device , self.footTrajectoryGenerator.getFootPosition(),
-                                      self.footTrajectoryGenerator.getFootVelocity(),
-                                      self.footTrajectoryGenerator.getFootAcceleration(), fsteps , 
-                                      self.q , self.v  )
-        self.loggerPlanner.log_state(self.k , self.q[:7], self.v[:6], o_v_ref , self.joystick.v_ref[0:6, 0:1] , oMb.rotation ,  xref )
+        # self.loggerPlanner.log_mpc(self.k , self.x_f_mpc)
+        # self.loggerPlanner.log_feet(self.k , device , self.footTrajectoryGenerator.getFootPosition(),
+        #                               self.footTrajectoryGenerator.getFootVelocity(),
+        #                               self.footTrajectoryGenerator.getFootAcceleration(), fsteps , 
+        #                               self.q , self.v  )
+        # self.loggerPlanner.log_state(self.k , self.q[:7], self.v[:6], o_v_ref , self.joystick.v_ref[0:6, 0:1] , oMb.rotation ,  xref )
 
         # Increment loop counter
         self.k += 1
@@ -435,25 +438,8 @@ class Controller:
             # pyb.resetDebugVisualizerCamera(cameraDistance=1.5, cameraYaw=215, cameraPitch=-25.9,
             #                                cameraTargetPosition=[device.dummyHeight[0], device.dummyHeight[1], 0.0])
             pass
-        if self.k > 1 :
-            goals = self.footTrajectoryGenerator.getFootPosition()
-            # for i_foot in range(4) :
-            #     if self.gait[1,i_foot + 1] == 1 :
-            #         ftps_Ids = device.pyb_sim.ftps_Ids_deb  
-            #         # Display the goal position of the feet as green sphere in PyBullet
-            #         pyb.resetBasePositionAndOrientation(ftps_Ids[i_foot],
-            #                                             posObj=goals[:,i_foot],
-            #                                             ornObj=np.array([0.0, 0.0, 0.0, 1.0]) )
-
-
-            for i_foot in range(4) :
-                if self.gait[1,i_foot + 1] == 1 :
-                    ftps_Ids_deb = device.pyb_sim.ftps_Ids_deb
-                    # Display the goal position of the feet as green sphere in PyBullet
-                    goals = self.fsteps[1,3*i_foot +1 : 3*i_foot + 4]
-                    pyb.resetBasePositionAndOrientation(ftps_Ids_deb[i_foot],
-                                                        posObj=goals,
-                                                        ornObj=np.array([0.0, 0.0, 0.0, 1.0]))
+        
+        # self.pybVisualizationTraj.vizuFootTraj(self.k , self.fsteps , self.gait , device)
 
     def security_check(self):
 

@@ -8,7 +8,7 @@ class FootStepPlannerQP:
     to avoid edges of surface.
     '''
 
-    def __init__(self , dt , dt_wbc , T_gait , h_ref, on_solo8 , k_mpc , heightMap) :
+    def __init__(self , dt , dt_wbc , T_gait , h_ref, k_mpc , heightMap) :
 
         # Time step of the contact sequence
         self.dt = dt  # dt mpc
@@ -61,7 +61,6 @@ class FootStepPlannerQP:
         self.k_feedback = 0.03
         self.g = 9.81
         self.L = 0.155
-        self.on_solo8 = on_solo8
 
         # heightMap
         self.heightMap = heightMap   
@@ -377,7 +376,7 @@ class FootStepPlannerQP:
         # The number of new contact
         # L = [  [x =1,y=0  ,  surface_id  , nb ineq in surface]  ]  --> First variable in gait[1,0]  (gait of size 4, not the nb iteration in first row !!)
 
-        print(L)
+        # print(L)
 
         self.run_optimisation(np.array(L) ,q_cur, v_cur, v_ref , dx , dy)
 
