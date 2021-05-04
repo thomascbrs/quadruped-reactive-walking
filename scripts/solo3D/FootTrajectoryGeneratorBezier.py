@@ -14,7 +14,7 @@ from example_robot_data import load
 
 class FootTrajectoryGeneratorBezier:
 
-    def __init__(self , T_gait , dt_tsid , k_mpc , fsteps_init , heightMap):
+    def __init__(self , T_gait , dt_tsid , k_mpc , fsteps_init , gaitPlanner , footStepPlannerQP , heightMap):
 
         self.T_gait = T_gait
         self.dt_wbc = dt_tsid
@@ -108,9 +108,10 @@ class FootTrajectoryGeneratorBezier:
         # Load the URDF model to get Pinocchio data and model structures
         robot = load('solo12')
         self.data = robot.data.copy()  # for velocity estimation (forward kinematics)
-        self.model = robot.model.copy()  # for velocity estimation (forward kinematics)      
+        self.model = robot.model.copy()  # for velocity estimation (forward kinematics)  
 
-
+        self.footStepPlannerQP = footStepPlannerQP
+        self.gaitPlanner = gaitPlanner 
     
 
     def updatePolyCoeff_XY(self,i_foot , x_init, v_init, a_init , x_end ,  t0 , t1 , h ) :
@@ -370,7 +371,6 @@ class FootTrajectoryGeneratorBezier:
                     if  t0 + (t1-t0)*ts < self.t_stop[i_foot] + t_margin :                        
                         if zt < self.footsteps_target[2,i_foot] + z_margin  :
                             self.t_stop[i_foot] = t0 + (t1-t0)*ts
-                            print("ts : " , ts)
                             
                         t_curve = ts 
                         wayPoint = vb(ts)
@@ -431,18 +431,71 @@ class FootTrajectoryGeneratorBezier:
         return 0
 
 
-    def update_foot_trajectory(self, k , fsteps , gaitPlanner , fstepsPlanner , device , q_filt , v_filt):
+    def update(self, k , targetFootstep , device , q_filt , v_filt):
 
-        self.gait = gaitPlanner.getCurrentGait()         
+        gait = self.gaitPlanner.getCurrentGait()         
 
         # Update foot target 
-        self.footsteps_target = np.zeros((3, 4))
+        self.footsteps_target = targetFootstep
 
-        for i in range(4) :
-            index = 0
-            while fsteps[index, 1 + 3*i] == 0. :
-                index += 1 
-            self.footsteps_target[:, i] = fsteps[index, (1+i*3):(4+i*3)]
+        # Update current foot position with pybullet feedback 
+        self.updateFootPositionFeedback( k , q_filt , v_filt , device)
+
+
+        if (k % self.k_mpc) == 0 :
+            self.feet = []
+            self.t0s = np.zeros((4, ))
+
+            # Indexes of feet in swing phase
+            self.feet = np.where(gait[0, :] == 0)[0]
+            if len(self.feet) == 0:  # If no foot in swing phase
+                return 0
+            
+            # For each foot in swing phase get remaining duration of the swing phase
+            for i in self.feet :              
+                self.t_swing[i] = self.gaitPlanner.getPhaseDuration(0,i,0.)   # 0. for swing phase   
+                self.remainingTime = self.gaitPlanner.getRemainingTime()
+                value =  self.t_swing[i] - (self.remainingTime * self.k_mpc - ((k+1)%self.k_mpc) )*self.dt_wbc - self.dt_wbc
+                self.t0s[i] =   np.max( [value , 0.] ) 
+                
+
+        else :
+            # If no foot in swing phase
+            if len(self.feet) == 0:  # If no foot in swing phase
+                return 0
+
+            # Increment of one time step for feet in swing phase
+            for i in self.feet :
+                self.t0s[i] = np.max(  [self.t0s[i] + self.dt_wbc, 0.0])
+            
+       
+
+        # Update new surface and past if t0 == 0 (new swing phase)
+        if (k % self.k_mpc) == 0  :
+            for i_foot in range(4) : 
+                if self.t0s[i_foot] < 10e-6 :
+                    self.past_surface[i_foot] = self.new_surface[i_foot]
+                    if self.footStepPlannerQP.surface_selected[i_foot] != None :
+                        self.new_surface[i_foot] = self.footStepPlannerQP.surface_selected[i_foot]
+                    else : 
+                        self.new_surface[i_foot] = -99  
+        
+        for i in self.feet :
+            
+            self.updateFootPosition(k,i)
+
+        return 0
+
+    def getFootPosition(self) :
+        return self.goals
+
+    def getFootVelocity(self) :
+        return self.vgoals
+
+    def getFootAcceleration(self) :
+        return self.agoals
+ 
+    def updateFootPositionFeedback(self, k , q_filt , v_filt , device) :
 
         # Update current position : Pybullet feedback, directly
         ##########################
@@ -489,59 +542,7 @@ class FootTrajectoryGeneratorBezier:
             self.goals[:,j] = framePlacement.translation[:]
             self.goals[2,j] -= 0.016988                     # Pybullet offset on Z
             # self.vgoals[:,j] = frameVelocity.linear       # velocity feedback not working
-
-
-        if (k % self.k_mpc) == 0 :
-            self.feet = []
-            self.t0s = np.zeros((4, ))
-
-            # Indexes of feet in swing phase
-            self.feet = np.where(self.gait[0, 1:] == 0)[0]
-            if len(self.feet) == 0:  # If no foot in swing phase
-                return 0
-            
-            # For each foot in swing phase get remaining duration of the swing phase
-            for i in self.feet :              
-                self.t_swing[i] = gaitPlanner.getPhaseDuration(0,i,0.)   # 0. for swing phase   
-                self.remainingTime = gaitPlanner.getRemainingTime()
-                value =  self.t_swing[i] - (self.remainingTime * self.k_mpc - ((k+1)%self.k_mpc) )*self.dt_wbc - self.dt_wbc
-                self.t0s[i] =   np.max( [value , 0.] ) 
-                
-
-        else :
-            # If no foot in swing phase
-            if len(self.feet) == 0:  # If no foot in swing phase
-                return 0
-
-            # Increment of one time step for feet in swing phase
-            for i in self.feet :
-                self.t0s[i] = np.max(  [self.t0s[i] + self.dt_wbc, 0.0])
-            
-       
-
-        # Update new surface and past if t0 == 0 (new swing phase)
-        if (k % self.k_mpc) == 0  :
-            for i_foot in range(4) : 
-                if self.t0s[i_foot] < 10e-6 :
-                    self.past_surface[i_foot] = self.new_surface[i_foot]
-                    if fstepsPlanner.surface_selected[i_foot] != None :
-                        self.new_surface[i_foot] = fstepsPlanner.surface_selected[i_foot]
-                    else : 
-                        self.new_surface[i_foot] = -99  
         
-        for i in self.feet :
-            
-            self.updateFootPosition(k,i)
-
         return 0
-
-    def getFootPosition(self) :
-        return self.goals
-
-    def getFootVelocity(self) :
-        return self.vgoals
-
-    def getFootAcceleration(self) :
-        return self.agoals
 
     

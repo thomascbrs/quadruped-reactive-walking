@@ -72,7 +72,7 @@ class LoggerPlanner:
      
 
 
-    def log_feet(self, k , device , goals , vgoals, agoals, fsteps , q_filt ,  v_filt ):
+    def log_feet(self, k , device , goals , vgoals, agoals, targetFootstep , q_filt ,  v_filt ):
         """ Log feet 
                                             
         :param device: device interface to retrieve real feet pos/vel from pybullet
@@ -111,13 +111,7 @@ class LoggerPlanner:
         self.feet_acc_des[k,:,:] = agoals
 
         # Update foot target 
-    
-
-        for i in range(4) :
-            index = 0
-            while fsteps[index, 1 + 3*i] == 0. :
-                index += 1 
-            self.footsteps_target[k,:, i] = fsteps[index, (1+i*3):(4+i*3)]
+        self.footsteps_target[k,:, :] = targetFootstep
 
         return 0 
 
