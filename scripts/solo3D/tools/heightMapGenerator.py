@@ -19,17 +19,17 @@ import trimesh
 
 t_init = time.clock()
 
-Nx = 500
-Ny = 300
-x = np.linspace(-1.0,3.,Nx)
-y = np.linspace(-2.0,1.0,Ny)
+Nx = 400
+Ny = 400
+x = np.linspace(-0.4,2.5,Nx)
+y = np.linspace(-2.5,1.,Ny)
 
 # To Edit : 
-object_ = "object_4"
+object_ = "object_5"
 path_object = "solo3D/objects/" + object_ + "/"
 path_mesh = "solo3D/objects/" + object_ + "/meshes/"
 path_saving = "solo3D/objects/" + object_ + "/heightmap/"
-simple_stairs = "simple_stairs_4.stl"   # Full .stl file
+simple_stairs = "stair_rotation_5cm.stl"   # Full .stl file
 
 print("\n Object selected : " , simple_stairs)
 print("Folder for the selected object : " , object_)

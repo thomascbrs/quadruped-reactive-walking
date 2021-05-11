@@ -50,6 +50,11 @@ class FootTrajectoryGeneratorBezier:
         self.Ay = np.zeros((6,4))
         self.Az = np.zeros((7,4))
 
+        # Coefficient used for simple trajectories (v,acc = 0)
+        self.Ax_s = np.zeros((6,4))
+        self.Ay_s = np.zeros((6,4))
+        self.Az_s = np.zeros((7,4))
+
         # heightMap
         self.heightMap = heightMap   
 
@@ -195,6 +200,30 @@ class FootTrajectoryGeneratorBezier:
         self.Az[0,i_foot] = z0
 
         return 0
+    
+    def evaluateBezier(self, i_foot , indice ,  t ) :
+        '''Evaluate the polynomial curves at t or its derivatives 
+
+        Args:
+            - i_foot (int): indice of foot 
+            - indice (int):  f indice derivative : 0 --> poly(t) ; 1 --> poly'(t)  (0,1 or 2)
+            - t (float) : time in polynomial ref (t_bezier : 0 <--> 1)
+        '''
+        t1 = self.t_swing[i_foot]
+        delta_t = t1 - self.t0_bezier[i_foot]
+        t_b = min( (t - self.t0_bezier[i_foot])/(t1 -  self.t0_bezier[i_foot] )   , 1. )
+
+        if indice == 0 :
+            return self.fitBeziers[i_foot](t_b)
+        
+        elif indice == 1 :
+            return  self.fitBeziers[i_foot].derivate(t_b,1)/delta_t
+
+        elif indice == 2 :
+            return  self.fitBeziers[i_foot].derivate(t_b,2)/delta_t**2
+        
+        else :           
+            return np.array([0.,0.,0.])
  
     
     def evaluatePoly(self, i_foot , indice ,  t ) :
@@ -544,5 +573,79 @@ class FootTrajectoryGeneratorBezier:
             # self.vgoals[:,j] = frameVelocity.linear       # velocity feedback not working
         
         return 0
+
+    def updatePolyCoeff_simple(self,i_foot , x_init , x_end ,  t1  ) :
+        ''' Compute coefficients for polynomial 5D curve for X,Y,Z trajectory. Vel, Acc initial and final are nulle. 
+        Args:
+        - i_foot (int): indice of foot to update the coefficients 
+        - x_init (np.array x3) : initial position [x0,y0,z0]
+        - x_end  (np.array x3) : end position [x1,y1,z1]
+        -  t1 (float): final time
+        -  h (float): height for z curve 
+        '''
+        x0 , y0 , z0        = x_init
+        x1 , y1 , z1        = x_end
+
+        h = z1 + self.max_height_feet
+
+        self.Ax_s[5,i_foot] = - ( 6 * x0 - 6*x1)/(t1**5)  
+        self.Ax_s[4,i_foot]  = - (  - 15*x0 + 15*x1 )/(t1**4)  
+        self.Ax_s[3,i_foot]  = - ( 10*x0  - 10*x1 )/(t1**3)
+        self.Ax_s[2,i_foot]  =  0.
+        self.Ax_s[1,i_foot]  = 0.
+        self.Ax_s[0,i_foot]  = x0
+
+        self.Ay_s[5,i_foot] = - ( 6 * y0 - 6*y1)/(t1**5)  
+        self.Ay_s[4,i_foot]  = - (  - 15*y0 + 15*y1 )/(t1**4)  
+        self.Ay_s[3,i_foot]  = - ( 10*y0  - 10*y1 )/(t1**3)
+        self.Ay_s[2,i_foot]  =  0.
+        self.Ay_s[1,i_foot]  = 0.
+        self.Ay_s[0,i_foot]  = y0
+
+        # Version 3D 
+        self.Az_s[6,i_foot] =  (32.*z0 + 32.*z1 - 64.*h)/(t1**6)
+        self.Az_s[5,i_foot] = - (102.*z0 + 90.*z1 - 192.*h)/(t1**5)
+        self.Az_s[4,i_foot] = (111.*z0 + 81.*z1 - 192.*h)/(t1**4)
+        self.Az_s[3,i_foot] = - (42.*z0 + 22.*z1 - 64.*h)/(t1**3)
+        self.Az_s[2,i_foot] = 0
+        self.Az_s[1,i_foot] = 0
+        self.Az_s[0,i_foot] = z0
+
+        return 0
+
+    def evaluatePoly_simple(self, i_foot , indice ,  t ) :
+        '''Evaluate the polynomial curves at t or its derivatives 
+
+        Args:
+            - i_foot (int): indice of foot 
+            - indice (int):  f indice derivative : 0 --> poly(t) ; 1 --> poly'(t)  (0,1 or 2)
+            - t (float) : time 
+        '''
+        if indice == 0 :
+            x = self.Ax_s[0,i_foot] + self.Ax_s[1,i_foot]*t + self.Ax_s[2,i_foot]*t**2 + self.Ax_s[3,i_foot]*t**3 + self.Ax_s[4,i_foot]*t**4 + self.Ax_s[5,i_foot]*t**5
+            y = self.Ay_s[0,i_foot] + self.Ay_s[1,i_foot]*t + self.Ay_s[2,i_foot]*t**2 + self.Ay_s[3,i_foot]*t**3 + self.Ay_s[4,i_foot]*t**4 + self.Ay_s[5,i_foot]*t**5
+            z = self.Az_s[0,i_foot] + self.Az_s[1,i_foot]*t + self.Az_s[2,i_foot]*t**2 + self.Az_s[3,i_foot]*t**3 + self.Az_s[4,i_foot]*t**4 + self.Az_s[5,i_foot]*t**5+ self.Az_s[6,i_foot]*t**6
+
+            return np.array([x,y,z])
+
+        elif indice == 1 :
+            vx = self.Ax_s[1,i_foot] + 2*self.Ax_s[2,i_foot]*t + 3*self.Ax_s[3,i_foot]*t**2 + 4*self.Ax_s[4,i_foot]*t**3 + 5*self.Ax_s[5,i_foot]*t**4
+            vy = self.Ay_s[1,i_foot] + 2*self.Ay_s[2,i_foot]*t + 3*self.Ay_s[3,i_foot]*t**2 + 4*self.Ay_s[4,i_foot]*t**3 + 5*self.Ay_s[5,i_foot]*t**4
+            vz = self.Az_s[1,i_foot] + 2*self.Az_s[2,i_foot]*t + 3*self.Az_s[3,i_foot]*t**2 + 4*self.Az_s[4,i_foot]*t**3 + 5*self.Az_s[5,i_foot]*t**4 + 6*self.Az_s[6,i_foot]*t**5
+
+            return np.array([vx,vy,vz])
+
+        elif indice == 2 :
+            ax = 2*self.Ax_s[2,i_foot] + 6*self.Ax_s[3,i_foot]*t + 12*self.Ax_s[4,i_foot]*t**2 + 20*self.Ax_s[5,i_foot]*t**3
+            ay = 2*self.Ay_s[2,i_foot] + 6*self.Ay_s[3,i_foot]*t + 12*self.Ay_s[4,i_foot]*t**2 + 20*self.Ay_s[5,i_foot]*t**3
+            az = 2*self.Az_s[2,i_foot] + 6*self.Az_s[3,i_foot]*t + 12*self.Az_s[4,i_foot]*t**2 + 20*self.Az_s[5,i_foot]*t**3 + 30*self.Az_s[6,i_foot]*t**4
+
+            return np.array([ax,ay,az])
+
+        else :
+            return np.array([0.,0.,0.])
+
+    
+
 
     

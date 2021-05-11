@@ -96,7 +96,7 @@ class FootStepPlannerQP:
 
         # current position without height
         RPY_tmp = np.zeros(3)
-        q_tmp = q[:3,0]
+        q_tmp = q[:3,0].copy()
         q_tmp[2] = 0.
 
         for indice_L ,[i,j,indice_s , nb_ineq] in enumerate(L) :
@@ -147,7 +147,7 @@ class FootStepPlannerQP:
 
         
         # Store the value for getRefState
-        self.o_vref_qp = o_vref
+        self.o_vref_qp = o_vref.copy()
         self.o_vref_qp[0,0] = res[0]
         self.o_vref_qp[1,0] = res[1]        
 
@@ -164,7 +164,7 @@ class FootStepPlannerQP:
             q_dxdy = np.array( [self.dx[i - 1], self.dy[i - 1], 0.0 ])
 
             # Get future desired position of footsteps without k_feedback
-            nextFootstep = self.computeNextFootstep(i, j, b_vlin , b_vref_qp , True)
+            nextFootstep = self.computeNextFootstep(i, j, b_vlin , o_vref[:,0] , True)
 
             # Get desired position of footstep compared to current position
             RPY_tmp[2] = self.yaws[i-1]
@@ -256,7 +256,7 @@ class FootStepPlannerQP:
         if o_vref[5,0] != 0 :
             for j in range(1,len(self.footsteps) ) :
                 self.dx[j] = (v[0] * np.sin(o_vref[5,0] * self.dt_cum[j] ) + v[1] * (np.cos(o_vref[5,0] * self.dt_cum[j]) - 1.)   ) / o_vref[5,0]
-                self.dy[j] = (v[1] * np.sin(o_vref[5,0] * self.dt_cum[j] ) - v[0] * (np.sin(o_vref[5,0] * self.dt_cum[j]) - 1.)   ) / o_vref[5,0]
+                self.dy[j] = (v[1] * np.sin(o_vref[5,0] * self.dt_cum[j] ) - v[0] * (np.cos(o_vref[5,0] * self.dt_cum[j]) - 1.)   ) / o_vref[5,0]
         else :
             for j in range(1,len(self.footsteps) ) :
                 self.dx[j] = v[0]*self.dt_cum[j]
@@ -289,7 +289,7 @@ class FootStepPlannerQP:
                     self.footsteps[i][:,j] = self.footsteps[i-1][:,j]
             
             # Current position without height
-            q_tmp = q[:3,0]
+            q_tmp = q[:3,0].copy()
             q_tmp[2] = 0.
 
             # Feet that were in swing phase and are now in stance phase need to be updated
@@ -312,9 +312,18 @@ class FootStepPlannerQP:
 
                         if self.t0s[j] < 10e-4 and (self.k % self.k_mpc) == 0: 
                             #  beginning of flying phase, selection of surface
-                    
-                            height , id_surface = self.heightMap.getHeight(next_ft[0] , next_ft[1])
-                            self.surface_selected[j] = id_surface                        
+
+                            print("Next foot : " ,next_ft)
+                            
+                            
+                            id_surface = None
+                            for id_sf,sf in enumerate(self.heightMap.Surfaces) :
+                                if sf.isInsideIneq(next_ft) :
+                                    id_surface = id_sf
+                            # height , id_surface = self.heightMap.getHeight(next_ft[0] , next_ft[1])
+                            self.surface_selected[j] = id_surface  
+
+                            print("Surface selected : " , id_surface)                      
                      
                         id_surface = self.surface_selected[j] 
 
@@ -328,7 +337,11 @@ class FootStepPlannerQP:
 
                     else :   
                         # The surface can be modified at each time step if not in flying phase
-                        height , id_surface = self.heightMap.getHeight(next_ft[0] , next_ft[1])  
+                        # height , id_surface = self.heightMap.getHeight(next_ft[0] , next_ft[1]) 
+                        id_surface = None
+                        for id_sf,sf in enumerate(self.heightMap.Surfaces) :
+                            if sf.isInsideIneq(next_ft) :
+                                id_surface = id_sf 
                     
                         if id_surface != None :                 
                             
@@ -377,7 +390,7 @@ class FootStepPlannerQP:
         # self.nextFootstep[:,j] += self.shoulders[:,j] 
         
         # Taking into account Roll and Pitch (here base frame only takes yaw)
-        RP = self.RPY
+        RP = self.RPY.copy()
         RP[2] = 0.   # Remove Yaw, taking into account after
         nextFootstep += pin.rpy.rpyToMatrix(RP).dot( self.shoulders[:,j] ) 
 
@@ -403,6 +416,8 @@ class FootStepPlannerQP:
         self.RPY = pin.rpy.matrixToRpy(quat.toRotationMatrix())   # Array (3,)
         self.RPY_b = self.RPY.copy()
 
+        print("RPY : " , self.RPY  )
+
         # Only yaw rotation for the base frame
         self.RPY_b[0] = 0
         self.RPY_b[1] = 0
@@ -417,6 +432,12 @@ class FootStepPlannerQP:
 
         # Update desired location of footsteps on the ground
         self.updateTargetFootsteps()
+
+        # Update self.fsteps, not a list, but array representation (Nx12)
+        self.fsteps = np.zeros(( self.N_gait, 12  ))
+        
+        for index , footstep     in enumerate(self.footsteps):
+            self.fsteps[index , :] =  np.reshape(footstep, 12, order='F') 
 
         return self.getTargetFootsteps()
 
@@ -447,12 +468,11 @@ class FootStepPlannerQP:
         return 0
     
     def getFootsteps(self):
-        self.fsteps = np.zeros(( self.N_gait, 12  ))
-        
-        for index , footstep     in enumerate(self.footsteps):
-            self.fsteps[index , :] =  np.reshape(footstep, 12, order='F') 
 
         return self.fsteps
+
+    def getFootstepsList(self) :
+        return self.footsteps
 
     def getTargetFootsteps(self):
         return self.targetFootstep 

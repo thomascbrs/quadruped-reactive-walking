@@ -31,11 +31,12 @@ class HeightMap():
         self.Ny = self.heightMap.shape[1]
         # self.x_bounds = [-2. , 4.]  # object 1 
         # self.y_bounds = [-2. , 1.]
-        self.x_bounds = [-1. , 3.]  # object 4 
-        self.y_bounds = [-2. , 1.]
+        # self.x_bounds = [-1. , 3.]  # object 4 
+        # self.y_bounds = [-2. , 1.]
+        self.x_bounds = [-0.4 , 2.5]  # object 5
+        self.y_bounds = [-2.5, 1.]
         self.x = np.linspace(self.x_bounds[0],self.x_bounds[1],self.Nx)
         self.y = np.linspace(self.y_bounds[0],self.y_bounds[1],self.Ny)
-
 
 
     def load_data(self):

@@ -18,7 +18,7 @@ from solo3D.tools.HeightMap import HeightMap
 from solo3D.StatePlanner import StatePlanner
 from solo3D.LoggerPlanner import LoggerPlanner
 
-# from solo3D.tools.vizualization import PybVisualizationTraj
+from solo3D.tools.vizualization import PybVisualizationTraj
 
 class Result:
     """Object to store the result of the control loop
@@ -197,7 +197,7 @@ class Controller:
         dDevice.b_baseVel = np.zeros(3)
 
         # Load Heightmap
-        path_ = "solo3D/objects/object_4/heightmap/"
+        path_ = "solo3D/objects/object_5/heightmap/"
         surface_margin = 0.05
         self.heightMap = HeightMap(path_ , surface_margin)
 
@@ -210,7 +210,7 @@ class Controller:
         self.statePlanner = StatePlanner(dt_mpc, T_mpc, self.h_ref , self.heightMap)
         
         # Pybullet Trajectory 
-        # self.pybVisualizationTraj = PybVisualizationTraj(self.footTrajectoryGenerator)
+        self.pybVisualizationTraj = PybVisualizationTraj(self.gaitPlanner , self.footStepPlannerQP ,self.statePlanner ,  self.footTrajectoryGenerator , enable_pyb_GUI)
 
         # Log values for planner
         self.loggerPlanner = LoggerPlanner(dt_mpc , N_SIMULATION , T_gait , k_mpc)
@@ -328,14 +328,13 @@ class Controller:
         targetFootstep = self.footStepPlannerQP.computeTargetFootstep(self.k,self.q[0:7, 0:1], self.v[0:6, 0:1].copy(), o_v_ref)
 
         # Compute foot trajectory
-        self.footTrajectoryGenerator.update( self.k , targetFootstep, device , self.q , self.v)
+        self.footTrajectoryGenerator.update( self.k , targetFootstep, device , self.q , self.v)        
 
         self.statePlanner.computeReferenceStates(self.q[0:7, 0:1], self.v[0:6, 0:1].copy(), o_v_ref, 0.0)
 
         xref = self.statePlanner.getReferenceStates()
         fsteps = self.footStepPlannerQP.getFootsteps()
         cgait = self.gaitPlanner.getCurrentGait()
-
 
         t_planner = time.time()
 
@@ -417,7 +416,8 @@ class Controller:
         self.security_check()
 
         # Update PyBullet camera
-        self.pyb_camera(device)
+        # self.pyb_camera(device)
+        self.pybVisualizationTraj.update(self.k , device)
 
         # Logs
         self.log_misc(t_start, t_filter, t_planner, t_mpc, t_wbc)

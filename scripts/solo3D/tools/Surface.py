@@ -281,3 +281,11 @@ class Surface():
 
         else :
             return False
+
+    def isInsideIneq(self , pt , epsilon = 10e-4) :
+
+        Sx = np.dot(self.ineq[:-1,:], pt)
+
+        return np.sum(Sx <= self.ineq_vect[:-1]) == len(self.vertices)   
+
+
