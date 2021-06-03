@@ -18,6 +18,7 @@ from solo3D.LoggerPlanner import LoggerPlanner
 
 from solo3D.tools.vizualization import PybVisualizationTraj
 
+
 class Result:
     """Object to store the result of the control loop
     It contains what is sent to the robot (gains, desired positions and velocities,
@@ -100,8 +101,6 @@ class Controller:
 
         # Enable/Disable Gepetto viewer
         self.enable_gepetto_viewer = True
-        '''if self.enable_gepetto_viewer:
-            self.view = viewerClient()'''
 
         # Enable/Disable perfect estimator
         perfectEstimator = True
@@ -194,18 +193,17 @@ class Controller:
         # Load Heightmap
         path_ = "solo3D/objects/object_5/heightmap/"
         surface_margin = 0.05
-        self.heightMap = HeightMap(path_ , surface_margin)
+        self.heightMap = HeightMap(path_, surface_margin)
 
         # Solo3D python class
-        self.footStepPlannerQP = FootStepPlannerQP(dt_mpc, dt_wbc, T_gait, self.h_ref, k_mpc, self.gait, self.N_gait, self.heightMap)
+        self.footStepPlannerQP = FootStepPlannerQP(dt_mpc, dt_wbc, T_gait, self.h_ref, k_mpc, self.gait, N_gait, self.heightMap)
         self.footTrajectoryGenerator = FootTrajectoryGeneratorBezier(T_gait, dt_wbc, k_mpc,  self.fsteps_init, self.gait, self.footStepPlannerQP, self.heightMap)
-        self.statePlanner = StatePlanner(dt_mpc, T_mpc, self.h_ref , self.heightMap)
-        PybVisualizationTraj
-        # Pybullet Trajectory 
-        self.pybVisualizationTraj = PybVisualizationTraj(self.gait , self.footStepPlannerQP ,self.statePlanner ,  self.footTrajectoryGenerator , enable_pyb_GUI)
+        self.statePlanner = StatePlanner(dt_mpc, T_mpc, self.h_ref, self.heightMap)
+        # Pybullet Trajectory
+        self.pybVisualizationTraj = PybVisualizationTraj(self.gait, self.footStepPlannerQP, self.statePlanner,  self.footTrajectoryGenerator, enable_pyb_GUI)
 
         # Log values for planner
-        self.loggerPlanner = LoggerPlanner(dt_mpc , N_SIMULATION , T_gait , k_mpc)
+        self.loggerPlanner = LoggerPlanner(dt_mpc, N_SIMULATION, T_gait, k_mpc)
 
         self.compute(dDevice)
 
@@ -241,7 +239,7 @@ class Controller:
             self.v_estim[3:6, 0:1] = oMb.rotation.transpose() @ self.joystick.v_ref[3:6, 0:1]
             # if not self.gait.getIsStatic():
             self.q_estim[:, 0] = pin.integrate(self.solo.model,
-                                                self.q, self.v_estim * self.myController.dt)
+                                               self.q, self.v_estim * self.myController.dt)
             self.yaw_estim = (utils_mpc.quaternionToRPY(self.q_estim[3:7, 0]))[2, 0]
             self.roll_estim = (utils_mpc.quaternionToRPY(self.q_estim[3:7, 0]))[0, 0]
             self.pitch_estim = (utils_mpc.quaternionToRPY(self.q_estim[3:7, 0]))[1, 0]
@@ -266,16 +264,6 @@ class Controller:
         # Update footsteps if new contact phase
         # if(self.k % self.k_mpc == 0 and self.k != 0 and self.gait.isNewPhase()):
         #     self.footstepPlanner.updateNewContact()
-
-        """// Get the reference velocity in world frame (given in base frame)
-        Eigen::Quaterniond quat(q(6, 0), q(3, 0), q(4, 0), q(5, 0));  // w, x, y, z
-        RPY << pinocchio::rpy::matrixToRpy(quat.toRotationMatrix());
-        double c = std::cos(RPY(2, 0));
-        double s = std::sin(RPY(2, 0));
-        R_2.block(0, 0, 2, 2) << c, -s, s, c;
-        R_2(2, 2) = 1.0;
-        vref_in.block(0, 0, 3, 1) = R_2 * b_vref_in.block(0, 0, 3, 1);
-        vref_in.block(3, 0, 3, 1) = b_vref_in.block(3, 0, 3, 1);"""
 
         o_v_ref = np.zeros((6, 1))
         o_v_ref[0:3, 0:1] = oMb.rotation @ self.joystick.v_ref[0:3, 0:1]
@@ -303,8 +291,6 @@ class Controller:
         # fsteps = self.footstepPlanner.getFootsteps()
         # cgait = self.gait.getCurrentGait()
 
-
-
         ################
         # solo3D python
         ################
@@ -317,29 +303,22 @@ class Controller:
             self.footStepPlannerQP.updateNewContact()
 
         # Compute target footstep based on current and reference velocities
-        targetFootstep = self.footStepPlannerQP.computeTargetFootstep(self.k,self.q[0:7, 0:1], self.v[0:6, 0:1].copy(), o_v_ref)
+        self.statePlanner.computeReferenceStates(self.q[0:7, 0:1], self.v[0:6, 0:1].copy(), o_v_ref, 0.0)
+        xref = self.statePlanner.getReferenceStates()
+
+        targetFootstep = self.footStepPlannerQP.computeTargetFootstep(self.k, self.q[0:7, 0:1], self.v[0:6, 0:1].copy(), o_v_ref)
+        fsteps = self.footStepPlannerQP.getFootsteps()
 
         # Compute foot trajectory
-        self.footTrajectoryGenerator.update( self.k , targetFootstep, device , self.q , self.v)        
+        self.footTrajectoryGenerator.update(self.k, targetFootstep, device, self.q, self.v)
 
-        self.statePlanner.computeReferenceStates(self.q[0:7, 0:1], self.v[0:6, 0:1].copy(), o_v_ref, 0.0)
-
-        xref = self.statePlanner.getReferenceStates()
-        fsteps = self.footStepPlannerQP.getFootsteps()
         cgait = self.gait.getCurrentGait()
 
         t_planner = time.time()
 
-        """if(self.k > 11000):
-
-            from IPython import embed
-            embed()"""
-
-
         # Process MPC once every k_mpc iterations of TSID
         if (self.k % self.k_mpc) == 0:
             try:
-                # self.mpc_wrapper.solve(self.k, xref, fsteps, cgait)
                 self.mpc_wrapper.solve(self.k, xref, fsteps, cgait)
             except ValueError:
                 print("MPC Problem")
@@ -355,10 +334,10 @@ class Controller:
         self.x_f_wbc[0] = self.q_estim[0, 0]
         self.x_f_wbc[1] = self.q_estim[1, 0]
         # Get Z value using next xref
-        self.x_f_wbc[2] = - (self.dt_mpc - self.dt_wbc)* (xref[2,2] - xref[2,1])/self.dt_mpc  + xref[2,1]
+        self.x_f_wbc[2] = - (self.dt_mpc - self.dt_wbc) * (xref[2, 2] - xref[2, 1])/self.dt_mpc + xref[2, 1]
         # self.x_f_wbc[2] = self.h_ref
-        self.x_f_wbc[3] = - (self.dt_mpc - self.dt_wbc)* (xref[3,2] - xref[3,1])/self.dt_mpc  + xref[3,1]
-        self.x_f_wbc[4] = - (self.dt_mpc - self.dt_wbc)* (xref[4,2] - xref[4,1])/self.dt_mpc  + xref[4,1]
+        self.x_f_wbc[3] = - (self.dt_mpc - self.dt_wbc) * (xref[3, 2] - xref[3, 1])/self.dt_mpc + xref[3, 1]
+        self.x_f_wbc[4] = - (self.dt_mpc - self.dt_wbc) * (xref[4, 2] - xref[4, 1])/self.dt_mpc + xref[4, 1]
         self.x_f_wbc[5] = self.yaw_estim
         # else:  # Sort of position control to avoid slow drift
         #     self.x_f_wbc[0:3] = self.planner.q_static[0:3, 0]
@@ -409,18 +388,18 @@ class Controller:
 
         # Update PyBullet camera
         # self.pyb_camera(device)
-        self.pybVisualizationTraj.update(self.k , device)
+        self.pybVisualizationTraj.update(self.k, device)
 
         # Logs
         self.log_misc(t_start, t_filter, t_planner, t_mpc, t_wbc)
 
         # Log Planner
-        self.loggerPlanner.log_mpc(self.k , self.x_f_mpc)
-        self.loggerPlanner.log_feet(self.k , device , self.footTrajectoryGenerator.getFootPosition(),
-                                      self.footTrajectoryGenerator.getFootVelocity(),
-                                      self.footTrajectoryGenerator.getFootAcceleration(), targetFootstep ,
-                                      self.q , self.v  )
-        self.loggerPlanner.log_state(self.k , self.q[:7], self.v[:6], o_v_ref , self.joystick.v_ref[0:6, 0:1] , oMb.rotation ,  xref )
+        self.loggerPlanner.log_mpc(self.k, self.x_f_mpc)
+        self.loggerPlanner.log_feet(self.k, device, self.footTrajectoryGenerator.getFootPosition(),
+                                    self.footTrajectoryGenerator.getFootVelocity(),
+                                    self.footTrajectoryGenerator.getFootAcceleration(), targetFootstep,
+                                    self.q, self.v)
+        self.loggerPlanner.log_state(self.k, self.q[:7], self.v[:6], o_v_ref, self.joystick.v_ref[0:6, 0:1], oMb.rotation,  xref)
 
         # Increment loop counter
         self.k += 1
