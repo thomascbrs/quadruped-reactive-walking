@@ -14,10 +14,12 @@ from solo3D.FootStepPlannerQP import FootStepPlannerQP
 from solo3D.FootTrajectoryGeneratorBezier import FootTrajectoryGeneratorBezier
 from solo3D.tools.HeightMap import HeightMap
 from solo3D.StatePlanner import StatePlanner
+from solo3D.SurfacePlanner import SurfacePlanner
 from solo3D.LoggerPlanner import LoggerPlanner
 
 from solo3D.tools.vizualization import PybVisualizationTraj
 
+ENV_URDF = "/opt/openrobots/share/hpp_environments/urdf/multicontact/bauzil_stairs.urdf"
 
 class Result:
     """Object to store the result of the control loop
@@ -199,6 +201,7 @@ class Controller:
         self.footStepPlannerQP = FootStepPlannerQP(dt_mpc, dt_wbc, T_gait, self.h_ref, k_mpc, self.gait, N_gait, self.heightMap)
         self.footTrajectoryGenerator = FootTrajectoryGeneratorBezier(T_gait, dt_wbc, k_mpc,  self.fsteps_init, self.gait, self.footStepPlannerQP, self.heightMap)
         self.statePlanner = StatePlanner(dt_mpc, T_mpc, self.h_ref, self.heightMap)
+        self.surfacePlanner = SurfacePlanner(ENV_URDF)
         # Pybullet Trajectory
         self.pybVisualizationTraj = PybVisualizationTraj(self.gait, self.footStepPlannerQP, self.statePlanner,  self.footTrajectoryGenerator, enable_pyb_GUI)
 
@@ -323,6 +326,13 @@ class Controller:
             except ValueError:
                 print("MPC Problem")
 
+        # Process MPC once every k_mpc iterations of TSID
+        if (self.k % self.k_mpc) == 0:
+            try:
+                self.mpc_wrapper.solve(self.k, xref, fsteps, cgait)
+            except ValueError:
+                print("MPC Problem")
+
         # Retrieve reference contact forces
         self.x_f_mpc = self.mpc_wrapper.get_latest_result()
 
@@ -340,8 +350,6 @@ class Controller:
         self.x_f_wbc[4] = - (self.dt_mpc - self.dt_wbc) * (xref[4, 2] - xref[4, 1])/self.dt_mpc + xref[4, 1]
         self.x_f_wbc[5] = self.yaw_estim
         # else:  # Sort of position control to avoid slow drift
-        #     self.x_f_wbc[0:3] = self.planner.q_static[0:3, 0]
-        #     self.x_f_wbc[3:6] = self.planner.RPY_static[:, 0]
         self.x_f_wbc[6:12] = xref[6:, 1]
 
         # Whole Body Control
@@ -354,11 +362,6 @@ class Controller:
             self.b_v[6:, 0] = self.v[6:, 0]
 
             # Run InvKin + WBC QP
-            # self.myController.compute(self.q, self.b_v, self.x_f_wbc[:12],
-            #                           self.x_f_wbc[12:], gait[0, 1:],
-            #                           self.footTrajectoryGenerator.getFootPosition(),
-            #                           self.footTrajectoryGenerator.getFootVelocity(),
-            #                           self.footTrajectoryGenerator.getFootAcceleration())
             self.myController.compute(self.q, self.b_v, self.x_f_wbc[:12],
                                       self.x_f_wbc[12:], cgait[0, :],
                                       self.footTrajectoryGenerator.getFootPosition(),
@@ -371,15 +374,6 @@ class Controller:
             self.result.q_des[:] = self.myController.qdes[7:]
             self.result.v_des[:] = self.myController.vdes[6:, 0]
             self.result.tau_ff[:] = 0.5 * self.myController.tau_ff
-
-            """if self.k % 5 == 0:
-                self.solo.display(self.q)
-                #self.view.display(self.q)
-                #print("Pass")
-                np.set_printoptions(linewidth=200, precision=2)
-                print("###")
-                #print(self.q.ravel())
-                print(self.myController.tau_ff)"""
 
         t_wbc = time.time()
 

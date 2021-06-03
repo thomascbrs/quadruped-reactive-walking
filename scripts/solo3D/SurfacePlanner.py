@@ -81,16 +81,19 @@ class SurfacePlanner:
 
         return surfaces_list
 
-    def run(self, states, R, gait, current_contacts, step_length):
+    def run(self, xref, gait_in, current_contacts, step_length):
         """
         Select the nex surfaces to use
-        :param states: a list of successive base positions
-        :param R: a list of successive orientations of the robot
+        :param xref: successive states
         :param gait: a gait matrix
         :param current_contacts: the initial_contacts to use in the computation
         :param step_length: the desired step_length for the cost
         :return: the selected surfaces for the first phase
         """
+        # TODO compute configs (vector 3) et R (3*3 rotation matrix) from xref
+        # TODO compute gait with one ligne per phase
+        # TODO compute gait with one ligne per phase
+
         surfaces = self.get_potential_surfaces(configs, gait)
 
         pb = Problem(limb_names=limbs, other_names=others, constraint_paths=paths)
@@ -107,3 +110,7 @@ class SurfacePlanner:
                 selected_surfaces.append[surfaces[0][foot][index]]
 
             return selected_surfaces
+        
+        else:
+            # TODO what if the problem did not converge ???
+            return None

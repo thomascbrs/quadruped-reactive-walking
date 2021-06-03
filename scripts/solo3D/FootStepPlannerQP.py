@@ -1,9 +1,7 @@
 import numpy as np
 import pinocchio as pin
 from solo3D.tools.optimisation import genCost, quadprog_solve_qp, to_least_square
-from solo3D.surfacePlanner import SurfacePlanner
 
-ENV_URDF = "/opt/openrobots/share/hpp_environments/urdf/multicontact/bauzil_stairs.urdf"
 
 
 class FootStepPlannerQP:
@@ -71,7 +69,6 @@ class FootStepPlannerQP:
         self.targetFootstep = self.shoulders.copy()
         self.fsteps = np.zeros((self.N_gait, 12))
 
-        self.surfacePlanner = SurfacePlanner(ENV_URDF)
 
     def run_optimisation(self, L, q, b_vlin, b_vref, o_vref):
         ''' Update ftseps with the optimised positions. 
@@ -305,13 +302,9 @@ class FootStepPlannerQP:
                     Rz = pin.rpy.rpyToMatrix(RPY_tmp)
                     next_ft = Rz.dot(nextFootstep) + q_tmp + q_dxdy
 
-                    # self.footsteps[i][:,j] = next_ft
-
                     if j in self.feet:  # feet currently in flying phase
-
                         if self.t0s[j] < 10e-4 and (self.k % self.k_mpc) == 0:
                             #  beginning of flying phase, selection of surface
-
                             print("Next foot : ", next_ft)
 
                             id_surface = None
@@ -326,10 +319,8 @@ class FootStepPlannerQP:
                         id_surface = self.surface_selected[j]
 
                         if id_surface != None:
-
                             nb_ineq = self.heightMap.Surfaces[id_surface].ineq_vect.shape[0] - 1
                             L.append([i, j, id_surface, int(nb_ineq)])
-
                         else:
                             L.append([i, j, -99, 0])
 
