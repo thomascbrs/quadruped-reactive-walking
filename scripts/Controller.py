@@ -1,5 +1,4 @@
 # coding: utf8
-
 import numpy as np
 import utils_mpc
 import time
@@ -11,7 +10,6 @@ import pinocchio as pin
 from solopython.utils.viewerClient import viewerClient, NonBlockingViewerFromRobot
 import libquadruped_reactive_walking as lqrw
 
-from solo3D.GaitPlanner import GaitPlanner
 from solo3D.FootStepPlannerQP import FootStepPlannerQP
 from solo3D.FootTrajectoryGeneratorBezier import FootTrajectoryGeneratorBezier
 from solo3D.tools.HeightMap import HeightMap
@@ -132,11 +130,8 @@ class Controller:
         # self.statePlanner = lqrw.StatePlanner()
         # self.statePlanner.initialize(dt_mpc, T_mpc, self.h_ref)
 
-        # self.gait = lqrw.Gait()
-        # self.gait.initialize(dt_mpc, T_gait, T_mpc, N_gait)
-
-        """from IPython import embed
-        embed()"""
+        self.gait = lqrw.Gait()
+        self.gait.initialize(dt_mpc, T_gait, T_mpc, N_gait)
 
         shoulders = np.zeros((3, 4))
         shoulders[0, :] = [0.1946, 0.1946, -0.1946, -0.1946]
@@ -202,15 +197,12 @@ class Controller:
         self.heightMap = HeightMap(path_ , surface_margin)
 
         # Solo3D python class
-        self.N_gait = 100
-        self.gaitPlanner = GaitPlanner(T_gait , dt_mpc , T_mpc , self.N_gait)
-        self.footStepPlannerQP = FootStepPlannerQP(dt_mpc,dt_wbc , T_gait , self.h_ref , k_mpc , self.gaitPlanner , self.N_gait , self.heightMap )
-        self.footTrajectoryGenerator = FootTrajectoryGeneratorBezier(T_gait , dt_wbc ,k_mpc ,  self.fsteps_init ,
-                                            self.gaitPlanner , self.footStepPlannerQP ,  self.heightMap)
+        self.footStepPlannerQP = FootStepPlannerQP(dt_mpc, dt_wbc, T_gait, self.h_ref, k_mpc, self.gait, self.N_gait, self.heightMap)
+        self.footTrajectoryGenerator = FootTrajectoryGeneratorBezier(T_gait, dt_wbc, k_mpc,  self.fsteps_init, self.gait, self.footStepPlannerQP, self.heightMap)
         self.statePlanner = StatePlanner(dt_mpc, T_mpc, self.h_ref , self.heightMap)
-        
+        PybVisualizationTraj
         # Pybullet Trajectory 
-        self.pybVisualizationTraj = PybVisualizationTraj(self.gaitPlanner , self.footStepPlannerQP ,self.statePlanner ,  self.footTrajectoryGenerator , enable_pyb_GUI)
+        self.pybVisualizationTraj = PybVisualizationTraj(self.gait , self.footStepPlannerQP ,self.statePlanner ,  self.footTrajectoryGenerator , enable_pyb_GUI)
 
         # Log values for planner
         self.loggerPlanner = LoggerPlanner(dt_mpc , N_SIMULATION , T_gait , k_mpc)
@@ -232,7 +224,7 @@ class Controller:
         # Process state estimator
         # self.estimator.run_filter(self.k, self.gait.getCurrentGait(),
         #                           device, self.footTrajectoryGenerator.getFootPosition())
-        self.estimator.run_filter(self.k, self.gaitPlanner.getCurrentGait(),
+        self.estimator.run_filter(self.k, self.gait.getCurrentGait(),
                                   device, self.footTrajectoryGenerator.getFootPosition())
         t_filter = time.time()
 
@@ -269,7 +261,7 @@ class Controller:
             self.v_estim = self.v.copy()
 
         # Update gait
-        # self.gait.updateGait(self.k, self.k_mpc, self.q[0:7, 0:1], self.joystick.joystick_code)
+        self.gait.updateGait(self.k, self.k_mpc, self.q[0:7, 0:1], self.joystick.joystick_code)
 
         # Update footsteps if new contact phase
         # if(self.k % self.k_mpc == 0 and self.k != 0 and self.gait.isNewPhase()):
@@ -318,10 +310,10 @@ class Controller:
         ################
 
         # Update gait
-        self.gaitPlanner.updateGait(self.k  , self.k_mpc )
+        # self.gait.updateGait(self.k  , self.k_mpc )
 
         # Update footsteps if new contact phase
-        if(self.k % self.k_mpc == 0 and self.k != 0 and self.gaitPlanner.isNewPhase()):
+        if(self.k % self.k_mpc == 0 and self.k != 0 and self.gait.isNewPhase()):
             self.footStepPlannerQP.updateNewContact()
 
         # Compute target footstep based on current and reference velocities
@@ -334,7 +326,7 @@ class Controller:
 
         xref = self.statePlanner.getReferenceStates()
         fsteps = self.footStepPlannerQP.getFootsteps()
-        cgait = self.gaitPlanner.getCurrentGait()
+        cgait = self.gait.getCurrentGait()
 
         t_planner = time.time()
 
