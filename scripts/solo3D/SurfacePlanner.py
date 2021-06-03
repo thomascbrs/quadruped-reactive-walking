@@ -1,3 +1,4 @@
+import pinocchio as pin
 import numpy as np
 import os
 
@@ -15,11 +16,9 @@ from hpp.gepetto import ViewerFactory
 
 paths = [os.environ["INSTALL_HPP_DIR"] + "/share/solo-rbprm/com_inequalities/feet_quasi_flat/",
          os.environ["INSTALL_HPP_DIR"] + "/share/solo-rbprm/relative_effector_positions/"]
-limbs = ['HRleg', 'HLleg', 'FLleg', 'FRleg']
-others = ['HR_FOOT', 'HL_FOOT', 'FL_FOOT', 'FR_FOOT']
-rom_names = ['solo_RHleg_rom', 'solo_LHleg_rom', 'solo_LFleg_rom', 'solo_RFleg_rom']
-offsets = {'FRleg':  [0.1946, -0.0875, -0.241], 'FLleg': [0.1946, 0.0875, -0.241],
-           'HRleg': [-0.1946, -0.0875, -0.241], 'HLleg': [-0.1946, 0.0875, -0.241]}
+limbs = ['FLleg', 'FRleg', 'HLleg', 'HRleg']
+others = ['FL_FOOT', 'FR_FOOT', 'HL_FOOT', 'HR_FOOT']
+rom_names = ['solo_LFleg_rom', 'solo_RFleg_rom', 'solo_LHleg_rom', 'solo_RHleg_rom']
 
 # --------------------------------- METHODS ---------------------------------------------------------------
 
@@ -29,10 +28,11 @@ class SurfacePlanner:
     Choose the next surface to use by solving a MIP problem
     """
 
-    def __init__(self, environment_URDF):
+    def __init__(self, environment_URDF, T_gait):
         """
         Initialize the affordance tool and save the solo abstract rbprm builder, and surface dictionary
         """
+        self.T_gait = T_gait
         self.solo_abstract = SoloAbstract()
         self.solo_abstract.setJointBounds("root_joint", [-5., 5., -5., 5., 0.241, 1.5])
         self.solo_abstract.boundSO3([-3.14, 3.14, -0.01, 0.01, -0.01, 0.01])
@@ -47,6 +47,58 @@ class SurfacePlanner:
         ps.selectPathValidation("RbprmPathValidation", 0.05)
 
         self.all_surfaces = getAllSurfacesDict(afftool)
+
+    def compute_configurations(self, xref, q):
+        """
+        Get a gait matrix with only one line per phase
+        :param gait_in: gait matrix with several line per phase
+        :return: gait matrix
+        """
+        configs = []
+        R = []
+
+        config = np.array(q[:, 0])
+
+        # TODO ne prendre que un par pas !!!
+        for i in range(5):
+            rpy = xref[3:6, i]
+            matrix = pin.rpy.rpyToMatrix(rpy)
+            R.append(matrix)
+
+            config[:3] = xref[:3, i]
+            quat = pin.Quaternion(matrix)
+            config[3:7] = [quat.x, quat.y, quat.z, quat.w]
+            configs.append(config.copy())
+
+        return configs, R
+
+    def compute_gait(self, gait_in):
+        """
+        Get a gait matrix with only one line per phase
+        :param gait_in: gait matrix with several line per phase
+        :return: gait matrix
+        """
+        gait = [gait_in[0, :]]
+        for i in range(1, gait_in.shape[0] - 1):
+            if (gait_in[i, :] != gait[-1]).any():
+                gait.append(gait_in[i, :])
+
+        # TODO only works if we the last phase is not a flying phase
+        gait.pop(-1)
+        gait = np.roll(gait, -1, axis=0)
+
+        return gait
+
+    def compute_step_length(self, o_v_ref):
+        """
+        Get a gait matrix with only one line per phase
+        :param gait_in: gait matrix with several line per phase
+        :return: gait matrix
+        """
+        # TODO: Divide by number of phases in gait
+        step_length = o_v_ref * self.T_gait/4
+
+        return np.array([step_length[i][0] for i in range(2)])
 
     def get_potential_surfaces(self, configs, gait):
         """
@@ -81,36 +133,48 @@ class SurfacePlanner:
 
         return surfaces_list
 
-    def run(self, xref, gait_in, current_contacts, step_length):
+    def run(self, xref, q, gait_in, current_contacts, o_v_ref):
         """
         Select the nex surfaces to use
         :param xref: successive states
         :param gait: a gait matrix
         :param current_contacts: the initial_contacts to use in the computation
-        :param step_length: the desired step_length for the cost
+        :param o_v_ref: the desired velocity for the cost
         :return: the selected surfaces for the first phase
         """
-        # TODO compute configs (vector 3) et R (3*3 rotation matrix) from xref
-        # TODO compute gait with one ligne per phase
-        # TODO compute gait with one ligne per phase
+        print("------------------------------------------------------------------------------------")
+
+        configs, R = self.compute_configurations(xref, q[:7])
+
+        gait = self.compute_gait(gait_in)
+
+        step_length = self.compute_step_length(o_v_ref)
 
         surfaces = self.get_potential_surfaces(configs, gait)
 
+        initial_contacts = [current_contacts[:, i].tolist() for i in range(4)]
+
         pb = Problem(limb_names=limbs, other_names=others, constraint_paths=paths)
-        pb.generate_problem(R, surfaces, gait, current_contacts, com=False)
+        pb.generate_problem(R, surfaces, gait, initial_contacts, com=False)
+        print(pb.phaseData[0].moving)
 
         costs = {"step_size": [1.0, step_length]}
         pb_data = solve_MIP(pb, costs=costs, com=False)
 
         if pb_data.success:
+            print(pb_data)
             surface_indices = pb_data.surface_indices
 
             selected_surfaces = []
             for foot, index in enumerate(surface_indices[0]):
-                selected_surfaces.append[surfaces[0][foot][index]]
+                print(index)
+                print(surfaces[0][foot])
+                selected_surfaces.append(surfaces[0][foot][index])
+
+            print(selected_surfaces)
 
             return selected_surfaces
-        
+
         else:
             # TODO what if the problem did not converge ???
             return None

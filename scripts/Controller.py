@@ -19,7 +19,7 @@ from solo3D.LoggerPlanner import LoggerPlanner
 
 from solo3D.tools.vizualization import PybVisualizationTraj
 
-ENV_URDF = "/opt/openrobots/share/hpp_environments/urdf/multicontact/bauzil_stairs.urdf"
+ENV_URDF = "/local/users/frisbourg/install/share/hpp_environments/urdf/Solo3D/object5.urdf"
 
 class Result:
     """Object to store the result of the control loop
@@ -201,7 +201,9 @@ class Controller:
         self.footStepPlannerQP = FootStepPlannerQP(dt_mpc, dt_wbc, T_gait, self.h_ref, k_mpc, self.gait, N_gait, self.heightMap)
         self.footTrajectoryGenerator = FootTrajectoryGeneratorBezier(T_gait, dt_wbc, k_mpc,  self.fsteps_init, self.gait, self.footStepPlannerQP, self.heightMap)
         self.statePlanner = StatePlanner(dt_mpc, T_mpc, self.h_ref, self.heightMap)
-        self.surfacePlanner = SurfacePlanner(ENV_URDF)
+        self.surfacePlanner = SurfacePlanner(ENV_URDF, T_gait)
+        # TODO: initialize self.next_surfaces with the initial first surfaces
+
         # Pybullet Trajectory
         self.pybVisualizationTraj = PybVisualizationTraj(self.gait, self.footStepPlannerQP, self.statePlanner,  self.footTrajectoryGenerator, enable_pyb_GUI)
 
@@ -223,8 +225,6 @@ class Controller:
         self.joystick.update_v_ref(self.k, self.velID)
 
         # Process state estimator
-        # self.estimator.run_filter(self.k, self.gait.getCurrentGait(),
-        #                           device, self.footTrajectoryGenerator.getFootPosition())
         self.estimator.run_filter(self.k, self.gait.getCurrentGait(),
                                   device, self.footTrajectoryGenerator.getFootPosition())
         t_filter = time.time()
@@ -240,19 +240,11 @@ class Controller:
             # Update estimated position of the robot
             self.v_estim[0:3, 0:1] = oMb.rotation.transpose() @ self.joystick.v_ref[0:3, 0:1]
             self.v_estim[3:6, 0:1] = oMb.rotation.transpose() @ self.joystick.v_ref[3:6, 0:1]
-            # if not self.gait.getIsStatic():
             self.q_estim[:, 0] = pin.integrate(self.solo.model,
                                                self.q, self.v_estim * self.myController.dt)
             self.yaw_estim = (utils_mpc.quaternionToRPY(self.q_estim[3:7, 0]))[2, 0]
             self.roll_estim = (utils_mpc.quaternionToRPY(self.q_estim[3:7, 0]))[0, 0]
             self.pitch_estim = (utils_mpc.quaternionToRPY(self.q_estim[3:7, 0]))[1, 0]
-            #     self.q_estim[:, 0] = pin.integrate(self.solo.model,
-            #                                        self.q, self.v_estim * self.myController.dt)
-            #     self.yaw_estim = (utils_mpc.quaternionToRPY(self.q_estim[3:7, 0]))[2, 0]
-            # else:
-            #     self.planner.q_static[:] = pin.integrate(self.solo.model,
-            #                                              self.planner.q_static, self.v_estim * self.myController.dt)
-            #     self.planner.RPY_static[:, 0:1] = utils_mpc.quaternionToRPY(self.planner.q_static[3:7, 0])
         else:
             self.yaw_estim = 0.0
             self.roll_estim = 0.0
@@ -263,10 +255,6 @@ class Controller:
 
         # Update gait
         self.gait.updateGait(self.k, self.k_mpc, self.q[0:7, 0:1], self.joystick.joystick_code)
-
-        # Update footsteps if new contact phase
-        # if(self.k % self.k_mpc == 0 and self.k != 0 and self.gait.isNewPhase()):
-        #     self.footstepPlanner.updateNewContact()
 
         o_v_ref = np.zeros((6, 1))
         o_v_ref[0:3, 0:1] = oMb.rotation @ self.joystick.v_ref[0:3, 0:1]
@@ -280,27 +268,16 @@ class Controller:
         # self.footTrajectoryGenerator.update(self.k, targetFootstep)
 
         # Retrieve data from C++ planner
-        # TODO
-        """self.fsteps = self.planner.get_fsteps()
-        self.gait = self.planner.get_gait()
-        self.goals = self.planner.get_goals()
-        self.vgoals = self.planner.get_vgoals()
-        self.agoals = self.planner.get_agoals()"""
 
         # Run state planner (outputs the reference trajectory of the CoM / base)
         # self.statePlanner.computeReferenceStates(self.q[0:7, 0:1], self.v[0:6, 0:1].copy(), o_v_ref, 0.0)
         # Result can be retrieved with self.statePlanner.getReferenceStates()
         # xref = self.statePlanner.getReferenceStates()
         # fsteps = self.footstepPlanner.getFootsteps()
-        # cgait = self.gait.getCurrentGait()
 
         ################
         # solo3D python
         ################
-
-        # Update gait
-        # self.gait.updateGait(self.k  , self.k_mpc )
-
         # Update footsteps if new contact phase
         if(self.k % self.k_mpc == 0 and self.k != 0 and self.gait.isNewPhase()):
             self.footStepPlannerQP.updateNewContact()
@@ -317,14 +294,10 @@ class Controller:
 
         cgait = self.gait.getCurrentGait()
 
-        t_planner = time.time()
+        if(self.k % self.k_mpc == 0 and self.k != 0 and self.gait.isNewPhase()):
+            self.next_surfaces = self.surfacePlanner.run(xref, self.q, cgait, targetFootstep, o_v_ref)
 
-        # Process MPC once every k_mpc iterations of TSID
-        if (self.k % self.k_mpc) == 0:
-            try:
-                self.mpc_wrapper.solve(self.k, xref, fsteps, cgait)
-            except ValueError:
-                print("MPC Problem")
+        t_planner = time.time()
 
         # Process MPC once every k_mpc iterations of TSID
         if (self.k % self.k_mpc) == 0:
@@ -340,22 +313,18 @@ class Controller:
 
         # Target state for the whole body control
         self.x_f_wbc = (self.x_f_mpc[:, 0]).copy()
-        # if not self.gait.getIsStatic():  Not used for now
         self.x_f_wbc[0] = self.q_estim[0, 0]
         self.x_f_wbc[1] = self.q_estim[1, 0]
         # Get Z value using next xref
         self.x_f_wbc[2] = - (self.dt_mpc - self.dt_wbc) * (xref[2, 2] - xref[2, 1])/self.dt_mpc + xref[2, 1]
-        # self.x_f_wbc[2] = self.h_ref
         self.x_f_wbc[3] = - (self.dt_mpc - self.dt_wbc) * (xref[3, 2] - xref[3, 1])/self.dt_mpc + xref[3, 1]
         self.x_f_wbc[4] = - (self.dt_mpc - self.dt_wbc) * (xref[4, 2] - xref[4, 1])/self.dt_mpc + xref[4, 1]
         self.x_f_wbc[5] = self.yaw_estim
-        # else:  # Sort of position control to avoid slow drift
         self.x_f_wbc[6:12] = xref[6:, 1]
 
         # Whole Body Control
         # If nothing wrong happened yet in the WBC controller
         if (not self.myController.error) and (not self.joystick.stop):
-
             # Get velocity in base frame for pinocchio
             self.b_v[0:3, 0:1] = oMb.rotation.transpose() @ self.v[0:3, 0:1]
             self.b_v[3:6, 0:1] = oMb.rotation.transpose() @ self.v[3:6, 0:1]
@@ -381,7 +350,6 @@ class Controller:
         self.security_check()
 
         # Update PyBullet camera
-        # self.pyb_camera(device)
         self.pybVisualizationTraj.update(self.k, device)
 
         # Logs
@@ -401,7 +369,6 @@ class Controller:
         return 0.0
 
     def pyb_camera(self, device):
-
         # Update position of PyBullet camera on the robot position to do as if it was attached to the robot
         if self.k > 10 and self.enable_pyb_GUI:
             # pyb.resetDebugVisualizerCamera(cameraDistance=0.8, cameraYaw=45, cameraPitch=-30,
