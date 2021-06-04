@@ -1,0 +1,6 @@
+Nx: 500
+Ny: 300
+X_bound_lower: -2.0
+X_bound_upper: 4.0
+Y_bound_lower: -2.0
+Y_bound_upper: 1.0

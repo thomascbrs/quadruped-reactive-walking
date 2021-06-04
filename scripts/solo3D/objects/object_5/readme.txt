@@ -7,5 +7,5 @@ Axes : Y forward , Z up
 
 Nx = 400
 Ny = 400
-X_bound = [0 , 2.5]
-Y_bound = [1.0 , -2.5]
+X_bound = [-0.4 , 2.5]
+Y_bound = [-2.5 , 1.]
