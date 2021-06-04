@@ -4,9 +4,9 @@ from solo3D.tools.collision_tool import get_intersect_segment , doIntersect_segm
 import eigenpy
 eigenpy.switchToNumpyArray()
 #importing the bezier curve class
-from curves import (bezier)
-from curves.optimization import (problem_definition, setup_control_points)
-from curves.optimization import constraint_flag
+from ndcurves import (bezier)
+from ndcurves.optimization import (problem_definition, setup_control_points)
+from ndcurves.optimization import constraint_flag
 import pybullet as pyb
 import pinocchio as pin
 from example_robot_data import load
