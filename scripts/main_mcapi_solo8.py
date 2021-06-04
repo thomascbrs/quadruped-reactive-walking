@@ -11,9 +11,9 @@ from utils.logger import Logger
 from utils.qualisysClient import QualisysClient
 import matplotlib.pyplot as plt
 from math import ceil
-import curves
+import ndcurves
 from multicontact_api import ContactSequence
-curves.switchToNumpyArray()
+ndcurves.switchToNumpyArray()
 DT = 0.001
 KP = 4.
 KD = 0.05
