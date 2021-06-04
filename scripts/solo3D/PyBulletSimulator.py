@@ -176,33 +176,8 @@ class pybullet_simulator:
             self.flag_sphere2 = True
         
         if envID == 2 :
-            #pyb.setAdditionalSearchPath("/home/corberes/Bureau/edin/my_quad_reactive/quadruped-reactive-walking/scripts/solo3D/objects/")
-            # path_mesh = "solo3D/objects/object_4/meshes/"
-            path_mesh = "solo3D/objects/object_5/meshes/"
-            for elt in os.listdir(path_mesh) :
-                name_object = path_mesh + elt
-           
-                mesh_scale = [1.0, 1., 1.]
-                # Add stairs with platform and bridge
-                visualShapeId = pyb.createVisualShape(shapeType=pyb.GEOM_MESH,
-                                                    fileName=name_object,
-                                                    rgbaColor=[.3, 0.3, 0.3, 1.0],
-                                                    specularColor=[0.4, .4, 0],
-                                                    visualFramePosition=[0.0, 0.0, 0.0],
-                                                    meshScale=mesh_scale)
-
-                collisionShapeId = pyb.createCollisionShape(shapeType=pyb.GEOM_MESH,
-                                                                        fileName=name_object,
-                                                                        collisionFramePosition=[0.0, 0.0, 0.0],
-                                                                        meshScale=mesh_scale)
-
-                tmpId = pyb.createMultiBody(baseMass=0.0,
-                                                            baseInertialFramePosition=[0, 0, 0],
-                                                            baseCollisionShapeIndex=collisionShapeId,
-                                                            baseVisualShapeIndex=visualShapeId,
-                                                            basePosition=[0.0, 0., 0.0],
-                                                            useMaximalCoordinates=True)
-                pyb.changeDynamics(tmpId, -1, lateralFriction=1.0)
+            # Switched to load object in vizualization /solo3D/tools
+            pass 
 
         # Create blue spheres without collision box for debug purpose
         mesh_scale = [0.015, 0.015, 0.015]
