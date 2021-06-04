@@ -87,10 +87,10 @@ add_project_dependency(pinocchio REQUIRED)
 TARGET_LINK_LIBRARIES(${PROJECT_NAME} PUBLIC pinocchio::pinocchio)
 
 # Find parametric curves library and headers
-add_project_dependency(curves REQUIRED)
+#add_project_dependency(curves REQUIRED)
 
 # Link parametric curves library
-target_link_libraries(${PROJECT_NAME} PUBLIC curves::curves)
+#target_link_libraries(${PROJECT_NAME} PUBLIC curves::curves)
 
 # Find eiquadprog library and headers
 add_project_dependency(eiquadprog REQUIRED)
@@ -106,6 +106,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE osqp::osqp)
 
 #find_package(yaml-cpp REQUIRED)
 #target_link_libraries(${PROJECT_NAME} PRIVATE yaml-cpp::yaml-cpp)
+#include_directories(${YAML_CPP_INCLUDE_DIR})
 add_project_dependency(yaml-cpp CONFIG REQUIRED)
 target_link_libraries(${PROJECT_NAME} PUBLIC ${YAML_CPP_LIBRARIES})
 
@@ -116,7 +117,7 @@ endif()
 # target_compile_options(${PROJECT_NAME} PUBLIC PRINTING)
 # target_compile_definitions(${PROJECT_NAME} PUBLIC PRINTING)
 
-target_compile_options(${PROJECT_NAME} PUBLIC -DNDEBUG -O3)
+target_compile_options(${PROJECT_NAME} PUBLIC -DNDEBUG -O3) 
 
 target_compile_definitions(${PROJECT_NAME} PUBLIC CONFIG_SOLO12_YAML="${PROJECT_SOURCE_DIR}/src/config_solo12.yaml")
 

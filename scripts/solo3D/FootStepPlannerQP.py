@@ -2,14 +2,18 @@ import numpy as np
 import pinocchio as pin
 import utils_mpc
 import math
+import os
 from solo3D.tools.optimisation import genCost , quadprog_solve_qp , to_least_square
+
+from sl1m.tools.obj_to_constraints import load_obj, as_inequalities, rotate_inequalities
+from sl1m.constants_and_tools import default_transform_from_pos_normal
 
 class FootStepPlannerQP:
     ''' Python class to compute the target foot step and the ref state using QP optimisation 
     to avoid edges of surface.
     '''
 
-    def __init__(self , dt , dt_wbc , T_gait , h_ref, k_mpc , gaitPlanner ,N_gait, heightMap) :
+    def __init__(self , dt , dt_wbc , T_gait , h_ref, k_mpc , gaitPlanner ,N_gait, heightMap , statePlanner) :
 
         # Time step of the contact sequence
         self.dt = dt  # dt mpc
@@ -68,9 +72,34 @@ class FootStepPlannerQP:
         self.current_fstep = self.shoulders.copy()
         self.targetFootstep = self.shoulders.copy()
         self.fsteps = np.zeros(( self.N_gait, 12  ))
-    
-    
-  
+
+        self.o_vref_qp = np.zeros((6,1))
+
+        # solo-rbprm link to retrieve the kinematic constraints
+        self.com_objects = []
+        # Constraints inequalities size != depending of which foot is used
+        self.ine_CoM_size = []
+        n_effectors = 4 
+        # kinematic_constraints_path = "/home/thomas_cbrs/Library/solo-rbprm/data/com_inequalities/feet_quasi_flat/"
+        # limbs_names = ["FLleg" , "FRleg" , "HLleg" , "HRleg"]
+        
+        kinematic_constraints_path = os.getcwd() + "/solo3D/objects/constraints_sphere/"
+
+        limbs_names = ["FL" , "FR" , "HL" , "HR"]
+        for foot in range(n_effectors):
+            foot_name = limbs_names[foot]
+            # filekin = kinematic_constraints_path + "COM_constraints_in_" + \
+            #     foot_name + "_effector_frame_quasi_static_reduced.obj"
+            filekin = kinematic_constraints_path + "COM_constraints_" + \
+                foot_name + "3.obj"
+            self.com_objects.append(as_inequalities(load_obj(filekin)))
+            self.ine_CoM_size.append(self.com_objects[foot].A.shape[0] )
+
+        self.statePlanner = statePlanner
+
+        self.res = None
+ 
+
     
     def run_optimisation(self , L , q, b_vlin, b_vref , o_vref ) :
         ''' Update ftseps with the optimised positions. 
@@ -84,11 +113,17 @@ class FootStepPlannerQP:
         - b_vref (6x) : array, vref i
         - o_vref (6x1) : o_vref in world frame
         '''
+        gait = self.gaitPlanner.getCurrentGait()
+        stance_feet = np.where(self.gaitPlanner.current_gait[0, :] == 1)[0]
+        size_ineq = 0
+        for foot in stance_feet :
+            size_ineq += self.ine_CoM_size[foot]
 
-        ineqMatrix = np.zeros(( int(np.sum(L[:,3])) , 3*L.shape[0] + 2  ))
-        ineqVector = np.zeros( int(np.sum(L[:,3])) )
+        # print(L)
+        ineqMatrix = np.zeros(( int(np.sum(L[:,3])) + size_ineq , 3*L.shape[0] + 2 + 1  ))
+        ineqVector = np.zeros( int(np.sum(L[:,3])) + size_ineq)
 
-        eqMatrix = np.zeros((L.shape[0]  , 3*L.shape[0] + 2))
+        eqMatrix = np.zeros((L.shape[0]  , 3*L.shape[0] + 2 + 1))
         eqVector = np.zeros( L.shape[0] )
 
         count = 0 
@@ -138,18 +173,60 @@ class FootStepPlannerQP:
             count_eq += 1 
             count += nb_ineq 
 
-        P = np.identity(2 + L.shape[0]*3)
-        q = np.zeros(2 + L.shape[0]*3)
+        surface_equation = self.statePlanner.getSurfaceHeightMap()
+        RPY_tmp2 = np.array([- 1.*np.arctan2(surface_equation[1], 1.) , - 1.*np.arctan2(surface_equation[0], 1.) , 0.   ])       
+        
+        if len(stance_feet) != 0 :
+            for foot in stance_feet :
+                i = 1
+                while gait[i-1,foot]* gait[i,foot] > 0 :
+                    i += 1
+                
+                print(i)
+
+                # Offset to the future position
+                q_dxdy = q_tmp + np.array( [self.dx[i - 1], self.dy[i - 1], 0.0 ])
+                RPY_tmp2[2] = self.yaws[i-1]
+                Rz = pin.rpy.rpyToMatrix(RPY_tmp2)
+                Rz = np.identity(3)
+
+                normal = np.array([0,0,1])
+                transform = default_transform_from_pos_normal(np.zeros(3), normal, Rz)
+
+                # ine_CoM : ine_CoM.A (CoM - r_foot ) <= ine_CoM.A 
+                # ine_CoM = rotate_inequalities(self.com_objects[foot], transform.copy())
+                
+                # ineqMatrix[count:count+self.ine_CoM_size[foot], -1 ] = ine_CoM.A[:,2]
+                # ineqVector[count:count+self.ine_CoM_size[foot]] = ine_CoM.A[:,2]*self.current_fstep[2,foot] +  ine_CoM.b[:] - np.dot( ine_CoM.A[:,0:2] , np.array([q_dxdy[0] - self.current_fstep[0,foot] , q_dxdy[1] - self.current_fstep[1,foot] ]))
+
+                count += self.ine_CoM_size[foot]
+
+        # X optimised : [Vxref , Vyref , px1 , py1 , pz1 , px2 ... , zCoM_end_stance ]
+        P = np.identity(2 +1 + L.shape[0]*3)
+        q = np.zeros(2 + 1 + L.shape[0]*3)
 
         P[:2,:2] = self.weight_vref*np.identity(2)
         q[:2] = -self.weight_vref*np.array([o_vref[0,0] , o_vref[1,0]])
-        res = quadprog_solve_qp(P, q,  G=ineqMatrix, h = ineqVector ,C=eqMatrix , d=eqVector)
+
+        # z_CoM_end_stance_ref = surface_equation[0]*q_dxdy[0] + surface_equation[1]*q_dxdy[1] + surface_equation[2] + self.h_ref  
+        # q[-1] = - z_CoM_end_stance_ref
+
+        try :
+            res = quadprog_solve_qp(P, q,  G=ineqMatrix, h = ineqVector ,C=eqMatrix , d=eqVector)
+            self.res = res
+        except :
+            print("ERROR QP FOOTSTEPPLANNER ---------------------------------------------------------")
+            res = self.res
+        # print("Z ref : " , z_CoM_end_stance_ref  )
+        # print("Z optim :  " , res[-1])
 
         
         # Store the value for getRefState
         self.o_vref_qp = o_vref.copy()
         self.o_vref_qp[0,0] = res[0]
-        self.o_vref_qp[1,0] = res[1]        
+        self.o_vref_qp[1,0] = res[1]       
+
+        print("res qp : " , self.o_vref_qp[0,0] ) 
 
         # Get new reference velocity in base frame to recompute the new footsteps
         
@@ -164,7 +241,8 @@ class FootStepPlannerQP:
             q_dxdy = np.array( [self.dx[i - 1], self.dy[i - 1], 0.0 ])
 
             # Get future desired position of footsteps without k_feedback
-            nextFootstep = self.computeNextFootstep(i, j, b_vlin , o_vref[:,0] , True)
+            #nextFootstep = self.computeNextFootstep(i, j, b_vlin , o_vref[:,0] , True)
+            nextFootstep = self.computeNextFootstep(i, j, b_vlin , b_vref_qp , True)
 
             # Get desired position of footstep compared to current position
             RPY_tmp[2] = self.yaws[i-1]
@@ -313,7 +391,7 @@ class FootStepPlannerQP:
                         if self.t0s[j] < 10e-4 and (self.k % self.k_mpc) == 0: 
                             #  beginning of flying phase, selection of surface
 
-                            print("Next foot : " ,next_ft)
+                            #print("Next foot : " ,next_ft)
                             
                             
                             id_surface = None
@@ -323,7 +401,7 @@ class FootStepPlannerQP:
                             # height , id_surface = self.heightMap.getHeight(next_ft[0] , next_ft[1])
                             self.surface_selected[j] = id_surface  
 
-                            print("Surface selected : " , id_surface)                      
+                            #print("Surface selected : " , id_surface)                      
                      
                         id_surface = self.surface_selected[j] 
 
@@ -416,7 +494,8 @@ class FootStepPlannerQP:
         self.RPY = pin.rpy.matrixToRpy(quat.toRotationMatrix())   # Array (3,)
         self.RPY_b = self.RPY.copy()
 
-        print("RPY : " , self.RPY  )
+        # print("b_vref : " , b_vref )
+        # print("v : " , v )
 
         # Only yaw rotation for the base frame
         self.RPY_b[0] = 0
@@ -440,6 +519,7 @@ class FootStepPlannerQP:
             self.fsteps[index , :] =  np.reshape(footstep, 12, order='F') 
 
         return self.getTargetFootsteps()
+
 
     def cross3(self, left, right):
         """Numpy is inefficient for this"""
@@ -476,6 +556,9 @@ class FootStepPlannerQP:
 
     def getTargetFootsteps(self):
         return self.targetFootstep 
+
+    def getVref_QP(self) :
+        return self.o_vref_qp
         
     
 

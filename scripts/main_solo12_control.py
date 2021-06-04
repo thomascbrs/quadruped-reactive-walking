@@ -110,7 +110,10 @@ def control_loop(name_interface, name_interface_clone=None):
     t = 0.0
 
     # Default position after calibration
-    q_init = np.array([0.0, 0.7, -1.4, -0.0, 0.7, -1.4, 0.0, -0.7, +1.4, -0.0, -0.7, +1.4])
+    # q_init = np.array([0.0, 0.7, -1.4, -0.0, 0.7, -1.4, 0.0, -0.7, +1.4, -0.0, -0.7, +1.4])
+
+    # q_init = np.array([0.0, 0.9, -1.6, -0.0, 0.9, -1.6, 0.0, 0.9, -1.6, -0.0, 0.9, -1.6])
+    q_init = np.array([0.0, 0.7, -1.4, -0.0, 0.7, -1.4, 0.0, 0.7, -1.4, -0.0, 0.7, -1.4])
 
     # Run a scenario and retrieve data thanks to the logger
     controller = Controller(q_init, params.envID, params.velID, params.dt_wbc, params.dt_mpc,
@@ -208,7 +211,7 @@ def control_loop(name_interface, name_interface_clone=None):
         # import os
         # from matplotlib import pyplot as plt
         # import pybullet as pyb
-        # newpath = r'/home/corberes/Bureau/edin/my_quad_reactive/tmp/recording/'
+        # newpath = r'/home/thomas_cbrs/Desktop/edin/recording/images/'
         # if (t == 0.0):
         #     cpt_frames = 0
         #     step = 2

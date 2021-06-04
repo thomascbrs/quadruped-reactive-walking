@@ -196,21 +196,22 @@ class Controller:
         dDevice.dummyPos = np.array([0.0, 0.0, q_init[2]])
         dDevice.b_baseVel = np.zeros(3)
 
-        # Load Heightmap
-        path_ = "solo3D/objects/object_5/heightmap/"
+        # Load Heightmap, select stairs
+        object_stair = 1
         surface_margin = 0.05
-        self.heightMap = HeightMap(path_ , surface_margin)
+        self.heightMap = HeightMap(object_stair  , surface_margin)
 
         # Solo3D python class
         self.N_gait = 100
         self.gaitPlanner = GaitPlanner(T_gait , dt_mpc , T_mpc , self.N_gait)
-        self.footStepPlannerQP = FootStepPlannerQP(dt_mpc,dt_wbc , T_gait , self.h_ref , k_mpc , self.gaitPlanner , self.N_gait , self.heightMap )
+        self.statePlanner = StatePlanner(dt_mpc, T_mpc, self.h_ref , self.heightMap ) 
+        self.footStepPlannerQP = FootStepPlannerQP(dt_mpc,dt_wbc , T_gait , self.h_ref , k_mpc , self.gaitPlanner , self.N_gait , self.heightMap , self.statePlanner)
         self.footTrajectoryGenerator = FootTrajectoryGeneratorBezier(T_gait , dt_wbc ,k_mpc ,  self.fsteps_init ,
                                             self.gaitPlanner , self.footStepPlannerQP ,  self.heightMap)
-        self.statePlanner = StatePlanner(dt_mpc, T_mpc, self.h_ref , self.heightMap)
+        
         
         # Pybullet Trajectory 
-        self.pybVisualizationTraj = PybVisualizationTraj(self.gaitPlanner , self.footStepPlannerQP ,self.statePlanner ,  self.footTrajectoryGenerator , enable_pyb_GUI)
+        self.pybVisualizationTraj = PybVisualizationTraj(self.gaitPlanner , self.footStepPlannerQP ,self.statePlanner ,  self.footTrajectoryGenerator , enable_pyb_GUI , object_stair )
 
         # Log values for planner
         self.loggerPlanner = LoggerPlanner(dt_mpc , N_SIMULATION , T_gait , k_mpc)
@@ -324,11 +325,15 @@ class Controller:
         if(self.k % self.k_mpc == 0 and self.k != 0 and self.gaitPlanner.isNewPhase()):
             self.footStepPlannerQP.updateNewContact()
 
+        self.statePlanner.computeSurfaceHeightMap(self.q[0:3, 0:1])
+
         # Compute target footstep based on current and reference velocities
         targetFootstep = self.footStepPlannerQP.computeTargetFootstep(self.k,self.q[0:7, 0:1], self.v[0:6, 0:1].copy(), o_v_ref)
 
         # Compute foot trajectory
-        self.footTrajectoryGenerator.update( self.k , targetFootstep, device , self.q , self.v)        
+        self.footTrajectoryGenerator.update( self.k , targetFootstep, device , self.q , self.v)   
+
+        o_v_ref = self.footStepPlannerQP.getVref_QP()     
 
         self.statePlanner.computeReferenceStates(self.q[0:7, 0:1], self.v[0:6, 0:1].copy(), o_v_ref, 0.0)
 
@@ -395,7 +400,7 @@ class Controller:
                                       self.footTrajectoryGenerator.getFootAcceleration())
 
             # Quantities sent to the control board
-            self.result.P = 3.0 * np.ones(12)
+            self.result.P = 2.0 * np.ones(12)
             self.result.D = 0.2 * np.ones(12)
             self.result.q_des[:] = self.myController.qdes[7:]
             self.result.v_des[:] = self.myController.vdes[6:, 0]
