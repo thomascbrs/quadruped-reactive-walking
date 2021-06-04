@@ -2,12 +2,12 @@
 #include "qrw/InvKin.hpp"
 #include "qrw/MPC.hpp"
 // #include "qrw/Planner.hpp"
-#include "qrw/StatePlanner.hpp"
-#include "qrw/Gait.hpp"
-#include "qrw/FootstepPlanner.hpp"
 #include "qrw/FootTrajectoryGenerator.hpp"
-#include "qrw/QPWBC.hpp"
+#include "qrw/FootstepPlanner.hpp"
+#include "qrw/Gait.hpp"
 #include "qrw/Params.hpp"
+#include "qrw/QPWBC.hpp"
+#include "qrw/StatePlanner.hpp"
 
 #include <boost/python.hpp>
 #include <eigenpy/eigenpy.hpp>
@@ -22,7 +22,7 @@ struct MPCPythonVisitor : public bp::def_visitor<MPCPythonVisitor<MPC>>
     {
         cl.def(bp::init<>(bp::arg(""), "Default constructor."))
             .def(bp::init<double, int, double, int>(bp::args("dt_in", "n_steps_in", "T_gait_in", "N_gait"),
-                                               "Constructor with parameters."))
+                                                    "Constructor with parameters."))
 
             // Run MPC from Python
             .def("run", &MPC::run, bp::args("num_iter", "xref_in", "fsteps_in"), "Run MPC from Python.\n")
@@ -91,13 +91,16 @@ struct GaitPythonVisitor : public bp::def_visitor<GaitPythonVisitor<Gait>>
             .def("initialize", &Gait::initialize, bp::args("dt_in", "T_gait_in", "T_mpc_in", "N_gait"),
                  "Initialize Gait from Python.\n")
 
-            // Update current gait matrix from Python
             .def("updateGait", &Gait::updateGait, bp::args("k", "k_mpc", "q", "joystickCode"),
                  "Update current gait matrix from Python.\n")
 
-            // Set current gait matrix from Python
             .def("setGait", &Gait::setGait, bp::args("gaitMatrix"),
-                 "Set current gait matrix from Python.\n");
+                 "Set current gait matrix from Python.\n")
+
+            .def("getPhaseDuration", &Gait::getPhaseDuration, bp::args("i", "j", "value"),
+                 "Compute the remaining and total duration of a phase.\n")
+                 
+            .def("getRemainingTime", &Gait::getRemainingTime, "get remaining time of the current phase\n");
     }
 
     static void expose()
@@ -130,7 +133,6 @@ struct FootstepPlannerPythonVisitor : public bp::def_visitor<FootstepPlannerPyth
                  "Compute target location of footsteps from Python.\n")
 
             .def("updateNewContact", &FootstepPlanner::updateNewContact, "Refresh feet position when entering a new contact phase.\n");
-
     }
 
     static void expose()
@@ -157,14 +159,12 @@ struct FootTrajectoryGeneratorPythonVisitor : public bp::def_visitor<FootTraject
             .def("getFootVelocity", &FootTrajectoryGenerator::getFootVelocity, "Get velocity_ matrix.\n")
             .def("getFootAcceleration", &FootTrajectoryGenerator::getFootAcceleration, "Get acceleration_ matrix.\n")
 
-            .def("initialize", &FootTrajectoryGenerator::initialize, bp::args("maxHeightIn", "lockTimeIn", "targetFootstepIn",
-                 "initialFootPosition", "dt_tsid_in", "k_mpc_in", "gaitIn"),
+            .def("initialize", &FootTrajectoryGenerator::initialize, bp::args("maxHeightIn", "lockTimeIn", "targetFootstepIn", "initialFootPosition", "dt_tsid_in", "k_mpc_in", "gaitIn"),
                  "Initialize FootTrajectoryGenerator from Python.\n")
 
             // Compute target location of footsteps from Python
             .def("update", &FootTrajectoryGenerator::update, bp::args("k", "targetFootstep"),
                  "Compute target location of footsteps from Python.\n");
-
     }
 
     static void expose()
@@ -268,7 +268,6 @@ struct ParamsPythonVisitor : public bp::def_visitor<ParamsPythonVisitor<Params>>
             .def_readwrite("predefined_vel", &Params::predefined_vel)
             .def_readwrite("kf_enabled", &Params::kf_enabled)
             .def_readwrite("enable_pyb_GUI", &Params::enable_pyb_GUI);
-
     }
 
     static void expose()

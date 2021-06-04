@@ -5,7 +5,7 @@ import pickle
 import matplotlib.pyplot as plt
 import mpl_toolkits.mplot3d as a3
 import hppfcl
-import time
+from time import perf_counter as clock
 from scipy.spatial import ConvexHull
 
 from solo3D.tools.Surface import Surface
@@ -18,7 +18,11 @@ import yaml
 
 
 
+<<<<<<< HEAD
 t_init = time.time()
+=======
+t_init = clock()
+>>>>>>> origin/devel_cbrs_1
 
 Nx = 500
 Ny = 300
@@ -211,7 +215,7 @@ for i in range(Nx) :
             
 
 print("Height map created") 
-t_end = time.time()
+t_end = clock()
 print("Time [s] : " , t_end - t_init)
 
 # Saving 

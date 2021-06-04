@@ -1,7 +1,7 @@
 import quadprog
 from numpy import array, hstack, vstack
 import numpy as np
-import time 
+from time import perf_counter as clock
 
 def to_least_square(A, b):
     return np.dot(A.T, A), - np.dot(A.T, b)
@@ -38,9 +38,9 @@ def quadprog_solve_qp(P, q, G=None, h=None, C=None, d=None, verbose=False):
     elif G is not None:  # no equality constraint
         qp_C = -G.T
         qp_b = -h
-    # t_init = time.clock()
+    # t_init = clock()
     res = quadprog.solve_qp(qp_G, qp_a, qp_C, qp_b, meq)
-    # t_end = time.clock()  - t_init
+    # t_end = clock()  - t_init
     # print("time optim coeff Bezier : " , t_end*1000 , " [ms]")
     if verbose:
         return res
