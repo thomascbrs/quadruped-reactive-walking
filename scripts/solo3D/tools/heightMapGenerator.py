@@ -14,22 +14,23 @@ import pickle
 
 from scipy.spatial import ConvexHull
 import trimesh
+import yaml
 
 
 
-t_init = time.clock()
+t_init = time.time()
 
-Nx = 400
-Ny = 400
-x = np.linspace(-0.4,2.5,Nx)
-y = np.linspace(-2.5,1.,Ny)
+Nx = 500
+Ny = 300
+x = np.linspace(-2.,4.,Nx)
+y = np.linspace(-2.,1.,Ny)
 
 # To Edit : 
-object_ = "object_5"
+object_ = "object_1"
 path_object = "solo3D/objects/" + object_ + "/"
 path_mesh = "solo3D/objects/" + object_ + "/meshes/"
 path_saving = "solo3D/objects/" + object_ + "/heightmap/"
-simple_stairs = "stair_rotation_5cm.stl"   # Full .stl file
+simple_stairs = "simple_stairs.stl"   # Full .stl file
 
 print("\n Object selected : " , simple_stairs)
 print("Folder for the selected object : " , object_)
@@ -46,6 +47,13 @@ if not os.path.exists(path_saving):
 
 # separate file into multiples .stl for pybullet 
 mesh = trimesh.load_mesh(path_object + simple_stairs)
+
+# Apply translation
+translation = np.array([0.5,-1.2,0.])
+mesh.apply_translation(translation)
+
+print("Transformation, translation : " , translation)
+
 meshsplit = mesh.split()
 for id,elt in enumerate(meshsplit) :
     txt = path_mesh + "object_" + str(id) + '.stl'
@@ -203,7 +211,7 @@ for i in range(Nx) :
             
 
 print("Height map created") 
-t_end = time.clock()
+t_end = time.time()
 print("Time [s] : " , t_end - t_init)
 
 # Saving 
@@ -215,12 +223,21 @@ with open(path_saving + "surfaces.dat" , "wb") as f :
     pickle.dump(Surfaces,f)
 
 # Load from the saved files to check 
-#Plot the 2 surfaces 
-ax = a3.Axes3D(plt.figure())
+
 with open(path_saving + "heightMap.dat" , "rb") as f :
     hm = pickle.load(f)
 with open(path_saving + "surfaces.dat" , "rb") as g :
     Sf = pickle.load(g)
+
+
+dict = {'X_bound_lower': float(x[0]), 'X_bound_upper': float(x[-1]), 'Y_bound_lower': float(y[0]), 'Y_bound_upper': float(y[-1])  , 'Nx': Nx , 'Ny' : Ny }
+with open(path_object + 'heightMap_bounds.yaml', 'w') as file:
+    doc = yaml.dump(dict, file)
+
+#Plot the 2 surfaces 
+fig = plt.figure()
+ax = fig.add_subplot(projection='3d')
+
 
 for surface in Sf :
     surface.margin = 0.05
@@ -247,7 +264,7 @@ ax.azim=125
 ax.elev=20
 
 fig = plt.figure()
-ax = fig.gca(projection = "3d")
+ax = fig.add_subplot(projection='3d')
 ax.plot_surface(xv[:,:],yv[:,:],hm[:,:,0])
 
 

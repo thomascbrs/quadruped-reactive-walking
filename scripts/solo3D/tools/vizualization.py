@@ -4,13 +4,13 @@ import pybullet_data
 import time
 import pinocchio as pin
 from solo3D.tools.geometry import EulerToQuaternion
-
+import os 
 
 class PybVisualizationTraj():
     ''' Class used to vizualise the feet trajectory on the pybullet simulation 
     '''
 
-    def __init__(self ,gaitPlanner , footStepPlannerQP , statePlanner ,  footTrajectoryGenerator , enable_pyb_GUI ):           
+    def __init__(self ,gaitPlanner , footStepPlannerQP , statePlanner ,  footTrajectoryGenerator , enable_pyb_GUI , object_stair):           
 
         # Pybullet enabled
         self.enable_pyb_GUI = enable_pyb_GUI
@@ -22,7 +22,7 @@ class PybVisualizationTraj():
         self.footTrajectoryGenerator = footTrajectoryGenerator
 
         # self.ftps_Ids_target = [0] * 4
-        self.n_points = 5
+        self.n_points = 15
 
         # n_points for the traj , 4 feet , 3 target max in futur
         self.trajectory_Ids = np.zeros((3 , 4, self.n_points))
@@ -31,9 +31,13 @@ class PybVisualizationTraj():
         self.surface_Id = 0
 
         # Int to determine when refresh object position (k % refresh == 0)
-        self.refresh = 2
+        self.refresh = 1
 
+        # Stair object to load
+        self.object_stair = object_stair
 
+        # Objects for constraints
+        self.constraints_objects = [0]*4
 
 
     def update(self, k , device) :
@@ -45,7 +49,8 @@ class PybVisualizationTraj():
 
         if k == 1 : # k ==0, device is still a dummy object, pyb env did not started
             self.initializeEnv()
-            pass
+            # pass
+            
         
 
         if self.enable_pyb_GUI and k > 1: 
@@ -54,17 +59,40 @@ class PybVisualizationTraj():
             # self.updateCamera(k , device)
 
             if k % self.refresh == 0 :  
+                pass
 
-                t_init = time.clock()
+                # t_init = time.time()
 
-                # Update target trajectory, current and next phase
+                # # Update target trajectory, current and next phase
                 self.updateTargetTrajectory()
 
-                # Update refrence trajectory
+                # # Update refrence trajectory
                 self.updateRefTrajectory()
 
-                t_end = time.clock() - t_init
-                print("Time for update pybullet = " ,  t_end )
+                # update constraints
+                self.updateConstraints()
+
+                # t_end = time.time() - t_init
+                # print("Time for update pybullet = " ,  t_end )
+
+        return 0
+
+    def updateConstraints(self):
+
+        gait = self.gaitPlanner.getCurrentGait() 
+        footsteps = self.footStepPlannerQP.getFootstepsList()
+        
+        feet = np.where(gait[0,:] == 1)[0]
+        for i in range(4):
+            if i in feet :
+                pyb.resetBasePositionAndOrientation(int( self.constraints_objects[i]),
+                                                posObj=footsteps[0][:,i],
+                                                ornObj=np.array([0.0, 0.0, 0.0, 1.0]))           
+
+            else :
+                pyb.resetBasePositionAndOrientation(int( self.constraints_objects[i]),
+                                                posObj=np.array([0.,0.,-1]),
+                                                ornObj=np.array([0.0, 0.0, 0.0, 1.0]))     
 
         return 0
        
@@ -74,7 +102,7 @@ class PybVisualizationTraj():
         if k > 10 and self.enable_pyb_GUI:
             # pyb.resetDebugVisualizerCamera(cameraDistance=0.8, cameraYaw=45, cameraPitch=-30,
             #                                cameraTargetPosition=[1.0, 0.3, 0.25])
-            pyb.resetDebugVisualizerCamera(cameraDistance=1.5, cameraYaw=215, cameraPitch=-25.9,
+            pyb.resetDebugVisualizerCamera(cameraDistance=1.2, cameraYaw=190, cameraPitch=-25.9,
                                            cameraTargetPosition=[device.dummyHeight[0], device.dummyHeight[1], 0.0])
 
         return 0
@@ -206,7 +234,35 @@ class PybVisualizationTraj():
 
         print("Loading pybullet object ...")
 
-        pyb.setAdditionalSearchPath(pybullet_data.getDataPath())        
+        pyb.setAdditionalSearchPath(pybullet_data.getDataPath())    
+
+        # Stairs object  
+        #pyb.setAdditionalSearchPath("/home/corberes/Bureau/edin/my_quad_reactive/quadruped-reactive-walking/scripts/solo3D/objects/")
+        path_mesh = "solo3D/objects/object_" + str(self.object_stair) + "/meshes/"
+        for elt in os.listdir(path_mesh) :
+            name_object = path_mesh + elt
+        
+            mesh_scale = [1.0, 1., 1.]
+            # Add stairs with platform and bridge
+            visualShapeId = pyb.createVisualShape(shapeType=pyb.GEOM_MESH,
+                                                fileName=name_object,
+                                                rgbaColor=[.3, 0.3, 0.3, 1.0],
+                                                specularColor=[0.4, .4, 0],
+                                                visualFramePosition=[0.0, 0.0, 0.0],
+                                                meshScale=mesh_scale)
+
+            collisionShapeId = pyb.createCollisionShape(shapeType=pyb.GEOM_MESH,
+                                                                    fileName=name_object,
+                                                                    collisionFramePosition=[0.0, 0.0, 0.0],
+                                                                    meshScale=mesh_scale)
+
+            tmpId = pyb.createMultiBody(baseMass=0.0,
+                                                        baseInertialFramePosition=[0, 0, 0],
+                                                        baseCollisionShapeIndex=collisionShapeId,
+                                                        baseVisualShapeIndex=visualShapeId,
+                                                        basePosition=[0.0, 0., 0.0],
+                                                        useMaximalCoordinates=True)
+            pyb.changeDynamics(tmpId, -1, lateralFriction=1.0)   
         
         # Sphere Object for target footsteps :
         for i in range(self.ftps_Ids_target.shape[0]) : # nb of feet target in futur
@@ -299,6 +355,35 @@ class PybVisualizationTraj():
                                                         baseVisualShapeIndex=visualShapeId,
                                                         basePosition=[0.0, 0.0, -0.1],
                                                         useMaximalCoordinates=True)
+
+        # Object for constraints : 
+        n_effectors = 4 
+        # kinematic_constraints_path = "/home/thomas_cbrs/Library/solo-rbprm/data/com_inequalities/feet_quasi_flat/"
+        # limbs_names = ["FLleg" , "FRleg" , "HLleg" , "HRleg"]
+        kinematic_constraints_path = os.getcwd() + "/solo3D/objects/constraints_sphere/"
+        limbs_names = ["FL" , "FR" , "HL" , "HR"]
+        for foot in range(n_effectors):
+            foot_name = limbs_names[foot]
+            # filekin = kinematic_constraints_path + "COM_constraints_in_" + \
+            #     foot_name + "_effector_frame_quasi_static_reduced.obj"
+            filekin = kinematic_constraints_path + "COM_constraints_" + \
+                foot_name + "3.obj"
+
+            mesh_scale = [1.,1.,1.] 
+            rgba = [0.,0.,1.,0.2]
+            visualShapeId = pyb.createVisualShape(shapeType=pyb.GEOM_MESH,
+                                                    fileName=filekin,
+                                                    rgbaColor=rgba,   
+                                                    specularColor=[0.4, .4, 0],
+                                                    visualFramePosition=[0.0, 0.0, 0.0],
+                                                    meshScale=mesh_scale)
+
+            self.constraints_objects[foot]  = pyb.createMultiBody(baseMass=0.0,
+                                                        baseInertialFramePosition=[0, 0, 0],
+                                                        baseVisualShapeIndex=visualShapeId,
+                                                        basePosition=[0.0, 0.0, -0.1],
+                                                        useMaximalCoordinates=True)
+
         
 
         print("pybullet object loaded")

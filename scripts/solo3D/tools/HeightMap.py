@@ -1,13 +1,14 @@
 import numpy as np
 from solo3D.tools.Surface import Surface
 import pickle
+import yaml
 
 class HeightMap():
 
-    def __init__(self , path = "solo3D/objects/object_3/heightmap/" , margin = 0.01) :
+    def __init__(self , object_stair , margin = 0.01) :
         ''' Load the heighMap and compute the distance margin for edges
         Args :
-        - path (str) : path where the files are located
+        - object_stair (int) : Stair object number
         - margin (float) : margin distance to avoid edges of surfaces
 
         Paremeters :
@@ -16,25 +17,24 @@ class HeightMap():
         self.Surfaces : list of surfaces
         '''
 
-        self.path = path
+        self.object_stair = object_stair
+        self.path = "solo3D/objects/object_" + str(object_stair) + "/heightmap/"
         self.margin = margin
-        self.heightMap , self.Surfaces = self.load_data()
 
+        self.heightMap , self.Surfaces , self.bounds = self.load_data()
+
+        # Update inner surface 
         for surface in self.Surfaces :
             surface.margin = margin
             surface.compute_inner_inequalities()
             surface.compute_inner_vertices()    
 
-        #TODO improve with heighmap
-        # Find a way to automatically generate bounds for x and y
-        self.Nx = self.heightMap.shape[0]
-        self.Ny = self.heightMap.shape[1]
-        # self.x_bounds = [-2. , 4.]  # object 1 
-        # self.y_bounds = [-2. , 1.]
-        # self.x_bounds = [-1. , 3.]  # object 4 
-        # self.y_bounds = [-2. , 1.]
-        self.x_bounds = [-0.4 , 2.5]  # object 5
-        self.y_bounds = [-2.5, 1.]
+        # Get bounds for x and y
+        self.Nx = int(self.bounds.get('Nx'))
+        self.Ny = int(self.bounds.get('Ny'))
+
+        self.x_bounds = [self.bounds.get('X_bound_lower'), self.bounds.get('X_bound_upper')]  
+        self.y_bounds = [self.bounds.get('Y_bound_lower'), self.bounds.get('Y_bound_upper')] 
         self.x = np.linspace(self.x_bounds[0],self.x_bounds[1],self.Nx)
         self.y = np.linspace(self.y_bounds[0],self.y_bounds[1],self.Ny)
 
@@ -49,12 +49,17 @@ class HeightMap():
             with open(name , "rb") as g :
                 Sf = pickle.load(g)
             
+            name = "solo3D/objects/object_" + str(self.object_stair) + '/heightMap_bounds.yaml'
+            with open(name , 'r') as file:
+                bounds = yaml.load(file, Loader=yaml.FullLoader)
+            
         except :
             hm = []
             Sf = []
+            bounds = []
             print("Error : heighmap not loaded")
 
-        return hm , Sf 
+        return hm , Sf , bounds
 
     def find_nearest(self, xt , yt):
         ''' Find the nearest index for x,y in the list that discretize the heighmap

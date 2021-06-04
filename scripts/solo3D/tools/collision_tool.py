@@ -25,11 +25,11 @@ def gjk(s1,s2, tf1, tf2):
     support_hint = np.array([0, 0], dtype=np.int32)
 
     shape = hppfcl.MinkowskiDiff()
-    t1  = time.clock()
+    t1  = time.time()
     shape.set(s1, s2, tf1, tf2)
     gjk = hppfcl.GJK(150, 1e-8)
     status = gjk.evaluate(shape, guess, support_hint)
-    t2  = time.clock()
+    t2  = time.time()
     return  gjk 
 
 # Methods to intersect triangle and segment 
