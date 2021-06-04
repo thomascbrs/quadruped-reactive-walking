@@ -1,6 +1,7 @@
 import pinocchio as pin
 import numpy as np
 import os
+from time import perf_counter as clock
 
 from sl1m.problem_definition import Problem
 from sl1m.generic_solver import solve_MIP
@@ -47,30 +48,6 @@ class SurfacePlanner:
         ps.selectPathValidation("RbprmPathValidation", 0.05)
 
         self.all_surfaces = getAllSurfacesDict(afftool)
-
-    def compute_configurations(self, xref, q):
-        """
-        Get a gait matrix with only one line per phase
-        :param gait_in: gait matrix with several line per phase
-        :return: gait matrix
-        """
-        configs = []
-        R = []
-
-        config = np.array(q[:, 0])
-
-        # TODO ne prendre que un par pas !!!
-        for i in range(5):
-            rpy = xref[3:6, i]
-            matrix = pin.rpy.rpyToMatrix(rpy)
-            R.append(matrix)
-
-            config[:3] = xref[:3, i]
-            quat = pin.Quaternion(matrix)
-            config[3:7] = [quat.x, quat.y, quat.z, quat.w]
-            configs.append(config.copy())
-
-        return configs, R
 
     def compute_gait(self, gait_in):
         """
@@ -133,7 +110,7 @@ class SurfacePlanner:
 
         return surfaces_list
 
-    def run(self, xref, q, gait_in, current_contacts, o_v_ref):
+    def run(self, configs, gait_in, current_contacts, o_v_ref):
         """
         Select the nex surfaces to use
         :param xref: successive states
@@ -143,8 +120,9 @@ class SurfacePlanner:
         :return: the selected surfaces for the first phase
         """
         print("------------------------------------------------------------------------------------")
+        t0 = clock()
 
-        configs, R = self.compute_configurations(xref, q[:7])
+        R = [pin.XYZQUATToSE3(np.array(config)).rotation for config in configs]
 
         gait = self.compute_gait(gait_in)
 
@@ -156,22 +134,19 @@ class SurfacePlanner:
 
         pb = Problem(limb_names=limbs, other_names=others, constraint_paths=paths)
         pb.generate_problem(R, surfaces, gait, initial_contacts, com=False)
-        print(pb.phaseData[0].moving)
 
         costs = {"step_size": [1.0, step_length]}
         pb_data = solve_MIP(pb, costs=costs, com=False)
 
         if pb_data.success:
-            print(pb_data)
             surface_indices = pb_data.surface_indices
 
             selected_surfaces = []
             for foot, index in enumerate(surface_indices[0]):
-                print(index)
-                print(surfaces[0][foot])
                 selected_surfaces.append(surfaces[0][foot][index])
-
-            print(selected_surfaces)
+            
+            t1 = clock()
+            print("Run took ", 1000. * (t1-t0))
 
             return selected_surfaces
 

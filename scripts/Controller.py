@@ -21,6 +21,7 @@ from solo3D.tools.vizualization import PybVisualizationTraj
 
 ENV_URDF = "/local/users/frisbourg/install/share/hpp_environments/urdf/Solo3D/object5.urdf"
 
+
 class Result:
     """Object to store the result of the control loop
     It contains what is sent to the robot (gains, desired positions and velocities,
@@ -200,7 +201,7 @@ class Controller:
         # Solo3D python class
         self.footStepPlannerQP = FootStepPlannerQP(dt_mpc, dt_wbc, T_gait, self.h_ref, k_mpc, self.gait, N_gait, self.heightMap)
         self.footTrajectoryGenerator = FootTrajectoryGeneratorBezier(T_gait, dt_wbc, k_mpc,  self.fsteps_init, self.gait, self.footStepPlannerQP, self.heightMap)
-        self.statePlanner = StatePlanner(dt_mpc, T_mpc, self.h_ref, self.heightMap)
+        self.statePlanner = StatePlanner(dt_mpc, T_mpc, self.h_ref, self.heightMap, 5, T_gait)
         self.surfacePlanner = SurfacePlanner(ENV_URDF, T_gait)
         # TODO: initialize self.next_surfaces with the initial first surfaces
 
@@ -279,11 +280,12 @@ class Controller:
         # solo3D python
         ################
         # Update footsteps if new contact phase
-        if(self.k % self.k_mpc == 0 and self.k != 0 and self.gait.isNewPhase()):
+        new_step = self.k % self.k_mpc == 0 and self.gait.isNewPhase()
+        if new_step and self.k != 0:
             self.footStepPlannerQP.updateNewContact()
 
         # Compute target footstep based on current and reference velocities
-        self.statePlanner.computeReferenceStates(self.q[0:7, 0:1], self.v[0:6, 0:1].copy(), o_v_ref, 0.0)
+        self.statePlanner.computeReferenceStates(self.q[0:7, 0:1], self.v[0:6, 0:1].copy(), o_v_ref, 0.0, new_step)
         xref = self.statePlanner.getReferenceStates()
 
         targetFootstep = self.footStepPlannerQP.computeTargetFootstep(self.k, self.q[0:7, 0:1], self.v[0:6, 0:1].copy(), o_v_ref)
@@ -294,8 +296,8 @@ class Controller:
 
         cgait = self.gait.getCurrentGait()
 
-        if(self.k % self.k_mpc == 0 and self.k != 0 and self.gait.isNewPhase()):
-            self.next_surfaces = self.surfacePlanner.run(xref, self.q, cgait, targetFootstep, o_v_ref)
+        if new_step:
+            self.next_surfaces = self.surfacePlanner.run(self.statePlanner.configs, cgait, targetFootstep, o_v_ref)
 
         t_planner = time.time()
 
