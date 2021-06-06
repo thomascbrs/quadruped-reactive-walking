@@ -19,7 +19,7 @@ from solo3D.LoggerPlanner import LoggerPlanner
 
 from solo3D.tools.vizualization import PybVisualizationTraj
 
-ENV_URDF = "/local/users/frisbourg/install/share/hpp_environments/urdf/Solo3D/object5.urdf"
+ENV_URDF = "/home/thomas_cbrs/install/share/hpp_environments/urdf/Solo3D/object5.urdf"
 
 class Result:
     """Object to store the result of the control loop
@@ -195,7 +195,7 @@ class Controller:
         # Load Heightmap, select stairs
         object_stair = 1
         surface_margin = 0.05
-        self.heightMap = HeightMap(path_, surface_margin)
+        self.heightMap = HeightMap(object_stair, surface_margin)
 
         # Solo3D python class
         self.footStepPlannerQP = FootStepPlannerQP(dt_mpc, dt_wbc, T_gait, self.h_ref, k_mpc, self.gait, N_gait, self.heightMap)

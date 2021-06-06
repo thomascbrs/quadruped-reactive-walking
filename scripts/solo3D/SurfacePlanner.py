@@ -14,8 +14,8 @@ from hpp.gepetto import ViewerFactory
 
 # --------------------------------- PROBLEM DEFINITION ---------------------------------------------------------------
 
-paths = [os.environ["INSTALL_HPP_DIR"] + "/share/solo-rbprm/com_inequalities/feet_quasi_flat/",
-         os.environ["INSTALL_HPP_DIR"] + "/share/solo-rbprm/relative_effector_positions/"]
+paths = [os.environ["INSTALL_HPP_DIR"] + "/solo-rbprm/com_inequalities/feet_quasi_flat/",
+         os.environ["INSTALL_HPP_DIR"] + "/solo-rbprm/relative_effector_positions/"]
 limbs = ['FLleg', 'FRleg', 'HLleg', 'HRleg']
 others = ['FL_FOOT', 'FR_FOOT', 'HL_FOOT', 'HR_FOOT']
 rom_names = ['solo_LFleg_rom', 'solo_RFleg_rom', 'solo_LHleg_rom', 'solo_RHleg_rom']
@@ -43,6 +43,7 @@ class SurfacePlanner:
         vf = ViewerFactory(ps)
         afftool = AffordanceTool()
         afftool.setAffordanceConfig('Support', [0.5, 0.03, 0.00005])
+
         afftool.loadObstacleModel(environment_URDF, "environment", vf, reduceSizes=[0.05, 0., 0.])
         ps.selectPathValidation("RbprmPathValidation", 0.05)
 

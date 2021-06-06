@@ -1,7 +1,7 @@
 import numpy as np
 import pinocchio as pin
 from solo3D.tools.optimisation import genCost, quadprog_solve_qp, to_least_square
-
+import os
 
 
 from sl1m.tools.obj_to_constraints import load_obj, as_inequalities, rotate_inequalities
@@ -94,7 +94,7 @@ class FootStepPlannerQP:
             self.com_objects.append(as_inequalities(load_obj(filekin)))
             self.ine_CoM_size.append(self.com_objects[foot].A.shape[0] )
 
-        self.statePlanner = statePlanner
+        # self.statePlanner = statePlanner
 
         self.res = None
  
@@ -112,8 +112,8 @@ class FootStepPlannerQP:
         - b_vref (6x) : array, vref i
         - o_vref (6x1) : o_vref in world frame
         '''
-        gait = self.gaitPlanner.getCurrentGait()
-        stance_feet = np.where(self.gaitPlanner.current_gait[0, :] == 1)[0]
+        gait = self.gait.getCurrentGait()
+        stance_feet = np.where(gait[0, :] == 1)[0]
         size_ineq = 0
         for foot in stance_feet :
             size_ineq += self.ine_CoM_size[foot]
@@ -173,25 +173,25 @@ class FootStepPlannerQP:
             count_eq += 1
             count += nb_ineq
 
-        surface_equation = self.statePlanner.getSurfaceHeightMap()
-        RPY_tmp2 = np.array([- 1.*np.arctan2(surface_equation[1], 1.) , - 1.*np.arctan2(surface_equation[0], 1.) , 0.   ])       
+        # surface_equation = self.statePlanner.getSurfaceHeightMap()
+        # RPY_tmp2 = np.array([- 1.*np.arctan2(surface_equation[1], 1.) , - 1.*np.arctan2(surface_equation[0], 1.) , 0.   ])       
         
-        if len(stance_feet) != 0 :
-            for foot in stance_feet :
-                i = 1
-                while gait[i-1,foot]* gait[i,foot] > 0 :
-                    i += 1
+        # if len(stance_feet) != 0 :
+        #     for foot in stance_feet :
+        #         i = 1
+        #         while gait[i-1,foot]* gait[i,foot] > 0 :
+        #             i += 1
                 
-                print(i)
+        #         print(i)
 
-                # Offset to the future position
-                q_dxdy = q_tmp + np.array( [self.dx[i - 1], self.dy[i - 1], 0.0 ])
-                RPY_tmp2[2] = self.yaws[i-1]
-                Rz = pin.rpy.rpyToMatrix(RPY_tmp2)
-                Rz = np.identity(3)
+        #         # Offset to the future position
+        #         q_dxdy = q_tmp + np.array( [self.dx[i - 1], self.dy[i - 1], 0.0 ])
+        #         RPY_tmp2[2] = self.yaws[i-1]
+        #         Rz = pin.rpy.rpyToMatrix(RPY_tmp2)
+        #         Rz = np.identity(3)
 
-                normal = np.array([0,0,1])
-                transform = default_transform_from_pos_normal(np.zeros(3), normal, Rz)
+        #         normal = np.array([0,0,1])
+        #         transform = default_transform_from_pos_normal(np.zeros(3), normal, Rz)
 
                 # ine_CoM : ine_CoM.A (CoM - r_foot ) <= ine_CoM.A 
                 # ine_CoM = rotate_inequalities(self.com_objects[foot], transform.copy())
@@ -199,7 +199,7 @@ class FootStepPlannerQP:
                 # ineqMatrix[count:count+self.ine_CoM_size[foot], -1 ] = ine_CoM.A[:,2]
                 # ineqVector[count:count+self.ine_CoM_size[foot]] = ine_CoM.A[:,2]*self.current_fstep[2,foot] +  ine_CoM.b[:] - np.dot( ine_CoM.A[:,0:2] , np.array([q_dxdy[0] - self.current_fstep[0,foot] , q_dxdy[1] - self.current_fstep[1,foot] ]))
 
-                count += self.ine_CoM_size[foot]
+                # count += self.ine_CoM_size[foot]
 
         # X optimised : [Vxref , Vyref , px1 , py1 , pz1 , px2 ... , zCoM_end_stance ]
         P = np.identity(2 +1 + L.shape[0]*3)

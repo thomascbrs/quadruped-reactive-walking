@@ -10,11 +10,7 @@ class PybVisualizationTraj():
     ''' Class used to vizualise the feet trajectory on the pybullet simulation 
     '''
 
-<<<<<<< HEAD
-    def __init__(self ,gaitPlanner , footStepPlannerQP , statePlanner ,  footTrajectoryGenerator , enable_pyb_GUI , object_stair):           
-=======
     def __init__(self, gait, footStepPlannerQP, statePlanner,  footTrajectoryGenerator, enable_pyb_GUI):
->>>>>>> origin/devel_cbrs_1
 
         # Pybullet enabled
         self.enable_pyb_GUI = enable_pyb_GUI
@@ -37,18 +33,14 @@ class PybVisualizationTraj():
         # Int to determine when refresh object position (k % refresh == 0)
         self.refresh = 1
 
-<<<<<<< HEAD
         # Stair object to load
-        self.object_stair = object_stair
+        # self.object_stair = object_stair
 
         # Objects for constraints
         self.constraints_objects = [0]*4
 
 
     def update(self, k , device) :
-=======
-    def update(self, k, device):
->>>>>>> origin/devel_cbrs_1
         ''' Update position of the objects in pybullet environment.
         Args :
         - k (int) : step of the simulation
@@ -57,29 +49,16 @@ class PybVisualizationTraj():
 
         if k == 1:  # k ==0, device is still a dummy object, pyb env did not started
             self.initializeEnv()
-<<<<<<< HEAD
-            # pass
-            
-        
-=======
             pass
->>>>>>> origin/devel_cbrs_1
 
         if self.enable_pyb_GUI and k > 1:
 
             # Update position of PyBullet camera
             # self.updateCamera(k , device)
 
-<<<<<<< HEAD
-            if k % self.refresh == 0 :  
-                pass
-
-                # t_init = time.time()
-=======
             if k % self.refresh == 0:
 
                 t_init = clock()
->>>>>>> origin/devel_cbrs_1
 
                 # # Update target trajectory, current and next phase
                 self.updateTargetTrajectory()
@@ -87,18 +66,17 @@ class PybVisualizationTraj():
                 # # Update refrence trajectory
                 self.updateRefTrajectory()
 
-<<<<<<< HEAD
                 # update constraints
                 self.updateConstraints()
 
-                # t_end = time.time() - t_init
-                # print("Time for update pybullet = " ,  t_end )
+                t_end = clock() - t_init
+                print("Time for update pybullet = ",  t_end)
 
         return 0
 
     def updateConstraints(self):
 
-        gait = self.gaitPlanner.getCurrentGait() 
+        gait = self.gait.getCurrentGait() 
         footsteps = self.footStepPlannerQP.getFootstepsList()
         
         feet = np.where(gait[0,:] == 1)[0]
@@ -112,10 +90,6 @@ class PybVisualizationTraj():
                 pyb.resetBasePositionAndOrientation(int( self.constraints_objects[i]),
                                                 posObj=np.array([0.,0.,-1]),
                                                 ornObj=np.array([0.0, 0.0, 0.0, 1.0]))     
-=======
-                t_end = clock() - t_init
-                print("Time for update pybullet = ",  t_end)
->>>>>>> origin/devel_cbrs_1
 
         return 0
 
@@ -255,41 +229,36 @@ class PybVisualizationTraj():
 
         print("Loading pybullet object ...")
 
-<<<<<<< HEAD
         pyb.setAdditionalSearchPath(pybullet_data.getDataPath())    
 
         # Stairs object  
         #pyb.setAdditionalSearchPath("/home/corberes/Bureau/edin/my_quad_reactive/quadruped-reactive-walking/scripts/solo3D/objects/")
-        path_mesh = "solo3D/objects/object_" + str(self.object_stair) + "/meshes/"
-        for elt in os.listdir(path_mesh) :
-            name_object = path_mesh + elt
+        # path_mesh = "solo3D/objects/object_" + str(self.object_stair) + "/meshes/"
+        # for elt in os.listdir(path_mesh) :
+        #     name_object = path_mesh + elt
         
-            mesh_scale = [1.0, 1., 1.]
-            # Add stairs with platform and bridge
-            visualShapeId = pyb.createVisualShape(shapeType=pyb.GEOM_MESH,
-                                                fileName=name_object,
-                                                rgbaColor=[.3, 0.3, 0.3, 1.0],
-                                                specularColor=[0.4, .4, 0],
-                                                visualFramePosition=[0.0, 0.0, 0.0],
-                                                meshScale=mesh_scale)
+        #     mesh_scale = [1.0, 1., 1.]
+        #     # Add stairs with platform and bridge
+        #     visualShapeId = pyb.createVisualShape(shapeType=pyb.GEOM_MESH,
+        #                                         fileName=name_object,
+        #                                         rgbaColor=[.3, 0.3, 0.3, 1.0],
+        #                                         specularColor=[0.4, .4, 0],
+        #                                         visualFramePosition=[0.0, 0.0, 0.0],
+        #                                         meshScale=mesh_scale)
 
-            collisionShapeId = pyb.createCollisionShape(shapeType=pyb.GEOM_MESH,
-                                                                    fileName=name_object,
-                                                                    collisionFramePosition=[0.0, 0.0, 0.0],
-                                                                    meshScale=mesh_scale)
+        #     collisionShapeId = pyb.createCollisionShape(shapeType=pyb.GEOM_MESH,
+        #                                                             fileName=name_object,
+        #                                                             collisionFramePosition=[0.0, 0.0, 0.0],
+        #                                                             meshScale=mesh_scale)
 
-            tmpId = pyb.createMultiBody(baseMass=0.0,
-                                                        baseInertialFramePosition=[0, 0, 0],
-                                                        baseCollisionShapeIndex=collisionShapeId,
-                                                        baseVisualShapeIndex=visualShapeId,
-                                                        basePosition=[0.0, 0., 0.0],
-                                                        useMaximalCoordinates=True)
-            pyb.changeDynamics(tmpId, -1, lateralFriction=1.0)   
+        #     tmpId = pyb.createMultiBody(baseMass=0.0,
+        #                                                 baseInertialFramePosition=[0, 0, 0],
+        #                                                 baseCollisionShapeIndex=collisionShapeId,
+        #                                                 baseVisualShapeIndex=visualShapeId,
+        #                                                 basePosition=[0.0, 0., 0.0],
+        #                                                 useMaximalCoordinates=True)
+        #     pyb.changeDynamics(tmpId, -1, lateralFriction=1.0)   
         
-=======
-        pyb.setAdditionalSearchPath(pybullet_data.getDataPath())
-
->>>>>>> origin/devel_cbrs_1
         # Sphere Object for target footsteps :
         for i in range(self.ftps_Ids_target.shape[0]):  # nb of feet target in futur
 
