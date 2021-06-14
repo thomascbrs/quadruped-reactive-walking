@@ -134,8 +134,6 @@ class Joystick:
         # Update joystick code depending on which buttons are pressed
         self.computeCode()
 
-        return 0
-
     def computeCode(self):
         # Check joystick buttons to trigger a change of gait type
         self.joystick_code = 0
@@ -182,8 +180,6 @@ class Joystick:
         A2 = (-3/2) * t1 * A3
         self.v_ref = self.v_switch[:, (i-1):i] + A2*ev**2 + A3*ev**3
 
-        return 0
-
     def update_v_ref_predefined(self, k_loop, velID):
         """Update the reference velocity of the robot along X, Y and Yaw in local frame
         according to a predefined sequence
@@ -224,61 +220,15 @@ class Joystick:
                                                 0.0, 0.0, 0.0, 0.0, 0.3, 0.3, 0.0, 0.0,
                                                 -0.3, 0.0])
         elif velID == 2:
-            self.k_switch = np.array([0, 400, 2000, 30000])
-            self.v_switch = np.array([[0.0, 0.22, 0.22, 0.0],
-                                      [0.0, 0.0, 0.0, 0.0],
-                                      [0.0, 0.0, 0.0, 0.0],
-                                      [0.0, 0.0, 0.0, 0.0],
-                                      [0.0, 0.0, 0.0, 0.0],
-                                      [0.0, -0., -0., 0.0]])
-        elif velID == 3:
-            if (k_loop == 0):
-                self.k_switch = np.array([0, 1000, 2000, 7000, 26000, 30000])
-                self.v_switch = np.array([[0.0, 0.0,  0.0, 0.3, 0.3, 0.0],
-                                          [0.0, 0.0,  0.0, 0.0, 0.0, 0.0],
-                                          [0.0, 0.0,  0.0, 0.0, 0.0, 0.0],
-                                          [0.0, 0.0,  0.0, 0.0, 0.0, 0.0],
-                                          [0.0, 0.0,  0.0, 0.0, 0.0, 0.0],
-                                          [0.0, 0.0,  0.3, 0.0, 0.0, 0.0]])
-        elif velID == 4:
-            if (k_loop == 0):
-                self.k_switch = np.array([0, 1000, 3000, 7000, 9000, 30000])
-                self.v_switch = np.array([[0.0, 0.0,  1.5, 1.5, 1.5, 1.5],
-                                          [0.0, 0.0,  0.0, 0.0, 0.0, 0.0],
-                                          [0.0, 0.0,  0.0, 0.0, 0.0, 0.0],
-                                          [0.0, 0.0,  0.0, 0.0, 0.0, 0.0],
-                                          [0.0, 0.0,  0.0, 0.0, 0.0, 0.0],
-                                          [0.0, 0.0,  0.0, 0.0, 0.4, 0.4]])
-        elif velID == 5:
-            if (k_loop == 0):
-                """self.k_switch = np.array([0, 500, 1500, 2600, 5000, 6500, 8000])
-                self.v_switch = np.array([[0.0, 0.0,  0.7, 0.6, 0.3, 0.3, 0.0],
-                                          [0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0],
-                                          [0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0],
-                                          [0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0],
-                                          [0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0],
-                                          [0.0, 0.0,  0.0, 0.4, 0.6, 0.0, 0.0]])"""
-                self.k_switch = np.array([0, 500, 1500, 2600, 5000, 6500, 7000, 8000, 9000])
-                self.v_switch = np.array([[0.0, 0.0,  0.5, 0.6, 0.3, 0.6, -0.5, 0.7, 0.0],
-                                          [0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                          [0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                          [0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                          [0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-                                          [0.0, 0.0,  0.2, 0.7, 0.7, 0.0, -0.4, -0.6, 0.0]])
-
-        elif velID == 6:
-            if (k_loop == 0):
-                self.k_switch = np.array(
-                    [0, 1000, 2500, 5000, 7500, 8000, 10000])
-                self.v_switch = np.array([[0.0, 0.0,  0.8, 0.4, 0.8, 0.8, 0.0],
-                                          [0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0],
-                                          [0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0],
-                                          [0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0],
-                                          [0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0],
-                                          [0.0, 0.0,  0.0, 0.55, 0.3, 0.0, 0.0]])
+            self.k_switch = np.array([0, 400, 1500])
+            self.v_switch = np.array([[0.0, 0.5, 0.5],
+                                      [0.0, 0.0, 0.0],
+                                      [0.0, 0.0, 0.0],
+                                      [0.0, 0.0, 0.0],
+                                      [0.0, 0.0, 0.0],
+                                      [0.0, 0., -0.22]])
 
         self.handle_v_switch(k_loop)
-        return 0
 
     def update_v_ref_multi_simu(self, k_loop):
         """Update the reference velocity of the robot along X, Y and Yaw in local frame
@@ -290,9 +240,6 @@ class Joystick:
         """
 
         # Moving forwards
-        """if k_loop == self.k_mpc*16*3:
-            self.v_ref = np.array([[1.0, 0.0, 0.0, 0.0, 0.0, 0.0]]).T"""
-
         beta_x = int(max(abs(self.Vx_ref)*10000, 100.0))
         alpha_x = np.max([np.min([(k_loop-self.k_mpc*16*3)/beta_x, 1.0]), 0.0])
 
@@ -305,5 +252,3 @@ class Joystick:
         # self.v_ref = np.array([[0.3*alpha, 0.0, 0.0, 0.0, 0.0, 0.0]]).T
         self.v_ref = np.array(
             [[self.Vx_ref*alpha_x, self.Vy_ref*alpha_y, 0.0, 0.0, 0.0, self.Vw_ref*alpha_w]]).T
-
-        return 0

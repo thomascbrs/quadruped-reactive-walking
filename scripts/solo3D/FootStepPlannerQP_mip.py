@@ -4,9 +4,7 @@ from solo3D.tools.optimisation import quadprog_solve_qp
 from solo3D.tools.collision_tool import fclObj_trimesh, simple_object, gjk
 import os
 
-
-from sl1m.tools.obj_to_constraints import load_obj, as_inequalities, rotate_inequalities
-from sl1m.constants_and_tools import default_transform_from_pos_normal
+from sl1m.tools.obj_to_constraints import load_obj, as_inequalities
 
 from scipy.spatial import Delaunay
 import hppfcl
@@ -18,12 +16,13 @@ from solo3D.tools.ProfileWrapper import ProfileWrapper
 # Store the results from cprofile
 profileWrap = ProfileWrapper()
 
+
 class FootStepPlannerQP_mip:
     ''' Python class to compute the target foot step and the ref state using QP optimisation 
     to avoid edges of surface.
     '''
 
-    def __init__(self, dt, dt_wbc, T_gait, h_ref, k_mpc, gait, N_gait, heightMap, surfacePlanner):
+    def __init__(self, dt, dt_wbc, T_gait, h_ref, k_mpc, gait, N_gait, surfacePlanner):
 
         # Time step of the contact sequence
         self.dt = dt  # dt mpc
@@ -43,9 +42,6 @@ class FootStepPlannerQP_mip:
         self.k_feedback = 0.03
         self.g = 9.81
         self.L = 0.155
-
-        # heightMap
-        self.heightMap = heightMap
 
         # Coefficients QP
         self.weight_vref = 0.06
@@ -114,7 +110,7 @@ class FootStepPlannerQP_mip:
 
         # Store timings of the loop
         # [whole loop , convert_inequalities , res_qp , update new fstep ]
-        self.timings = np.zeros(4)    
+        self.timings = np.zeros(4)
 
     def update_remaining_time(self):
 
@@ -125,7 +121,7 @@ class FootStepPlannerQP_mip:
             # Indexes of feet in swing phase
             self.feet = np.where(self.gait.getCurrentGait()[0, :] == 0)[0]
             if len(self.feet) == 0:  # If no foot in swing phase
-                return 0
+                return
 
             # For each foot in swing phase get remaining duration of the swing phase
             for i in self.feet:
@@ -138,13 +134,11 @@ class FootStepPlannerQP_mip:
         else:
             # If no foot in swing phase
             if len(self.feet) == 0:  # If no foot in swing phase
-                return 0
+                return
 
             # Increment of one time step for feet in swing phase
             for i in self.feet:
                 self.t0s[i] = np.max([self.t0s[i] + self.dt_wbc, 0.0])
-
-        return 0
 
     def select_surface_fromXY(self, point, phase, moving_foot_index):
         ''' Given a X,Y position, select the appropriate surface by testing the potential surfaces
@@ -237,8 +231,7 @@ class FootStepPlannerQP_mip:
             self.res = quadprog_solve_qp(P, q,  G=ineqMatrix, h=ineqVector)
         except:
             print("------------ ERROR QP FOOTSTEP ------------")
-        #     res = self.res
-
+            
         return self.res
 
     def surface_inequality(self, surface, next_ft, ineqMatrix, ineqVector, i_start, j):
@@ -257,9 +250,6 @@ class FootStepPlannerQP_mip:
         i_end = i_start + nrow
         j_start = 3*j + 2
         j_end = 3*j+5
-
-        # surface.b[-2] += 0.001
-        # surface.b[-1] += -0.001
 
         # S * [Vrefx , Vrefy]
         ineqMatrix[i_start:i_start + nrow, :2] = -self.k_feedback*surface.A[:, :2]
@@ -303,8 +293,6 @@ class FootStepPlannerQP_mip:
             for j in range(1, len(self.footsteps)):
                 self.dx[j] = v[0]*self.dt_cum[j]
                 self.dy[j] = v[1]*self.dt_cum[j]
-
-        return 0
 
     def computeFootsteps(self, q, v, o_vref):
         ''' 
@@ -361,7 +349,6 @@ class FootStepPlannerQP_mip:
             # Feet that were in swing phase and are now in stance phase need to be updated
             moving_foot_index = 0
             for j in range(4):
-
                 if (1 - gait[i-1, j]) * gait[i, j] > 0:
                     # Offset to the future position
                     q_dxdy = np.array([self.dx[i - 1], self.dy[i - 1], 0.0])
@@ -433,7 +420,6 @@ class FootStepPlannerQP_mip:
         t1 = clock()
         self.timings[2] = 1000*(t1-t0)
 
-
         t0 = clock()
 
         # Store the value for getRefState
@@ -482,17 +468,14 @@ class FootStepPlannerQP_mip:
     def computeNextFootstep(self, i, j, b_vlin, b_vref, feedback_term=True):
         ''' No vectors here, only array, easier for additions
         Params : 
-        - i,j (int) : index in gait
+        - i (int) : gait_phase
+        - j (int) : index of the foot
         - b_vlin    (3x) : linear velocity in base frame (yaw rotated)
-        - b_vref (6x) : b_vref in base frame  (yaw rotated)
+        - b_vref (6x) : desired velocity in base frame  (yaw rotated)
         '''
-
         nextFootstep = np.zeros(3)
-
         t_stance = self.gait.getPhaseDuration(int(i), int(j), 1.0)  # 1.0 for stance phase
-
-        # print("t_stance : " , t_stance)
-
+        
         # Add symmetry term
         nextFootstep = t_stance * 0.5 * b_vlin
         nextFootstep[1] = 0
@@ -512,9 +495,6 @@ class FootStepPlannerQP_mip:
         nextFootstep[1] = min(nextFootstep[1], self.L)
         nextFootstep[1] = max(nextFootstep[1], -self.L)
 
-        # Add shoulders
-        nextFootstep += self.shoulders[:,j]
-
         # Taking into account Roll and Pitch (here base frame only takes yaw)
         RP = self.RPY.copy()
         RP[2] = 0.   # Remove Yaw, taking into account after
@@ -525,7 +505,6 @@ class FootStepPlannerQP_mip:
 
         return nextFootstep
 
-    
     @profileWrap.profile
     def computeTargetFootstep(self, k, q, v, b_vref):
         ''' 
@@ -610,11 +589,11 @@ class FootStepPlannerQP_mip:
     def getVref_QP(self):
         return self.o_vref_qp
 
-    def print_profile(self , output_file):
+    def print_profile(self, output_file):
         ''' Print the profile computed with cProfile
         Args : 
         - output_file (str) :  file name
         '''
         profileWrap.print_stats(output_file)
-        
-        return  0
+
+        return 0

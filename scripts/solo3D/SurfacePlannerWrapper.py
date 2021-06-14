@@ -5,6 +5,8 @@ from multiprocessing.sharedctypes import Value, Array
 from ctypes import Structure, c_double
 import ctypes
 
+import libquadruped_reactive_walking as lqrw
+
 from time import perf_counter as clock
 import numpy as np
 
@@ -16,10 +18,9 @@ profileWrap = ProfileWrapper()
 # TODO : Modify this, should not be defined here
 N_VERTICES_MAX = 4
 N_SURFACE_MAX = 10
-EQ_AS_INEQ = True
 N_SURFACE_CONFIG = 3
 N_gait = 100
-N_POTENTIAL_SURFACE = 10
+N_POTENTIAL_SURFACE = 5
 N_MOVING_FEET = 2
 N_PHASE = 3
 
@@ -38,10 +39,7 @@ class SurfaceDataCtype(Structure):
     TODO : if more than 4 vertices, add a variable for the number of vertice to reshape the appropriate buffer
     '''
     nvertices = 4
-    if EQ_AS_INEQ:
-        nrow = nvertices + 2
-    else:
-        nrow = nvertices + 1
+    nrow = nvertices + 2
     _fields_ = [('A', ctypes.c_double * 3 * nrow), ('b', ctypes.c_double * nrow), ('vertices', ctypes.c_double * 3 * nvertices),
                 ('on', ctypes.c_bool)]
 
@@ -51,8 +49,8 @@ class DataOutCtype(Structure):
     Data Out, list of potential and the selected surfaces given by the MIP
     Potential surfaces are used if the MIP has not converged
     '''
-    _fields_ = [('potentialSurfaces',  SurfaceDataCtype * N_POTENTIAL_SURFACE * N_MOVING_FEET * N_PHASE),
-                ('selectedSurfaces',   SurfaceDataCtype * 2 * N_PHASE),
+    _fields_ = [('potentialSurfaces',  SurfaceDataCtype * N_POTENTIAL_SURFACE * N_MOVING_FEET),
+                ('selectedSurfaces',   SurfaceDataCtype * N_MOVING_FEET),
                 ('all_feet', ctypes.c_double * 12 * N_PHASE),
                 ('success', ctypes.c_bool)]
 
@@ -68,52 +66,11 @@ class DataInCtype(Structure):
                 ('iteration', ctypes.c_int64)]
 
 
-class SurfaceData():
-    """
-    Ax <= b
-    If normal as inequalities : A = [A , n , -n] , b = [b , d + eps, -d-eps]
-    Normal as equality : A = [A , n] , b = [b , d] 
-    surfaceData.normal_as_inequality = Boolean
-    surfaceData.A =  inequality matrix, last line equality if normal as equality
-    surfaceData.b =  inequality vector, 
-    surfaceData.vertices =  vertices of the surface  [[x1,y1,z1],
-                                                      [x2,y2,z2], ...] 
-    """
-
-    def __init__(self, A, b, vertices):
-        self.normal_as_inequality = True
-        self.A = A
-        self.b = b
-        self.vertices = vertices
-
-    def isInside_XY(self, point):
-        ''' Return a boolean whether point in x,y axes is inside the surface
-        Args : 
-        - point (array x2), works with array x3
-        '''
-        if self.normal_as_inequality:
-            Sx = np.dot(self.A[:-2, :-1], point[:2])
-            return np.sum(Sx <= self.b[:-2]) == (self.b.shape[0] - 2)
-        else:
-            Sx = np.dot(self.A[:-1, :-1], point[:2])
-            return np.sum(Sx <= self.b[:-1]) == (self.b.shape[0] - 1)
-
-    def getHeight(self, point):
-        ''' For a given X,Y point that belongs to the surface, return the height
-        d/c -a/c*x -b/c*y
-        Args : 
-        - point (array x2), works with arrayx3
-        '''
-        return abs(self.b[-1] - point[0]*self.A[-1, 0]/self.A[-1, 2] - point[1]*self.A[-1, 1]/self.A[-1, 2])
-
-
 class SurfacePlanner_Wrapper():
     ''' Wrapper for the class SurfacePlanner for the paralellisation
     '''
-
-    def __init__(self, environment_URDF, T_gait, N_gait, n_surface_configs):
-
-        self.environment_URDF = environment_URDF
+    def __init__(self, urdf, T_gait, N_gait, n_surfaces_configs):
+        self.urdf = urdf
         self.T_gait = T_gait
 
         # TODO : Modify this
@@ -132,20 +89,21 @@ class SurfacePlanner_Wrapper():
                     [7.39384262e-01, 1.60222740e+00, 1.98829693e-06],
                     [-2.03938475e+00, 1.60222740e+00, 1.98829693e-06]]
 
-        self.floor_surface = SurfaceData(np.array(A), np.array(b), np.array(vertices))
+        self.floor_surface = lqrw.Surface(np.array(A), np.array(b), np.array(vertices))
 
         # Results from MIP
         # Potential and selected surfaces for QP planner
-        self.potential_surfaces = []
-        self.selected_surfaces = []
+        self.potential_surfaces = lqrw.SurfaceVectorVector()
+        self.selected_surfaces = lqrw.SurfaceVector()
+
         self.all_feet_pos = []
 
-        # MIP status 
+        # MIP status
         self.mip_iteration = 0
         self.mip_success = False
         self.first_iteration = True
 
-        # MIP status synchronous, this is updated just after the run of SL1M, 
+        # MIP status synchronous, this is updated just after the run of SL1M,
         # but used in the controller only at the next flying phase
         self.mip_iteration_syn = 0
         self.mip_success_syn = False
@@ -162,8 +120,7 @@ class SurfacePlanner_Wrapper():
             self.dataIn = Value(DataInCtype)
 
         else:
-            self.surfacePlanner = SurfacePlanner(self.environment_URDF, self.T_gait)
-
+            self.surfacePlanner = SurfacePlanner(self.urdf, self.T_gait)
 
     def run(self, configs, gait_in, current_contacts, o_v_ref):
 
@@ -173,28 +130,27 @@ class SurfacePlanner_Wrapper():
             self.run_synchronous(configs, gait_in, current_contacts, o_v_ref)
 
     def run_synchronous(self, configs, gait_in, current_contacts, o_v_ref):
-
-        surfaces_vertices, surfaces_inequality, surfaces_indices, all_feet_pos, success = self.surfacePlanner.run(configs, gait_in, current_contacts, o_v_ref)
+        surfaces, surface_inequalities, surfaces_indices, all_feet_pos, success = self.surfacePlanner.run(configs, gait_in, current_contacts, o_v_ref)
         self.mip_iteration_syn += 1
         self.mip_success_syn = success
 
         # Retrieve potential data, usefull if solver not converged
-        self.potential_surfaces.clear()
-        self.potential_surfaces = [[[SurfaceData(sf[0], sf[1], surfaces_vertices[index_phase][index_foot][index_sf].T)
-                                     for index_sf, sf in enumerate(surfaces)]
-                                    for index_foot, surfaces in enumerate(phase.S)]
-                                   for index_phase, phase in enumerate(surfaces_inequality)]
-  
+        self.potential_surfaces = lqrw.SurfaceVectorVector()
+        for foot, foot_surfaces in enumerate(surface_inequalities):
+            list_surfaces = lqrw.SurfaceVector()
+            for i, (S, s) in enumerate(foot_surfaces):
+                list_surfaces.append(lqrw.Surface(S, s, surfaces[foot][i].T))
+            self.potential_surfaces.append(list_surfaces)
+
+        self.selected_surfaces = lqrw.SurfaceVector()
+
         if success:
-            self.selected_surfaces = [[SurfaceData(surfaces_inequality[index_phase].S[index_foot][id_selected][0],
-                                                   surfaces_inequality[index_phase].S[index_foot][id_selected][1],
-                                                   surfaces_vertices[index_phase][index_foot][id_selected].T)
-                                       for index_foot, id_selected in enumerate(phaseid)]
-                                      for index_phase, phaseid in enumerate(surfaces_indices)]
+            for foot, foot_surfaces in enumerate(surface_inequalities):
+                i = surfaces_indices[foot]
+                S, s = foot_surfaces[i]
+                self.selected_surfaces.append(lqrw.Surface(S, s, surfaces[foot][i].T))
 
-            self.all_feet_pos = all_feet_pos
-
-        return 0
+            self.all_feet_pos = all_feet_pos.copy()
 
     def run_asynchronous(self, configs, gait_in, current_contacts, o_v_ref):
 
@@ -208,14 +164,10 @@ class SurfacePlanner_Wrapper():
         self.compress_dataIn(configs, gait_in, current_contacts, o_v_ref)
         self.newData.value = True
 
-        return 0
-
     def create_MIP_asynchronous(self, newData, newResult, running, dataIn, dataOut):
-
         while running.value:
             # Checking if new data is available to trigger the asynchronous MPC
             if newData.value:
-
                 # Set the shared variable to false to avoid re-trigering the asynchronous MPC
                 newData.value = False
 
@@ -223,26 +175,20 @@ class SurfacePlanner_Wrapper():
 
                 with self.dataIn.get_lock():
                     if self.dataIn.iteration == 0:
-                        loop_planner = SurfacePlanner(self.environment_URDF, self.T_gait)
+                        loop_planner = SurfacePlanner(self.urdf, self.T_gait)
 
-                # Potential surfaces : surfaces_vertices , surfaces_inequality
-                # Results MIP : - surface_indices
-                #               - all_feet_pos
-                #               - success
-                surfaces_vertices, surfaces_inequality, surfaces_indices, all_feet_pos, success = loop_planner.run(configs, gait_in, current_contacts, o_v_ref)
+                surfaces, surface_inequalities, surfaces_indices, all_feet_pos, success = loop_planner.run(configs, gait_in, current_contacts, o_v_ref)
 
                 with self.dataIn.get_lock():
                     self.dataIn.iteration += 1
 
                 t1 = clock()
-                self.compress_dataOut(surfaces_vertices, surfaces_inequality,  surfaces_indices, all_feet_pos, success)
+                self.compress_dataOut(surfaces, surface_inequalities, surfaces_indices, all_feet_pos, success)
                 t2 = clock()
                 print("TIME COMPRESS DATA [ms] :  ", 1000 * (t2 - t1))
 
                 # Set shared variable to true to signal that a new result is available
                 newResult.value = True
-
-        return 0
 
     def compress_dataIn(self, configs, gait_in, current_contacts, o_v_ref):
 
@@ -261,8 +207,6 @@ class SurfacePlanner_Wrapper():
             contact = np.frombuffer(self.dataIn.contacts).reshape((3, 4))
             contact[:, :] = current_contacts[:, :]
 
-        return 0
-
     def decompress_dataIn(self, dataIn):
 
         with dataIn.get_lock():
@@ -277,58 +221,43 @@ class SurfacePlanner_Wrapper():
 
         return configs, gait, o_v_ref, contacts
 
-    def compress_dataOut(self, surfaces_vertices, surfaces_inequality, surfaces_indices, all_feet_pos, success):
-
+    def compress_dataOut(self, surfaces, surface_inequalities, surfaces_indices, all_feet_pos, success):
         # Modify this
         nvertices = 4
-        if EQ_AS_INEQ:
-            nrow = nvertices + 2
-        else:
-            nrow = nvertices + 1
+        nrow = nvertices + 2
 
         with self.dataOut.get_lock():
-
             # Compress potential surfaces :
-            for index_phase, phase in enumerate(surfaces_inequality):
-                for index_foot, surfaces in enumerate(phase.S):
-                    for index_sf, sf in enumerate(surfaces):
-                        A = np.frombuffer(self.dataOut.potentialSurfaces[index_phase][index_foot][index_sf].A).reshape((nrow, 3))
-                        b = np.frombuffer(self.dataOut.potentialSurfaces[index_phase][index_foot][index_sf].b)
-                        vertices = np.frombuffer(self.dataOut.potentialSurfaces[index_phase][index_foot][index_sf].vertices).reshape((nvertices, 3))
-                        A[:, :] = sf[0][:, :]
-                        b[:] = sf[1][:]
-                        vertices[:, :] = surfaces_vertices[index_phase][index_foot][index_sf].T[:, :]
-                        self.dataOut.potentialSurfaces[index_phase][index_foot][index_sf].on = True
+            for foot, foot_surfaces in enumerate(surface_inequalities):
+                for i, (S, s) in enumerate(foot_surfaces):
+                    A = np.frombuffer(self.dataOut.potentialSurfaces[foot][i].A).reshape((nrow, 3))
+                    b = np.frombuffer(self.dataOut.potentialSurfaces[foot][i].b)
+                    vertices = np.frombuffer(self.dataOut.potentialSurfaces[foot][i].vertices).reshape((nvertices, 3))
+                    A[:, :] = S[:, :]
+                    b[:] = s[:]
+                    vertices[:, :] = surfaces[foot][i].T[:, :]
+                    self.dataOut.potentialSurfaces[foot][i].on = True
 
-                    for i in range(index_sf + 1, N_POTENTIAL_SURFACE):
-                        self.dataOut.potentialSurfaces[index_phase][index_foot][i].on = False
+                for j in range(i + 1, N_POTENTIAL_SURFACE):
+                    self.dataOut.potentialSurfaces[foot][j].on = False
 
             if success:
-
                 self.dataOut.success = True
+                # self.dataOut.all_feet_pos = all_feet_pos
 
                 # Compress selected surfaces
-                for index_phase, phaseid in enumerate(surfaces_indices):
-
-                    for index_foot, id_selected in enumerate(phaseid):
-                        A = np.frombuffer(self.dataOut.selectedSurfaces[index_phase][index_foot].A).reshape((nrow, 3))
-                        b = np.frombuffer(self.dataOut.selectedSurfaces[index_phase][index_foot].b)
-                        vertices = np.frombuffer(self.dataOut.selectedSurfaces[index_phase][index_foot].vertices).reshape((nvertices, 3))
-                        A[:, :] = surfaces_inequality[index_phase].S[index_foot][id_selected][0][:, :]
-                        b[:] = surfaces_inequality[index_phase].S[index_foot][id_selected][1][:]
-                        vertices = surfaces_vertices[index_phase][index_foot][id_selected].T[:, :]
-                        self.dataOut.selectedSurfaces[index_phase][index_foot].on = True
-
-                # Compress feet : TODO
-                # all_feet_pos : list of optimized position such as : [[Foot 1 next_pos, None , Foot1 next_pos] , [Foot 2 next_pos, None , Foot2 next_pos] ]
-                # for index_phase , phase in enumerate(all_feet_pos) :
-                #     arr_feet = np.frombuffer( self.dataOut.all_feet[index_phase] ).reshape((3,4))
+                for foot, index in enumerate(surfaces_indices):
+                    A = np.frombuffer(self.dataOut.selectedSurfaces[foot].A).reshape((nrow, 3))
+                    b = np.frombuffer(self.dataOut.selectedSurfaces[foot].b)
+                    vertices = np.frombuffer(self.dataOut.selectedSurfaces[foot].vertices).reshape((nvertices, 3))
+                    A[:, :] = surface_inequalities[foot][index][0][:, :]
+                    b[:] = surface_inequalities[foot][index][1][:]
+                    vertices = surfaces[foot][index].T[:, :]
+                    self.dataOut.selectedSurfaces[foot].on = True
 
             else:
-
                 self.dataOut.success = False
 
-        return 0
     @profileWrap.profile
     def update_latest_results(self):
         ''' Update latest results : 2 list 
@@ -336,29 +265,31 @@ class SurfacePlanner_Wrapper():
         - selected_surfaces : surfaces selected for the next phases
         '''
         if self.multiprocessing:
-
             with self.dataOut.get_lock():
-
                 if self.newResult.value:
                     self.newResult.value = False
 
-                    self.potential_surfaces.clear()
-                    self.selected_surfaces.clear()
+                    self.potential_surfaces = lqrw.SurfaceVectorVector()
+                    for foot, foot_surfaces in enumerate(self.dataOut.potentialSurfaces):
+                        list_surfaces = lqrw.SurfaceVector()
+                        for foot_surface in foot_surfaces:
+                            if foot_surface.on:
+                                list_surfaces.append(lqrw.Surface(foot_surface.A, foot_surface.b, foot_surface.vertices))
+                        self.potential_surfaces.append(list_surfaces)
 
-                    self.potential_surfaces = [[[SurfaceData(np.array(sf.A), np.array(sf.b), np.array(sf.vertices))
-                                                 for index_sf, sf in enumerate(surfaces) if sf.on == True]
-                                                for index_foot, surfaces in enumerate(phase)]
-                                               for index_phase, phase in enumerate(self.dataOut.potentialSurfaces)]
+                    self.selected_surfaces = lqrw.SurfaceVector()
 
                     if self.dataOut.success:
                         self.mip_success = True
                         self.mip_iteration += 1
 
-                        self.selected_surfaces = [[SurfaceData(np.array(surface.A), np.array(surface.b), np.array(surface.vertices))
-                                                   for index_foot, surface in enumerate(phase)]
-                                                  for index_phase, phase in enumerate(self.dataOut.selectedSurfaces)]
+                        for surface in self.dataOut.selectedSurfaces:
+                            self.selected_surfaces.append(lqrw.Surface(surface.A, surface.b, surface.vertices))
 
-                        # self.all_pos_feet  =     TODO
+                        # self.all_feet_pos = self.dataOut.all_feet_pos.copy()
+                        # for foot in self.all_feet_pos:
+                        #     foot.pop(0)
+
                     else:
                         self.mip_success = False
                         self.mip_iteration += 1
@@ -369,10 +300,8 @@ class SurfacePlanner_Wrapper():
                     pass
         else:
             # Results have been already updated
-            self.mip_success = self.mip_success_syn  
+            self.mip_success = self.mip_success_syn
             self.mip_iteration = self.mip_iteration_syn
-
-        return 0
 
     def stop_parallel_loop(self):
         """Stop the infinite loop in the parallel process to properly close the simulation
@@ -380,13 +309,9 @@ class SurfacePlanner_Wrapper():
 
         self.running.value = False
 
-        return 0
-
-    def print_profile(self , output_file):
+    def print_profile(self, output_file):
         ''' Print the profile computed with cProfile
         Args : 
         - output_file (str) :  file name
         '''
         profileWrap.print_stats(output_file)
-        
-        return  0

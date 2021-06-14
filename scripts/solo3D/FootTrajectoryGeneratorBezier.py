@@ -23,7 +23,7 @@ profileWrap = ProfileWrapper()
 
 class FootTrajectoryGeneratorBezier:
 
-    def __init__(self, T_gait, dt_tsid, k_mpc, fsteps_init, gait, footStepPlannerQP, heightMap):
+    def __init__(self, T_gait, dt_tsid, k_mpc, fsteps_init, gait, footStepPlannerQP):
 
         self.T_gait = T_gait
         self.dt_wbc = dt_tsid
@@ -64,11 +64,7 @@ class FootTrajectoryGeneratorBezier:
         self.Ay_s = np.zeros((6, 4))
         self.Az_s = np.zeros((7, 4))
 
-        # heightMap
-        self.heightMap = heightMap
-
         # Bezier parameters
-
         # dimension of our problem (here 3 as our curve is 3D)
         self.N_int = 15  # Number of points in the least square problem
         self.dim = 3
@@ -316,8 +312,8 @@ class FootTrajectoryGeneratorBezier:
 
                 if abs(self.past_surface[i_foot].get_height(self.footsteps_target[:2, i_foot]) - self.new_surface[i_foot].get_height(self.footsteps_target[:2, i_foot])) >= 10e-4:
                     surface = self.new_surface[i_foot]
-                    nb_vert = surface.vertices.shape[0]
-                    vert = surface.vertices
+                    vert = surface.get_vertices()
+                    nb_vert = vert.shape[0]
 
                     P1 = self.goals[:2, i_foot]
                     P2 = self.footsteps_target[:2, i_foot]
@@ -395,8 +391,8 @@ class FootTrajectoryGeneratorBezier:
           
                 # Modify (should not be used) x_margin during flight, if problem during flight    
                 surface = self.new_surface[i_foot]
-                nb_vert = surface.vertices.shape[0]
-                vert = surface.vertices
+                vert = surface.get_vertices()
+                nb_vert = vert.shape[0]
 
                 P1 = self.goals[:2, i_foot]
                 P2 = self.footsteps_target[:2, i_foot]

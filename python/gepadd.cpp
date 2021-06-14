@@ -91,11 +91,12 @@ struct SurfacePythonVisitor : public bp::def_visitor<SurfacePythonVisitor<Surfac
         cl.def(bp::init<>(bp::arg(""), "Default constructor."))
             .def(bp::init<MatrixN, VectorN, MatrixN>(bp::args("A", "b", "vertices"), "Constructor with parameters."))
 
-            .def("get_height", &Surface::getHeight, bp::args("point"),
-                 "get the height of a point of the surface.\n")
+            .def("get_vertices", &Surface::getVertices, "get the vertices of the surface.\n")
+            .def("get_A", &Surface::getA, "get A vector of inequalities.\n")
+            .def("get_b", &Surface::getb, "get b vector of inequalities.\n")
 
-            .def("has_point", &Surface::hasPoint, bp::args("point"),
-                 "return true if the point is in the surface.\n");
+            .def("get_height", &Surface::getHeight, bp::args("point"), "get the height of a point of the surface.\n")
+            .def("has_point", &Surface::hasPoint, bp::args("point"), "return true if the point is in the surface.\n");
     }
 
     static void expose()

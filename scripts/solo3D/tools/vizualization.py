@@ -34,7 +34,7 @@ class PybVisualizationTraj():
         self.refresh = 1
 
         # Stair object to load
-        self.object_stair = 1
+        self.object_stair = 5
 
         # Objects for constraints
         self.constraints_objects = [0]*4
@@ -151,7 +151,6 @@ class PybVisualizationTraj():
                                                 ornObj=quat)
 
         # Update surface :
-
         a, b, c = self.statePlanner.surface_equation
         pos = self.statePlanner.surface_point
 

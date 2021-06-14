@@ -12,7 +12,6 @@ from solopython.utils.viewerClient import viewerClient, NonBlockingViewerFromRob
 import libquadruped_reactive_walking as lqrw
 
 from solo3D.FootTrajectoryGeneratorBezier import FootTrajectoryGeneratorBezier
-from solo3D.tools.HeightMap import HeightMap
 from solo3D.StatePlanner import StatePlanner
 from solo3D.LoggerPlanner import LoggerPlanner
 from solo3D.SurfacePlannerWrapper import SurfacePlanner_Wrapper
@@ -24,6 +23,7 @@ from solo3D.tools.geometry import inertiaTranslation
 from time import perf_counter as clock
 
 ENV_URDF = "/local/users/frisbourg/install/share/hpp_environments/urdf/Solo3D/stairs_rotation.urdf"
+HEIGHTMAP = "/local/users/frisbourg/install/share/hpp_environments/heightmaps/Solo3D/stairs_rotation.pickle"
 
 
 class Result:
@@ -197,25 +197,17 @@ class Controller:
         dDevice.dummyPos = np.array([0.0, 0.0, q_init[2]])
         dDevice.b_baseVel = np.zeros(3)
 
-        # Load Heightmap, select stairs
-        object_stair = 1
-        surface_margin = 0.05
-        self.heightMap = HeightMap(object_stair, surface_margin)
-
         # Solo3D python class
         n_surface_configs = 3
         self.surfacePlanner = SurfacePlanner_Wrapper(ENV_URDF, T_gait, N_gait, n_surface_configs)
 
-        self.statePlanner = StatePlanner(dt_mpc, T_mpc, self.h_ref, self.heightMap, n_surface_configs, T_gait)
+        self.statePlanner = StatePlanner(dt_mpc, T_mpc, self.h_ref, HEIGHTMAP, n_surface_configs, T_gait)
 
         # List of floor surface initialisation
         self.footstepPlanner = lqrw.FootstepPlannerQP()
-        floor_surface = lqrw.Surface(self.surfacePlanner.floor_surface.A, self.surfacePlanner.floor_surface.b, self.surfacePlanner.floor_surface.vertices)
-        self.surfaces = lqrw.SurfaceVector()
-        self.potential_surfaces = lqrw.SurfaceVectorVector()
 
-        self.footstepPlanner.initialize(dt_mpc, T_mpc, self.h_ref, k_mpc, dt_wbc, shoulders.copy(), self.gait, N_gait, floor_surface)
-        self.footTrajectoryGenerator = FootTrajectoryGeneratorBezier(T_gait, dt_wbc, k_mpc,  self.fsteps_init, self.gait, self.footstepPlanner, self.heightMap)
+        self.footstepPlanner.initialize(dt_mpc, T_mpc, self.h_ref, k_mpc, dt_wbc, shoulders.copy(), self.gait, N_gait, self.surfacePlanner.floor_surface)
+        self.footTrajectoryGenerator = FootTrajectoryGeneratorBezier(T_gait, dt_wbc, k_mpc,  self.fsteps_init, self.gait, self.footstepPlanner)
         # Pybullet Trajectory
         self.pybVisualizationTraj = PybVisualizationTraj(self.gait, self.footstepPlanner, self.statePlanner,  self.footTrajectoryGenerator, enable_pyb_GUI, ENV_URDF)
 
@@ -312,25 +304,12 @@ class Controller:
             else:
                 self.surfacePlanner.update_latest_results()
 
-                # update results for cpp
-                self.surfaces = lqrw.SurfaceVector()
-                for surface in self.surfacePlanner.selected_surfaces[0]:
-                    self.surfaces.append(lqrw.Surface(np.array(surface.A), np.array(surface.b), np.array(surface.vertices)))
-
-                self.potential_surfaces = lqrw.SurfaceVectorVector()
-                for foot_surfaces in self.surfacePlanner.potential_surfaces[0]:
-                    list_surfaces = lqrw.SurfaceVector()
-                    for surface in foot_surfaces:
-                        list_surfaces.append(lqrw.Surface(np.array(surface.A), np.array(surface.b), np.array(surface.vertices)))
-                    self.potential_surfaces.append(list_surfaces)
-
         targetFootstep = self.footstepPlanner.computeTargetFootstep(self.k, self.q[0:7, 0:1], self.v[0:6, 0:1].copy(
-        ), o_v_ref, self.potential_surfaces, self.surfaces, self.surfacePlanner.mip_success, self.surfacePlanner.mip_iteration)
+        ), o_v_ref, self.surfacePlanner.potential_surfaces, self.surfacePlanner.selected_surfaces, self.surfacePlanner.mip_success, self.surfacePlanner.mip_iteration)
         fsteps = self.footstepPlanner.getFootsteps()
-        self.statePlanner.computeSurfaceHeightMap(self.q[0:3, 0:1])
 
         # Compute target footstep based on current and reference velocities
-        self.statePlanner.computeReferenceStates(self.q[0:7, 0:1], self.v[0:6, 0:1].copy(), o_v_ref, 0.0, new_step)
+        self.statePlanner.computeReferenceStates(self.q[:7, 0].copy(), self.v[:6, 0].copy(), o_v_ref[:, 0].copy(), new_step)
         xref = self.statePlanner.getReferenceStates()
 
         # Compute foot trajectory
