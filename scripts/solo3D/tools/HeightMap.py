@@ -3,6 +3,8 @@ from solo3D.tools.Surface import Surface
 import pickle
 import yaml
 
+from time import perf_counter as clock
+
 class HeightMap():
 
     def __init__(self , object_stair , margin = 0.01) :
@@ -26,9 +28,11 @@ class HeightMap():
         # Update inner surface 
         for surface in self.Surfaces :
             surface.margin = margin
+            t1 = clock()
             surface.compute_inner_inequalities()
             surface.compute_inner_vertices()    
-
+            t2 = clock()
+            print("TIME COMPUTE INNER : " , 1000*(t2 - t1))
         # Get bounds for x and y
         self.Nx = int(self.bounds.get('Nx'))
         self.Ny = int(self.bounds.get('Ny'))

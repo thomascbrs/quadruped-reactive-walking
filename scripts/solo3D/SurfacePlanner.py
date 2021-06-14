@@ -5,6 +5,7 @@ from time import perf_counter as clock
 
 from sl1m.problem_definition import Problem
 from sl1m.generic_solver import solve_MIP
+from sl1m.constants_and_tools import convert_surface_to_inequality
 
 from solo_rbprm.solo_abstract import Robot as SoloAbstract
 
@@ -13,6 +14,8 @@ from hpp.corbaserver.rbprm.tools.surfaces_from_path import getAllSurfacesDict
 from hpp.corbaserver.problem_solver import ProblemSolver
 from hpp.gepetto import ViewerFactory
 
+import time
+
 # --------------------------------- PROBLEM DEFINITION ---------------------------------------------------------------
 
 paths = [os.environ["INSTALL_HPP_DIR"] + "/solo-rbprm/com_inequalities/feet_quasi_flat/",
@@ -20,8 +23,6 @@ paths = [os.environ["INSTALL_HPP_DIR"] + "/solo-rbprm/com_inequalities/feet_quas
 limbs = ['FLleg', 'FRleg', 'HLleg', 'HRleg']
 others = ['FL_FOOT', 'FR_FOOT', 'HL_FOOT', 'HR_FOOT']
 rom_names = ['solo_LFleg_rom', 'solo_RFleg_rom', 'solo_LHleg_rom', 'solo_RHleg_rom']
-
-# --------------------------------- METHODS ---------------------------------------------------------------
 
 
 class SurfacePlanner:
@@ -40,15 +41,23 @@ class SurfacePlanner:
         self.solo_abstract.setFilter(rom_names)
         for limb in rom_names:
             self.solo_abstract.setAffordanceFilter(limb, ['Support'])
-        ps = ProblemSolver(self.solo_abstract)
-        vf = ViewerFactory(ps)
-        afftool = AffordanceTool()
-        afftool.setAffordanceConfig('Support', [0.5, 0.03, 0.00005])
+        self.ps = ProblemSolver(self.solo_abstract)
+        self.vf = ViewerFactory(self.ps)
+        self.afftool = AffordanceTool()
+        self.afftool.setAffordanceConfig('Support', [0.5, 0.03, 0.00005])
 
-        afftool.loadObstacleModel(environment_URDF, "environment", vf, reduceSizes=[0.05, 0., 0.])
-        ps.selectPathValidation("RbprmPathValidation", 0.05)
+        self.afftool.loadObstacleModel(environment_URDF, "environment", self.vf, reduceSizes=[0.07, 0., 0.])
+        self.ps.selectPathValidation("RbprmPathValidation", 0.05)
 
-        self.all_surfaces = getAllSurfacesDict(afftool)
+        self.all_surfaces = getAllSurfacesDict(self.afftool)
+
+        # Potential surfaces for QP planner
+        self.potential_surfaces = []
+        # For now, floor_surface is hard defined in wrapper, multiprocessing makes it impossible to retrieve it from here 
+        # floor_object = 'environment/floor_0aff0_0'
+        # floor_inequality = convert_surface_to_inequality(np.array(self.all_surfaces.get(floor_object)[0]).T , True)
+        # self.floor_surface = SurfaceData( floor_inequality[0] , floor_inequality[1] ,  np.array(self.all_surfaces.get('environment/floor_0aff0_0')[0]) )
+
 
     def compute_gait(self, gait_in):
         """
@@ -74,9 +83,11 @@ class SurfacePlanner:
         :return: gait matrix
         """
         # TODO: Divide by number of phases in gait
-        step_length = o_v_ref * self.T_gait/4
+        # step_length = o_v_ref * self.T_gait/4
+        step_length = o_v_ref * self.T_gait/2
 
         return np.array([step_length[i][0] for i in range(2)])
+    
 
     def get_potential_surfaces(self, configs, gait):
         """
@@ -120,24 +131,32 @@ class SurfacePlanner:
         :param o_v_ref: the desired velocity for the cost
         :return: the selected surfaces for the first phase
         """
-        print("------------------------------------------------------------------------------------")
         t0 = clock()
 
-        R = [pin.XYZQUATToSE3(np.array(config)).rotation for config in configs]
+        R = [pin.XYZQUATToSE3(np.array(config)).rotation for config in configs]        
 
         gait = self.compute_gait(gait_in)
 
-        step_length = self.compute_step_length(o_v_ref)
+        step_length = self.compute_step_length(o_v_ref)        
 
-        surfaces = self.get_potential_surfaces(configs, gait)
+        surfaces = self.get_potential_surfaces(configs, gait)        
 
         initial_contacts = [current_contacts[:, i].tolist() for i in range(4)]
 
         pb = Problem(limb_names=limbs, other_names=others, constraint_paths=paths)
-        pb.generate_problem(R, surfaces, gait, initial_contacts, com=False)
+        pb.generate_problem(R, surfaces, gait, initial_contacts,c0 = None ,  com=False)
 
-        costs = {"step_size": [1.0, step_length]}
-        pb_data = solve_MIP(pb, costs=costs, com=False)
+        # The first phase correspond to the configuration the robot will be on the next step
+        # RBPRM gives the available contact for this next configuration
+        # All potential surfaces will be usefull if SL1M does not converged --> switch to heuristic, need potential surfaces around
+        # The computation of the surface equation is already done in generation of the problem phaseData    
+        
+        coms_cost = []
+        for config in configs : 
+            coms_cost.append(config[:3])
+
+        costs = {"step_size": [1.0, step_length] }
+        pb_data = solve_MIP(pb, costs=costs ,com=False)
 
         if pb_data.success:
             surface_indices = pb_data.surface_indices
@@ -145,12 +164,16 @@ class SurfacePlanner:
             selected_surfaces = []
             for foot, index in enumerate(surface_indices[0]):
                 selected_surfaces.append(surfaces[0][foot][index])
-            
+                                        
             t1 = clock()
-            print("Run took ", 1000. * (t1-t0))
+            print("Run took ", 1000. * (t1-t0))        
 
-            return selected_surfaces
+            return  surfaces , pb.phaseData , surface_indices  , pb_data.all_feet_pos , True
 
         else:
             # TODO what if the problem did not converge ???
-            return None
+
+            return surfaces , pb.phaseData , None , None , False
+
+
+

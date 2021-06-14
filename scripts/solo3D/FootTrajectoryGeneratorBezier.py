@@ -80,9 +80,9 @@ class FootTrajectoryGeneratorBezier:
         self.res = []
 
         self.t0_bezier = np.zeros((4,))
-
-        self.new_surface = np.array([-99, -99, -99, -99])
-        self.past_surface = np.array([-99, -99, -99, -99])
+        
+        # self.new_surface = np.array([-99, -99, -99, -99])
+        # self.past_surface = np.array([-99, -99, -99, -99])
         self.ineq = [0]*4
         self.ineq_vect = [0]*4
         self.x_margin_max = 0.02
@@ -120,6 +120,9 @@ class FootTrajectoryGeneratorBezier:
 
         self.footStepPlannerQP = footStepPlannerQP
         self.gait = gait
+
+        self.new_surface = [footStepPlannerQP.surface_selected[0]]*4
+        self.past_surface = [footStepPlannerQP.surface_selected[0]]*4
 
     def updatePolyCoeff_XY(self, i_foot, x_init, v_init, a_init, x_end,  t0, t1, h):
         ''' Compute coefficient for polynomial 5D curve for X and Y trajectory. Vel, Acc final is nulle. 
@@ -280,16 +283,22 @@ class FootTrajectoryGeneratorBezier:
 
         if t0 < t1 - self.t_lock_before_touchdown:
 
-            # compute polynoms coefficients for x and y
-            #self.updatePolyCoeff_Z(i_foot , self.goals[:, i_foot] , self.vgoals[:, i_foot] , self.agoals[:, i_foot] , self.footsteps_target[:,i_foot] , t0,t1,h )
+            # # compute polynoms coefficients for x and y and z : without Bezier optim
+            # if self.t0s[i_foot] < 10e-4 or k == 0: 
+            #     self.updatePolyCoeff_Z(i_foot , self.goals[:, i_foot] , self.vgoals[:, i_foot] , self.agoals[:, i_foot] , self.footsteps_target[:,i_foot] , t0,t1,h )
+            #     self.updatePolyCoeff_XY(i_foot, self.goals[:, i_foot], np.zeros(3), np.zeros(3), self.footsteps_target[:, i_foot], t0, t1, h)
+            # else : 
+            #     self.updatePolyCoeff_XY(i_foot, self.goals[:, i_foot], self.vgoals[:, i_foot] , self.agoals[:, i_foot] , self.footsteps_target[:, i_foot], t0, t1, h)
+
 
             # compute polynoms coefficients for x and y
             if self.t0s[i_foot] < 10e-4 or k == 0:
 
-                if self.new_surface[i_foot] != -99:
+                if self.new_surface[i_foot].getHeight(self.footsteps_target[:, i_foot]) >= 10-4:
                     self.updatePolyCoeff_Z(i_foot, self.goals[:, i_foot], np.zeros(3), np.zeros(
                         3), self.footsteps_target[:, i_foot], t0, t1, 0.03 + self.footsteps_target[:, i_foot][2])
                 else:
+                    # Walking on the floor 
                     self.updatePolyCoeff_Z(i_foot, self.goals[:, i_foot], np.zeros(3), np.zeros(
                         3), self.footsteps_target[:, i_foot], t0, t1, h + self.footsteps_target[:, i_foot][2])
 
@@ -302,9 +311,8 @@ class FootTrajectoryGeneratorBezier:
 
                 self.t_stop[i_foot] = 0.
 
-                if self.past_surface[i_foot] != self.new_surface[i_foot]:
-                    id_surface = self.new_surface[i_foot]
-                    surface = self.heightMap.Surfaces[id_surface]
+                if abs(self.past_surface[i_foot].getHeight(self.footsteps_target[:, i_foot]) - self.new_surface[i_foot].getHeight(self.footsteps_target[:, i_foot])) >= 10e-4:
+                    surface = self.new_surface[i_foot]
                     nb_vert = surface.vertices.shape[0]
                     vert = surface.vertices
 
@@ -320,13 +328,29 @@ class FootTrajectoryGeneratorBezier:
 
                         if doIntersect_segment(P1, P2, Q1, Q2):
                             P_r = get_intersect_segment(P1, P2, Q1, Q2)
-
+                        
                             # Should be sorted
-                            self.ineq[i_foot] = surface.ineq[k, :]
-                            self.ineq_vect[i_foot] = surface.ineq_vect[k]
+                            # self.ineq[i_foot] = surface.ineq[k, :]
+                            # self.ineq_vect[i_foot] = surface.ineq_vect[k]
+                            a = 0.
+                            if (Q1[0] - Q2[0]) != 0. :
+                                a = (Q2[1] - Q1[1])/(Q2[0] - Q1[0])
+                                b = Q1[1] - a*Q1[0]
+                                self.ineq[i_foot] = np.array([-a , 1. , 0.]) # -ax + y = b
+                                self.ineq_vect[i_foot] = b 
+                            else : 
+                                # Inequality of the surface corresponding to these vertices
+                                self.ineq[i_foot] = np.array([-1. , 0. , 0.])
+                                self.ineq_vect[i_foot] = -Q1[0]
+                            
+                            if np.dot(self.ineq[i_foot] , self.footsteps_target[:, i_foot]) > self.ineq_vect[i_foot] :
+                                # Wrong side, the targeted point is inside the surface
+                                self.ineq[i_foot] = - self.ineq[i_foot]
+                                self.ineq_vect[i_foot] = -self.ineq_vect[i_foot] 
 
                             # If foot position already closer than margin
                             self.x_margin[i_foot] = max(min(self.x_margin_max, abs(P_r[0] - P1[0]) - 0.001), 0.)
+                            
 
                 else:
                     self.ineq[i_foot] = 0
@@ -365,10 +389,9 @@ class FootTrajectoryGeneratorBezier:
 
             # No surface switch or already overpass the critical point
             if np.sum(abs(self.ineq[i_foot])) != 0 and ((zt < self.footsteps_target[2, i_foot]) or (self.t0s[i_foot] < self.t_stop[i_foot] + t_margin)) and self.x_margin[i_foot] != 0.:
-
-                # Modify (should not be used) x_margin during flight, if problem during flight
-                id_surface = self.new_surface[i_foot]
-                surface = self.heightMap.Surfaces[id_surface]
+          
+                # Modify (should not be used) x_margin during flight, if problem during flight    
+                surface = self.new_surface[i_foot]
                 nb_vert = surface.vertices.shape[0]
                 vert = surface.vertices
 
@@ -466,6 +489,7 @@ class FootTrajectoryGeneratorBezier:
         self.footsteps_target = targetFootstep
 
         # Update current foot position with pybullet feedback
+        # Only for Bezier curves
         self.updateFootPositionFeedback(k, q_filt, v_filt, device)
 
         if (k % self.k_mpc) == 0:
@@ -493,17 +517,19 @@ class FootTrajectoryGeneratorBezier:
             for i in self.feet:
                 self.t0s[i] = np.max([self.t0s[i] + self.dt_wbc, 0.0])
 
+        
+
         # Update new surface and past if t0 == 0 (new swing phase)
         if (k % self.k_mpc) == 0:
             for i_foot in range(4):
                 if self.t0s[i_foot] < 10e-6:
                     self.past_surface[i_foot] = self.new_surface[i_foot]
-                    if self.footStepPlannerQP.surface_selected[i_foot] != None:
-                        self.new_surface[i_foot] = self.footStepPlannerQP.surface_selected[i_foot]
-                    else:
-                        self.new_surface[i_foot] = -99
-
+                    self.new_surface[i_foot] = self.footStepPlannerQP.surface_selected[i_foot]
+        
         for i in self.feet:
+            # Only for 5th order polynomial curve
+            # if self.t0s[i] < 10e-4 and (k % self.k_mpc) == 0 :
+            #     self.updateFootPositionFeedback(k, q_filt, v_filt, device)
 
             self.updateFootPosition(k, i)
 

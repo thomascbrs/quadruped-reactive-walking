@@ -18,11 +18,7 @@ import yaml
 
 
 
-<<<<<<< HEAD
-t_init = time.time()
-=======
 t_init = clock()
->>>>>>> origin/devel_cbrs_1
 
 Nx = 500
 Ny = 300

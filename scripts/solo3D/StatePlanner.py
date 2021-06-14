@@ -31,7 +31,7 @@ class StatePlanner():
 
         self.configs = [np.zeros(7) for _ in range(n_surface_configs)]
         # TODO : 4 is actually the number of phases in a gait. We should use a phase length instead of T_gait/4
-        self.dt_vector_config = np.linspace(T_gait/4, n_surface_configs*T_gait/4, num=n_surface_configs)
+        self.dt_vector_config = np.linspace(T_gait/2, n_surface_configs*T_gait/2, num=n_surface_configs)
 
     def computeReferenceStates(self, q,  v, o_vref, z_average, new_step=False):
         '''
@@ -55,20 +55,19 @@ class StatePlanner():
 
         self.referenceStates[:3,0] += pin.rpy.rpyToMatrix(RPY).dot(np.array([-0.04,0.,0.])) 
 
+
         for i in range(1, self.n_steps + 1):
             # Displacement following the reference velocity compared to current position
-            if o_vref[5, 0] != 0:
-                self.referenceStates[0, i] = (o_vref[0, 0] * np.sin(o_vref[5, 0] * self.dt_vector[i]) + o_vref[1, 0] * (np.cos(o_vref[5, 0] * self.dt_vector[i]) - 1.)) / o_vref[5, 0]
-                self.referenceStates[1, i] = (o_vref[1, 0] * np.sin(o_vref[5, 0] * self.dt_vector[i]) - o_vref[0, 0] * (np.cos(o_vref[5, 0] * self.dt_vector[i]) - 1.)) / o_vref[5, 0]
-            else:
+            if o_vref[5,0] < 10e-3 : 
                 self.referenceStates[0, i] = o_vref[0, 0] * self.dt_vector[i]
                 self.referenceStates[1, i] = o_vref[1, 0] * self.dt_vector[i]
+            else : 
+                self.referenceStates[0, i] = (o_vref[0, 0] * np.sin(o_vref[5, 0] * self.dt_vector[i]) + o_vref[1, 0] * (np.cos(o_vref[5, 0] * self.dt_vector[i]) - 1.)) / o_vref[5, 0]
+                self.referenceStates[1, i] = (o_vref[1, 0] * np.sin(o_vref[5, 0] * self.dt_vector[i]) - o_vref[0, 0] * (np.cos(o_vref[5, 0] * self.dt_vector[i]) - 1.)) / o_vref[5, 0]
+            
             
             self.referenceStates[0:2,i] += self.referenceStates[0:2,0] 
             self.referenceStates[2,i] = self.h_ref +  z_average
-
-            self.referenceStates[0:2, i] += self.referenceStates[0:2, 0]
-            self.referenceStates[2, i] = self.h_ref + z_average
 
             self.referenceStates[5, i] = o_vref[5, 0] * self.dt_vector[i]
 
@@ -137,8 +136,9 @@ class StatePlanner():
                 config[1] += o_vref[1, 0] * self.dt_vector_config[k]
 
             rpy = np.zeros(3)
-            rpy[2] = RPY[2] + o_vref[5, 0] * self.dt_vector_config[k]
-
+            if o_vref[5, 0] != 0: 
+                rpy[2] = RPY[2] + o_vref[5, 0] * self.dt_vector_config[k]
+            
             isInside_min, i_min, j_min = self.heightMap.find_nearest(config[0] - self.FIT_SIZE_X, config[1] - self.FIT_SIZE_Y)
             isInside_max, i_max, j_max = self.heightMap.find_nearest(config[0] + self.FIT_SIZE_X, config[1] + self.FIT_SIZE_Y)
 
@@ -158,11 +158,13 @@ class StatePlanner():
                 _, i, j = self.heightMap.find_nearest(config[0], config[1])
                 config[2] = result.x[0]*self.heightMap.x[i] + result.x[1]*self.heightMap.y[j] + result.x[2] + self.h_ref
 
+
                 rpy[0] = -np.arctan2(result.x[1], 1.)
                 rpy[1] = -np.arctan2(result.x[0], 1.)
                 matrix = pin.rpy.rpyToMatrix(rpy)
                 quat = pin.Quaternion(matrix)
                 config[3:7] = [quat.x, quat.y, quat.z, quat.w]
+        print("configs : " , self.configs)
 
         return 0
 

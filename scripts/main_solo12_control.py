@@ -112,8 +112,8 @@ def control_loop(name_interface, name_interface_clone=None):
     # Default position after calibration
     # q_init = np.array([0.0, 0.7, -1.4, -0.0, 0.7, -1.4, 0.0, -0.7, +1.4, -0.0, -0.7, +1.4])
 
-    # q_init = np.array([0.0, 0.9, -1.6, -0.0, 0.9, -1.6, 0.0, 0.9, -1.6, -0.0, 0.9, -1.6])
-    q_init = np.array([0.0, 0.7, -1.4, -0.0, 0.7, -1.4, 0.0, 0.7, -1.4, -0.0, 0.7, -1.4])
+    q_init = np.array([0.0, 0.9, -1.6, -0.0, 0.9, -1.6, 0.0, 0.9, -1.6, -0.0, 0.9, -1.6])
+    # q_init = np.array([0.0, 0.7, -1.4, -0.0, 0.7, -1.4, 0.0, 0.7, -1.4, -0.0, 0.7, -1.4])
 
     # Run a scenario and retrieve data thanks to the logger
     controller = Controller(q_init, params.envID, params.velID, params.dt_wbc, params.dt_mpc,
@@ -214,7 +214,7 @@ def control_loop(name_interface, name_interface_clone=None):
         # newpath = r'/home/thomas_cbrs/Desktop/edin/recording/images/'
         # if (t == 0.0):
         #     cpt_frames = 0
-        #     step = 2
+        #     step = 5
         # if (cpt_frames % step) == 0:
         #     if (cpt_frames % 1000):
         #         print(cpt_frames)
@@ -246,6 +246,7 @@ def control_loop(name_interface, name_interface_clone=None):
     if controller.enable_multiprocessing:
         print("Stopping parallel process")
         controller.mpc_wrapper.stop_parallel_loop()
+        controller.surfacePlanner.stop_parallel_loop()
     # controller.view.stop()  # Stop viewer
 
     # DAMPING TO GET ON THE GROUND PROGRESSIVELY *********************
