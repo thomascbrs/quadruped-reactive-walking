@@ -5,7 +5,8 @@ from time import perf_counter as clock
 
 from sl1m.problem_definition import Problem
 from sl1m.generic_solver import solve_MIP
-from sl1m.constants_and_tools import convert_surface_to_inequality
+import matplotlib.pyplot as plt
+import sl1m.tools.plot_tools as plot
 
 from solo_rbprm.solo_abstract import Robot as SoloAbstract
 
@@ -13,8 +14,6 @@ from hpp.corbaserver.affordance.affordance import AffordanceTool
 from hpp.corbaserver.rbprm.tools.surfaces_from_path import getAllSurfacesDict
 from hpp.corbaserver.problem_solver import ProblemSolver
 from hpp.gepetto import ViewerFactory
-
-import time
 
 from solo3D.tools.ProfileWrapper import ProfileWrapper
 
@@ -52,17 +51,12 @@ class SurfacePlanner:
         self.afftool = AffordanceTool()
         self.afftool.setAffordanceConfig('Support', [0.5, 0.03, 0.00005])
 
-        self.afftool.loadObstacleModel(environment_URDF, "environment", self.vf, reduceSizes=[0.07, 0., 0.])
+        self.afftool.loadObstacleModel(environment_URDF, "environment", self.vf, reduceSizes=[0.05, 0., 0.])
         self.ps.selectPathValidation("RbprmPathValidation", 0.05)
 
         self.all_surfaces = getAllSurfacesDict(self.afftool)
 
-        # Potential surfaces for QP planner
         self.potential_surfaces = []
-        # For now, floor_surface is hard defined in wrapper, multiprocessing makes it impossible to retrieve it from here
-        # floor_object = 'environment/floor_0aff0_0'
-        # floor_inequality = convert_surface_to_inequality(np.array(self.all_surfaces.get(floor_object)[0]).T , True)
-        # self.floor_surface = SurfaceData( floor_inequality[0] , floor_inequality[1] ,  np.array(self.all_surfaces.get('environment/floor_0aff0_0')[0]) )
 
     def compute_gait(self, gait_in):
         """
@@ -101,6 +95,7 @@ class SurfacePlanner:
         :return: a list of surface candidates
         """
         surfaces_list = []
+        empty_list = False
         for id, config in enumerate(configs):
             stance_feet = np.nonzero(gait[id % len(gait)] == 1)[0]
             previous_swing_feet = np.nonzero(gait[(id-1) % len(gait)] == 0)[0]
@@ -114,6 +109,9 @@ class SurfacePlanner:
                 for name in surfaces_names:
                     surfaces.append(self.all_surfaces[name][0])
 
+                if not len(surfaces_names):
+                    empty_list = True
+
                 # Sort and then convert to array
                 surfaces = sorted(surfaces)
                 surfaces_array = []
@@ -124,7 +122,7 @@ class SurfacePlanner:
                 foot_surfaces.append(surfaces_array)
             surfaces_list.append(foot_surfaces)
 
-        return surfaces_list
+        return surfaces_list, empty_list
 
     @profileWrap.profile
     def run(self, configs, gait_in, current_contacts, o_v_ref):
@@ -143,27 +141,19 @@ class SurfacePlanner:
         gait = self.compute_gait(gait_in)
 
         step_length = self.compute_step_length(o_v_ref)
-        print(step_length)
 
-        surfaces = self.get_potential_surfaces(configs, gait)
+        surfaces, empty_list = self.get_potential_surfaces(configs, gait)
 
         initial_contacts = [current_contacts[:, i].tolist() for i in range(4)]
-
-        print(current_contacts)
 
         pb = Problem(limb_names=limbs, other_names=others, constraint_paths=paths)
         pb.generate_problem(R, surfaces, gait, initial_contacts, c0=None,  com=False)
 
-        # The first phase correspond to the configuration the robot will be on the next step
-        # RBPRM gives the available contact for this next configuration
-        # All potential surfaces will be usefull if SL1M does not converged --> switch to heuristic, need potential surfaces around
-        # The computation of the surface equation is already done in generation of the problem phaseData
+        if empty_list:
+            print("Surface planner: one step has no potential surface to use.")
+            return surfaces, pb.phaseData, None, None, False
 
-        coms_cost = []
-        for config in configs:
-            coms_cost.append(config[:3])
-
-        costs = {"step_size": [1.0, step_length]}
+        costs = {"step_size": [10.0, step_length]}
         pb_data = solve_MIP(pb, costs=costs, com=False)
 
         if pb_data.success:
@@ -179,16 +169,21 @@ class SurfacePlanner:
             return surfaces, pb.phaseData, surface_indices, pb_data.all_feet_pos, True
 
         else:
+            ax = plot.draw_whole_scene(self.all_surfaces)
+
+            plot.draw_surface(surfaces[0][0], pb.phaseData[0].moving[0], ax=ax)
+            plot.draw_surface(surfaces[0][1], pb.phaseData[0].moving[1], ax=ax)
+            plot.plot_initial_contacts(initial_contacts, ax=ax)
+            plt.show()
+
             print("The MIP problem did NOT converge")
             # TODO what if the problem did not converge ???
 
             return surfaces, pb.phaseData, None, None, False
 
-    def print_profile(self , output_file):
+    def print_profile(self, output_file):
         ''' Print the profile computed with cProfile
         Args : 
         - output_file (str) :  file name
         '''
         profileWrap.print_stats(output_file)
-        
-        return  0

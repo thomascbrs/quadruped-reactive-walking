@@ -199,7 +199,7 @@ class Controller:
 
         # Load Heightmap, select stairs
         object_stair = 1
-        surface_margin = 0.05
+        surface_margin = 0.001
         self.heightMap = HeightMap(object_stair, surface_margin)
 
         # Solo3D python class
