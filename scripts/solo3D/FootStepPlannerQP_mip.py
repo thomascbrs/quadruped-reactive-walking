@@ -1,7 +1,7 @@
 import numpy as np
 import pinocchio as pin
 from solo3D.tools.optimisation import genCost, quadprog_solve_qp, to_least_square
-from solo3D.tools.collision_tool import fclObj_trimesh, simple_object , gjk
+from solo3D.tools.collision_tool import fclObj_trimesh, simple_object, gjk
 import os
 
 
@@ -11,12 +11,13 @@ from sl1m.constants_and_tools import default_transform_from_pos_normal
 from scipy.spatial import Delaunay
 import hppfcl
 
+
 class FootStepPlannerQP_mip:
     ''' Python class to compute the target foot step and the ref state using QP optimisation 
     to avoid edges of surface.
     '''
 
-    def __init__(self, dt, dt_wbc, T_gait, h_ref, k_mpc, gait, N_gait, heightMap , surfacePlanner):
+    def __init__(self, dt, dt_wbc, T_gait, h_ref, k_mpc, gait, N_gait, heightMap, surfacePlanner):
 
         # Time step of the contact sequence
         self.dt = dt  # dt mpc
@@ -44,7 +45,6 @@ class FootStepPlannerQP_mip:
         self.weight_vref = 0.06
         self.weight_alpha = 1.
 
-        
         self.feet = []
         self.t0s = np.zeros((4, ))
         self.t_remaining = 0.
@@ -73,21 +73,21 @@ class FootStepPlannerQP_mip:
 
         self.current_fstep = self.shoulders.copy()
         self.targetFootstep = self.shoulders.copy()
-        self.fsteps = np.zeros(( self.N_gait, 12  ))
+        self.fsteps = np.zeros((self.N_gait, 12))
 
-        self.o_vref_qp = np.zeros((6,1))
+        self.o_vref_qp = np.zeros((6, 1))
 
         # solo-rbprm link to retrieve the kinematic constraints
         self.com_objects = []
         # Constraints inequalities size != depending of which foot is used
         self.ine_CoM_size = []
-        n_effectors = 4 
+        n_effectors = 4
         # kinematic_constraints_path = "/home/thomas_cbrs/Library/solo-rbprm/data/com_inequalities/feet_quasi_flat/"
         # limbs_names = ["FLleg" , "FRleg" , "HLleg" , "HRleg"]
-        
+
         kinematic_constraints_path = os.getcwd() + "/solo3D/objects/constraints_sphere/"
 
-        limbs_names = ["FL" , "FR" , "HL" , "HR"]
+        limbs_names = ["FL", "FR", "HL", "HR"]
         for foot in range(n_effectors):
             foot_name = limbs_names[foot]
             # filekin = kinematic_constraints_path + "COM_constraints_in_" + \
@@ -95,7 +95,7 @@ class FootStepPlannerQP_mip:
             filekin = kinematic_constraints_path + "COM_constraints_" + \
                 foot_name + "3.obj"
             self.com_objects.append(as_inequalities(load_obj(filekin)))
-            self.ine_CoM_size.append(self.com_objects[foot].A.shape[0] )
+            self.ine_CoM_size.append(self.com_objects[foot].A.shape[0])
 
         # self.statePlanner = statePlanner
 
@@ -105,7 +105,6 @@ class FootStepPlannerQP_mip:
 
         # Store surface selected for the current swing phase
         self.surface_selected = [self.surfacePlanner.floor_surface] * 4
- 
 
     def update_remaining_time(self):
 
@@ -137,7 +136,7 @@ class FootStepPlannerQP_mip:
 
         return 0
 
-    def select_surface_fromXY(self , point , phase , moving_foot_index):
+    def select_surface_fromXY(self, point, phase, moving_foot_index):
         ''' Given a X,Y position, select the appropriate surface by testing the potential surfaces
 
         Args : 
@@ -150,69 +149,69 @@ class FootStepPlannerQP_mip:
         h_selected = 0.
         reduced_surface_found = False
 
-        if self.surfacePlanner.mip_iteration != 0 :
+        if self.surfacePlanner.mip_iteration != 0:
             potential_surfaces = self.surfacePlanner.potential_surfaces[phase][moving_foot_index]
-            for sf in potential_surfaces :
+            for sf in potential_surfaces:
                 # print("sf.vertices : " , sf.vertices)
-                if sf.isInside_XY(point ) :
+                if sf.isInside_XY(point):
                     # Test if x,y point is inside surface
-                    height_potential = sf.getHeight(point )
+                    height_potential = sf.getHeight(point)
 
-                    if height_potential > h_selected :
+                    if height_potential > h_selected:
                         # Select higher surface if overlapping
                         h_selected = height_potential
                         surface_selected = sf
                         reduced_surface_found = True
-            
-            if not reduced_surface_found : 
+
+            if not reduced_surface_found:
                 # The X,Y point is outide of the reduced surfaces, keep closest surface
-                obj1 = simple_object( np.array([[point[0] , point[1] , 0. ]]) ,  [[0,0,0]] )
+                obj1 = simple_object(np.array([[point[0], point[1], 0.]]),  [[0, 0, 0]])
                 o1 = fclObj_trimesh(obj1)
                 t1 = hppfcl.Transform3f()
                 t2 = hppfcl.Transform3f()
                 distance = 100
 
-                for sf in potential_surfaces :
+                for sf in potential_surfaces:
                     vert = np.zeros(sf.vertices.shape)
-                    vert[:,:2] = sf.vertices[:,:2]
-                    tri = Delaunay(vert[:,:2])
-                    obj2 = simple_object( vert ,  tri.simplices.tolist() )                    
+                    vert[:, :2] = sf.vertices[:, :2]
+                    tri = Delaunay(vert[:, :2])
+                    obj2 = simple_object(vert,  tri.simplices.tolist())
                     o2 = fclObj_trimesh(obj2)
-                    gg = gjk(o1,o2,t1,t2)
+                    gg = gjk(o1, o2, t1, t2)
 
-                    if gg.distance <= distance :    
+                    if gg.distance <= distance:
                         surface_selected = sf
-                        distance = gg.distance 
+                        distance = gg.distance
 
-        else : 
+        else:
             surface_selected = self.surfacePlanner.floor_surface
-        
+
         return surface_selected
 
-    def convert_pb_inequalities(self , L):
+    def convert_pb_inequalities(self, L):
         ''' Convert the list of surface and next noving points into inequality matrix 
         that can be used for the QP
         Args : 
         - L : = [  [x =1 , y=0  ,  surfaceData  , next_ft_qp ] , ... ]  --> First variable in gait[1,0]
         '''
         # Total number of row in inequality matrix
-        nrow = 0 
-        for l in L : 
+        nrow = 0
+        for l in L:
             nrow += l[2].A.shape[0]
 
         # Total number of optimized variable (Vx , Vy , rx1 , ry1 , rz1 , rx2 ... )
-        ncol = 2 + 3*len(L) 
+        ncol = 2 + 3*len(L)
 
-        ineqMatrix = np.zeros((nrow , ncol))
+        ineqMatrix = np.zeros((nrow, ncol))
         ineqVector = np.zeros(nrow)
 
-        i_start = 0 
-        for index_L, [i,j,surface,next_ft] in enumerate(L) : 
-            i_start = self.surface_inequality(surface , next_ft , ineqMatrix , ineqVector ,i_start, index_L  )
+        i_start = 0
+        for index_L, [i, j, surface, next_ft] in enumerate(L):
+            i_start = self.surface_inequality(surface, next_ft, ineqMatrix, ineqVector, i_start, index_L)
 
-        return ineqMatrix , ineqVector  
+        return ineqMatrix, ineqVector
 
-    def solve_qp(self, ineqMatrix , ineqVector , o_vref ):
+    def solve_qp(self, ineqMatrix, ineqVector, o_vref):
         ''' Solve the QP problem 
         X optimised : [Vxref , Vyref , alpha_x1 , alpha_y1 , pz1 , alpha_x2 ... , ]
         min (1/2)x' P x + q' x
@@ -221,20 +220,18 @@ class FootStepPlannerQP_mip:
         P = np.identity(ineqMatrix.shape[1])
         q = np.zeros(ineqMatrix.shape[1])
 
-        P[:2,:2] = self.weight_vref*np.identity(2)
-        q[:2] = -self.weight_vref*np.array([o_vref[0,0] , o_vref[1,0]])
+        P[:2, :2] = self.weight_vref*np.identity(2)
+        q[:2] = -self.weight_vref*np.array([o_vref[0, 0], o_vref[1, 0]])
 
-        try :
-            self.res = quadprog_solve_qp(P, q,  G=ineqMatrix, h = ineqVector)
-        except :
+        try:
+            self.res = quadprog_solve_qp(P, q,  G=ineqMatrix, h=ineqVector)
+        except:
             print("------------ ERROR QP FOOTSTEP ------------")
         #     res = self.res
 
-        return self.res 
+        return self.res
 
-
-
-    def surface_inequality(self, surface ,next_ft , ineqMatrix , ineqVector , i_start , j) : 
+    def surface_inequality(self, surface, next_ft, ineqMatrix, ineqVector, i_start, j):
         ''' Update the inequality matrix with surface inequalities : 
         MX <= n , with X = [Vx_ref , Vy_ref , alpha_x1 , alpha_y1 , p_z1 , alpha_x2 ...] 
         Args : 
@@ -252,7 +249,7 @@ class FootStepPlannerQP_mip:
         j_end = 3*j+5
 
         # surface.b[-2] += 0.001
-        # surface.b[-1] += -0.001 
+        # surface.b[-1] += -0.001
 
         # S * [Vrefx , Vrefy]
         ineqMatrix[i_start:i_start + nrow, :2] = -self.k_feedback*surface.A[:, :2]
@@ -262,9 +259,9 @@ class FootStepPlannerQP_mip:
 
         ineqVector[i_start:i_end] = surface.b - np.dot(surface.A[:, :2], next_ft[:2])
 
-        return i_end 
+        return i_end
 
-    def integration_desired_velocity(self,o_vref,v,gait):
+    def integration_desired_velocity(self, o_vref, v, gait):
         ''' Integration OF desired velocity in world frame, to get
         dx,dy,dyaws in world frame for the time horizon
         Args : 
@@ -297,7 +294,6 @@ class FootStepPlannerQP_mip:
                 self.dx[j] = v[0]*self.dt_cum[j]
                 self.dy[j] = v[1]*self.dt_cum[j]
 
-
         return 0
 
     def computeFootsteps(self, q, v, o_vref):
@@ -312,7 +308,7 @@ class FootStepPlannerQP_mip:
 
         self.footsteps.clear()
         for i in range(self.N_gait):
-            self.footsteps.append(np.zeros((3, 4)))  
+            self.footsteps.append(np.zeros((3, 4)))
 
         # Set current position of feet for feet in stance phase
         for j in range(4):
@@ -320,7 +316,7 @@ class FootStepPlannerQP_mip:
                 self.footsteps[0][:, j] = self.current_fstep[:, j]
 
         # Integration of the desired velocities (Vx,Vy,Wyaw)
-        self.integration_desired_velocity( o_vref , v,gait)        
+        self.integration_desired_velocity(o_vref, v, gait)
 
         # Get current and reference velocities in base frame (rotated yaw)
         RPY_tmp = np.zeros(3)
@@ -344,7 +340,7 @@ class FootStepPlannerQP_mip:
 
         # Update the footstep matrix depending on the different phases of the gait (swing & stance)
         i = 1
-        phase = 0 
+        phase = 0
 
         while (gait[i, :].any()):
             # Feet that were in stance phase and are still in stance phase do not move
@@ -355,7 +351,7 @@ class FootStepPlannerQP_mip:
             # Feet that were in swing phase and are now in stance phase need to be updated
             moving_foot_index = 0
             for j in range(4):
-                
+
                 if (1 - gait[i-1, j]) * gait[i, j] > 0:
                     # Offset to the future position
                     q_dxdy = np.array([self.dx[i - 1], self.dy[i - 1], 0.0])
@@ -372,64 +368,62 @@ class FootStepPlannerQP_mip:
                     next_ft = Rz_tmp.dot(nextFootstep) + q_tmp + q_dxdy
                     next_ft_qp = Rz_tmp.dot(nextFootstep_qp) + q_tmp + q_dxdy
 
-                    if j in self.feet and phase == 0 : 
-                    # feet currently in flying phase
-                        
+                    if j in self.feet and phase == 0:
+                        # feet currently in flying phase
                         if self.t0s[j] < 10e-4 and (self.k % self.k_mpc) == 0:
                             # Beginning of flying phase, selection of surface
-                            
-                            if self.surfacePlanner.mip_success and False :
+
+                            if self.surfacePlanner.mip_success:
                                 # Surface from SL1M if converged
-                                # self.surface_selected[j] = self.surfacePlanner.selected_surfaces[phase][moving_foot_index]
-                                pass 
-                            else :
+                                self.surface_selected[j] = self.surfacePlanner.selected_surfaces[phase][moving_foot_index]
+                                pass
+                            else:
                                 # Surface from X,Y Heuristic
-                                self.surface_selected[j] = self.select_surface_fromXY( next_ft , phase , moving_foot_index)  
-                                        
-                        L.append([i,j,self.surface_selected[j] , next_ft_qp])
+                                self.surface_selected[j] = self.select_surface_fromXY(next_ft, phase, moving_foot_index)
+
+                        L.append([i, j, self.surface_selected[j], next_ft_qp])
 
                     else:
-                        if self.surfacePlanner.mip_success and False:
+                        if self.surfacePlanner.mip_success:
                             # Surface from SL1M if converged
-                            # surface_selected = self.surfacePlanner.selected_surfaces[phase][moving_foot_index]
+                            surface_selected = self.surfacePlanner.selected_surfaces[phase][moving_foot_index]
                             pass
-                        else :
+                        else:
                             # Surface from X,Y Heuristic
-                            surface_selected = self.select_surface_fromXY( next_ft , phase , moving_foot_index)  
-                        
-                        L.append([i,j,surface_selected , next_ft_qp])                       
+                            surface_selected = self.select_surface_fromXY(next_ft, phase, moving_foot_index)
 
-                    
-                    moving_foot_index += 1          
-            
-            if ((1 - gait[i-1, :]) * gait[i, :]).any() :
-                phase += 1 
+                        L.append([i, j, surface_selected, next_ft_qp])
+
+                    moving_foot_index += 1
+
+            if ((1 - gait[i-1, :]) * gait[i, :]).any():
+                phase += 1
 
             i += 1
 
         # Convert Problem to inequality matrix
-        ineqMatrix , ineqVector = self.convert_pb_inequalities(L)
+        ineqMatrix, ineqVector = self.convert_pb_inequalities(L)
 
         # Solve QP problem
-        res = self.solve_qp(ineqMatrix , ineqVector , o_vref )
+        res = self.solve_qp(ineqMatrix, ineqVector, o_vref)
 
         # Store the value for getRefState
         self.o_vref_qp = o_vref.copy()
-        self.o_vref_qp[0,0] = res[0]
-        self.o_vref_qp[1,0] = res[1]       
+        self.o_vref_qp[0, 0] = res[0]
+        self.o_vref_qp[1, 0] = res[1]
 
         # Get new reference velocity in base frame to recompute the new footsteps
         b_vref_qp = np.zeros(6)
         b_vref_qp[:3] = Rz.transpose().dot(self.o_vref_qp[:3, 0])
         b_vref_qp[3:] = Rz.transpose().dot(self.o_vref_qp[3:, 0])
 
-        for l in range(len(L)) :
-            i , j = L[l][0] , L[l][1]
+        for l in range(len(L)):
+            i, j = L[l][0], L[l][1]
             # Offset to the future position
             q_dxdy = np.array([self.dx[i - 1], self.dy[i - 1], 0.0])
 
             # Get future desired position of footsteps without k_feedback
-            nextFootstep = self.computeNextFootstep(i, j, b_vlin , b_vref_qp , True)
+            nextFootstep = self.computeNextFootstep(i, j, b_vlin, b_vref_qp, True)
 
             # Get desired position of footstep compared to current position
             RPY_tmp[2] = self.yaws[i-1]
@@ -509,7 +503,7 @@ class FootStepPlannerQP_mip:
         self.RPY = pin.rpy.matrixToRpy(quat.toRotationMatrix())   # Array (3,)
         self.RPY_b = self.RPY.copy()
 
-        print("RPY : ", self.RPY)
+        # print("RPY : ", self.RPY)
 
         # Only yaw rotation for the base frame
         self.RPY_b[0] = 0
@@ -533,7 +527,6 @@ class FootStepPlannerQP_mip:
             self.fsteps[index, :] = np.reshape(footstep, 12, order='F')
 
         return self.getTargetFootsteps()
-
 
     def cross3(self, left, right):
         """Numpy is inefficient for this"""
@@ -567,10 +560,7 @@ class FootStepPlannerQP_mip:
         return self.footsteps
 
     def getTargetFootsteps(self):
-        return self.targetFootstep 
+        return self.targetFootstep
 
-    def getVref_QP(self) :
+    def getVref_QP(self):
         return self.o_vref_qp
-        
-    
-

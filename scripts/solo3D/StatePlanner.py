@@ -164,7 +164,7 @@ class StatePlanner():
                 matrix = pin.rpy.rpyToMatrix(rpy)
                 quat = pin.Quaternion(matrix)
                 config[3:7] = [quat.x, quat.y, quat.z, quat.w]
-        print("configs : " , self.configs)
+        # print("configs : " , self.configs)
 
         return 0
 

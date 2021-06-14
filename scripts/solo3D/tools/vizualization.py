@@ -43,7 +43,7 @@ class PybVisualizationTraj():
         self.stairsId = None
 
         # Sl1m position (6 phases + inital)
-        self.sl1m_Ids_target = np.zeros((6, 4))
+        self.sl1m_Ids_target = np.zeros((7, 4))
 
 
     def update(self, k , device ) :
@@ -79,7 +79,7 @@ class PybVisualizationTraj():
                 # self.updateSl1M_target(all_feet_pos)
 
                 t_end = clock() - t_init
-                print("Time for update pybullet = ",  t_end)
+                # print("Time for update pybullet = ",  t_end)
 
         return 0
 
@@ -118,8 +118,8 @@ class PybVisualizationTraj():
             -  all_feet_pos : list of optimized position such as : [[Foot 1 next_pos, None , Foot1 next_pos] , [Foot 2 next_pos, None , Foot2 next_pos] ]
         '''
 
-        for i in range (6) :
-            for j in range(4) :
+        for i in range(len(all_feet_pos[0])) :
+            for j in range(len(all_feet_pos)) :
                 if all_feet_pos[j][i] is None : 
                     pyb.resetBasePositionAndOrientation(int(self.sl1m_Ids_target[i, j]),
                                                                     posObj=np.array([0., 0., -0.5]),

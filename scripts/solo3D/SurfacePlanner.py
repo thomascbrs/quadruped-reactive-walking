@@ -53,11 +53,10 @@ class SurfacePlanner:
 
         # Potential surfaces for QP planner
         self.potential_surfaces = []
-        # For now, floor_surface is hard defined in wrapper, multiprocessing makes it impossible to retrieve it from here 
+        # For now, floor_surface is hard defined in wrapper, multiprocessing makes it impossible to retrieve it from here
         # floor_object = 'environment/floor_0aff0_0'
         # floor_inequality = convert_surface_to_inequality(np.array(self.all_surfaces.get(floor_object)[0]).T , True)
         # self.floor_surface = SurfaceData( floor_inequality[0] , floor_inequality[1] ,  np.array(self.all_surfaces.get('environment/floor_0aff0_0')[0]) )
-
 
     def compute_gait(self, gait_in):
         """
@@ -78,16 +77,15 @@ class SurfacePlanner:
 
     def compute_step_length(self, o_v_ref):
         """
-        Get a gait matrix with only one line per phase
-        :param gait_in: gait matrix with several line per phase
-        :return: gait matrix
+        Compute the step_length used for the cost
+        :param o_v_ref: desired velocity
+        :return: desired step_length
         """
         # TODO: Divide by number of phases in gait
         # step_length = o_v_ref * self.T_gait/4
         step_length = o_v_ref * self.T_gait/2
 
         return np.array([step_length[i][0] for i in range(2)])
-    
 
     def get_potential_surfaces(self, configs, gait):
         """
@@ -133,30 +131,33 @@ class SurfacePlanner:
         """
         t0 = clock()
 
-        R = [pin.XYZQUATToSE3(np.array(config)).rotation for config in configs]        
+        R = [pin.XYZQUATToSE3(np.array(config)).rotation for config in configs]
 
         gait = self.compute_gait(gait_in)
 
-        step_length = self.compute_step_length(o_v_ref)        
+        step_length = self.compute_step_length(o_v_ref)
+        print(step_length)
 
-        surfaces = self.get_potential_surfaces(configs, gait)        
+        surfaces = self.get_potential_surfaces(configs, gait)
 
         initial_contacts = [current_contacts[:, i].tolist() for i in range(4)]
 
+        print(current_contacts)
+
         pb = Problem(limb_names=limbs, other_names=others, constraint_paths=paths)
-        pb.generate_problem(R, surfaces, gait, initial_contacts,c0 = None ,  com=False)
+        pb.generate_problem(R, surfaces, gait, initial_contacts, c0=None,  com=False)
 
         # The first phase correspond to the configuration the robot will be on the next step
         # RBPRM gives the available contact for this next configuration
         # All potential surfaces will be usefull if SL1M does not converged --> switch to heuristic, need potential surfaces around
-        # The computation of the surface equation is already done in generation of the problem phaseData    
-        
+        # The computation of the surface equation is already done in generation of the problem phaseData
+
         coms_cost = []
-        for config in configs : 
+        for config in configs:
             coms_cost.append(config[:3])
 
-        costs = {"step_size": [1.0, step_length] }
-        pb_data = solve_MIP(pb, costs=costs ,com=False)
+        costs = {"step_size": [1.0, step_length]}
+        pb_data = solve_MIP(pb, costs=costs, com=False)
 
         if pb_data.success:
             surface_indices = pb_data.surface_indices
@@ -164,16 +165,14 @@ class SurfacePlanner:
             selected_surfaces = []
             for foot, index in enumerate(surface_indices[0]):
                 selected_surfaces.append(surfaces[0][foot][index])
-                                        
-            t1 = clock()
-            print("Run took ", 1000. * (t1-t0))        
 
-            return  surfaces , pb.phaseData , surface_indices  , pb_data.all_feet_pos , True
+            t1 = clock()
+            print("Run took ", 1000. * (t1-t0))
+
+            return surfaces, pb.phaseData, surface_indices, pb_data.all_feet_pos, True
 
         else:
+            print("The MIP problem did NOT converge")
             # TODO what if the problem did not converge ???
 
-            return surfaces , pb.phaseData , None , None , False
-
-
-
+            return surfaces, pb.phaseData, None, None, False
