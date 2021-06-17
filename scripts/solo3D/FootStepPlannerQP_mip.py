@@ -11,6 +11,12 @@ from sl1m.constants_and_tools import default_transform_from_pos_normal
 from scipy.spatial import Delaunay
 import hppfcl
 
+from time import perf_counter as clock
+from solo3D.tools.ProfileWrapper import ProfileWrapper
+
+
+# Store the results from cprofile
+profileWrap = ProfileWrapper()
 
 class FootStepPlannerQP_mip:
     ''' Python class to compute the target foot step and the ref state using QP optimisation 
@@ -105,6 +111,10 @@ class FootStepPlannerQP_mip:
 
         # Store surface selected for the current swing phase
         self.surface_selected = [self.surfacePlanner.floor_surface] * 4
+
+        # Store timings of the loop
+        # [whole loop , convert_inequalities , res_qp , update new fstep ]
+        self.timings = np.zeros(4)    
 
     def update_remaining_time(self):
 
@@ -401,11 +411,22 @@ class FootStepPlannerQP_mip:
 
             i += 1
 
+        t0 = clock()
+
         # Convert Problem to inequality matrix
         ineqMatrix, ineqVector = self.convert_pb_inequalities(L)
 
+        t1 = clock()
+        self.timings[1] = 1000*(t1-t0)
+
+        t0 = clock()
         # Solve QP problem
         res = self.solve_qp(ineqMatrix, ineqVector, o_vref)
+        t1 = clock()
+        self.timings[2] = 1000*(t1-t0)
+
+
+        t0 = clock()
 
         # Store the value for getRefState
         self.o_vref_qp = o_vref.copy()
@@ -443,6 +464,9 @@ class FootStepPlannerQP_mip:
                 if gait[i-1, j]*gait[i, j] > 0:
                     self.footsteps[i][:, j] = self.footsteps[i-1][:, j]
             i += 1
+
+        t1 = clock()
+        self.timings[3] = 1000*(t1-t0)
 
         return 0
 
@@ -488,6 +512,8 @@ class FootStepPlannerQP_mip:
 
         return nextFootstep
 
+    
+    @profileWrap.profile
     def computeTargetFootstep(self, k, q, v, b_vref):
         ''' 
         Params : 
@@ -495,6 +521,8 @@ class FootStepPlannerQP_mip:
         - v (6x1) : v in world frame (lin + ang)
         - b_vref (6x1) : b_vref in base frame (Yaw rotated)
         '''
+        t0 = clock()
+
         self.k = k
 
         # pio : (x,y,z,w) , pybullet same
@@ -525,6 +553,9 @@ class FootStepPlannerQP_mip:
 
         for index, footstep in enumerate(self.footsteps):
             self.fsteps[index, :] = np.reshape(footstep, 12, order='F')
+
+        t1 = clock()
+        self.timings[0] = 1000*(t1 - t0)
 
         return self.getTargetFootsteps()
 
@@ -564,3 +595,12 @@ class FootStepPlannerQP_mip:
 
     def getVref_QP(self):
         return self.o_vref_qp
+
+    def print_profile(self , output_file):
+        ''' Print the profile computed with cProfile
+        Args : 
+        - output_file (str) :  file name
+        '''
+        profileWrap.print_stats(output_file)
+        
+        return  0

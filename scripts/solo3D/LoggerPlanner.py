@@ -68,6 +68,10 @@ class LoggerPlanner:
         self.data = robot.data.copy()  # for velocity estimation (forward kinematics)
         self.model = robot.model.copy()  # for velocity estimation (forward kinematics)
 
+
+        # Load timings
+        self.timings_qp = np.zeros( (self.N_SIMULATION , 4 ))
+        self.timings_bezier = np.zeros( (self.N_SIMULATION , 4 ))
         
      
 
@@ -132,12 +136,40 @@ class LoggerPlanner:
         self.b_vref[k,:] = b_vref[:,0]
         
         return 0
+    
+    def log_timing(self ,k, timings_qp , timings_bezier) :
+        """ Log the timings of the FoostepPlanner and curve planner
+        Args :
+        - timings_qp (array) : Array containing the results for [whole loop , convert_inequalities , res_qp , update new fstep ]
+        - timings_bezier (array) : Array containing the results for [ ]
+        """
+
+        self.timings_qp[k,:] = timings_qp
+        self.timings_qp[k,:] = timings_qp
+
+        return 0
 
 
     def log_mpc(self, k , x_f_mpc) :
         
         if (k % self.k_mpc) == 0 : 
             self.mpc_x_f[int(k/self.k_mpc), : , :] = x_f_mpc
+
+        return 0
+
+    def plot_log_planner(self) :
+        ''' Call the function to plot
+        '''
+        from matplotlib import pyplot as plt
+
+        # self.plot_ref_state()
+        # self.plot_MPC_pred()
+        # self.plot_feet()
+        self.plot_timings()
+
+
+        # Display graphs
+        plt.show(block=True)
 
         return 0
     
@@ -172,11 +204,8 @@ class LoggerPlanner:
                 plt.ylabel(lgd[i])
 
         plt.suptitle("FR foot trajectory ")
-        self.plot_ref_state()
-        self.plot_MPC_pred()
-
-        # Display graphs
-        plt.show(block=True)
+        
+        return 0
 
     def plot_ref_state(self):
         from matplotlib import pyplot as plt
@@ -267,6 +296,27 @@ class LoggerPlanner:
             plt.title("Predicted trajectory for velocity in " + titles[j])
         plt.suptitle("Analysis of trajectories of linear and angular velocities computed by the MPC")
 
+
+
+        return 0
+    
+    def plot_timings(self) :
+
+
+        from matplotlib import pyplot as plt
+
+        plt.figure()
+        h1, = plt.plot( self.timings_qp[:,0], "x", linewidth=2, color='k')
+
+        h2, = plt.plot( self.timings_qp[:,1], "x", linewidth=2, color='b')
+
+        h3, = plt.plot( self.timings_qp[:,2], "x", linewidth=2, color='r')
+
+        h4, = plt.plot( self.timings_qp[:,3], "x", linewidth=2, color='g')
+
+
+        plt.legend([h1, h2, h3,h4], ["Whole QP loop",
+                                      "convert_pb_to_ineq", "res qp" , "update fsteps"])
 
 
         return 0

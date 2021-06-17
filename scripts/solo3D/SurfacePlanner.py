@@ -16,6 +16,12 @@ from hpp.gepetto import ViewerFactory
 
 import time
 
+from solo3D.tools.ProfileWrapper import ProfileWrapper
+
+# Store the results from cprofile
+profileWrap = ProfileWrapper()
+
+
 # --------------------------------- PROBLEM DEFINITION ---------------------------------------------------------------
 
 paths = [os.environ["INSTALL_HPP_DIR"] + "/solo-rbprm/com_inequalities/feet_quasi_flat/",
@@ -120,6 +126,7 @@ class SurfacePlanner:
 
         return surfaces_list
 
+    @profileWrap.profile
     def run(self, configs, gait_in, current_contacts, o_v_ref):
         """
         Select the nex surfaces to use
@@ -176,3 +183,12 @@ class SurfacePlanner:
             # TODO what if the problem did not converge ???
 
             return surfaces, pb.phaseData, None, None, False
+
+    def print_profile(self , output_file):
+        ''' Print the profile computed with cProfile
+        Args : 
+        - output_file (str) :  file name
+        '''
+        profileWrap.print_stats(output_file)
+        
+        return  0

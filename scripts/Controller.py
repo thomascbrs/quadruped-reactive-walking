@@ -2,6 +2,7 @@
 import numpy as np
 import utils_mpc
 import time
+from time import perf_counter as clock
 
 from QP_WBC import wbc_controller
 import MPC_Wrapper
@@ -20,8 +21,10 @@ from solo3D.SurfacePlannerWrapper import SurfacePlanner_Wrapper
 
 from solo3D.tools.vizualization import PybVisualizationTraj
 
-ENV_URDF = "/local/users/frisbourg/install/share/hpp_environments/urdf/Solo3D/object1.urdf"
 
+
+
+ENV_URDF = "/home/thomas_cbrs/install/share/hpp_environments/urdf/Solo3D/object1.urdf"
 
 class Result:
     """Object to store the result of the control loop
@@ -298,7 +301,8 @@ class Controller:
         # Compute target footstep based on current and reference velocities
         self.statePlanner.computeReferenceStates(self.q[0:7, 0:1], self.v[0:6, 0:1].copy(), o_v_ref, 0.0, new_step)
         xref = self.statePlanner.getReferenceStates()
-
+        
+        
         targetFootstep = self.footStepPlannerQP.computeTargetFootstep(self.k, self.q[0:7, 0:1], self.v[0:6, 0:1].copy(), o_v_ref)
         fsteps = self.footStepPlannerQP.getFootsteps()
 
@@ -375,6 +379,7 @@ class Controller:
                                     self.footTrajectoryGenerator.getFootAcceleration(), targetFootstep,
                                     self.q, self.v)
         self.loggerPlanner.log_state(self.k, self.q[:7], self.v[:6], o_v_ref, self.joystick.v_ref[0:6, 0:1], oMb.rotation,  xref)
+        self.loggerPlanner.log_timing(self.k , self.footStepPlannerQP.timings , np.zeros(4))
 
         # Increment loop counter
         self.k += 1

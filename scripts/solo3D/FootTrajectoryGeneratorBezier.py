@@ -16,7 +16,10 @@ from ndcurves.optimization import constraint_flag
 import pybullet as pyb
 import pinocchio as pin
 from example_robot_data import load
+from solo3D.tools.ProfileWrapper import ProfileWrapper
 
+# Store the results from cprofile
+profileWrap = ProfileWrapper()
 
 class FootTrajectoryGeneratorBezier:
 
@@ -481,6 +484,7 @@ class FootTrajectoryGeneratorBezier:
 
         return 0
 
+    @profileWrap.profile
     def update(self, k, targetFootstep, device, q_filt, v_filt):
 
         gait = self.gait.getCurrentGait()
@@ -670,3 +674,13 @@ class FootTrajectoryGeneratorBezier:
 
         else:
             return np.array([0., 0., 0.])
+
+    def print_profile(self , output_file):
+        ''' Print the profile computed with cProfile
+        Args : 
+        - output_file (str) :  file name
+        '''
+        profileWrap.print_stats(output_file)
+        
+        return  0
+
