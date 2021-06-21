@@ -20,9 +20,10 @@ from solo3D.LoggerPlanner import LoggerPlanner
 from solo3D.SurfacePlannerWrapper import SurfacePlanner_Wrapper
 
 from solo3D.tools.vizualization import PybVisualizationTraj
+from example_robot_data import load
 
-
-
+from solo3D.tools.geometry import inertiaTranslation 
+from time import perf_counter as clock
 
 ENV_URDF = "/home/thomas_cbrs/install/share/hpp_environments/urdf/Solo3D/object1.urdf"
 
@@ -209,6 +210,12 @@ class Controller:
         self.footTrajectoryGenerator = FootTrajectoryGeneratorBezier(T_gait, dt_wbc, k_mpc,  self.fsteps_init, self.gait, self.footStepPlannerQP, self.heightMap)
         self.statePlanner = StatePlanner(dt_mpc, T_mpc, self.h_ref, self.heightMap, n_surface_configs, T_gait)
 
+        # pinocchio model and data, CoM and Inertia estimation for MPC
+        robot = load('solo12')
+        self.data = robot.data.copy()  # for velocity estimation (forward kinematics)
+        self.model = robot.model.copy()  # for velocity estimation (forward kinematics)
+        self.q_neutral = pin.neutral(self.model).reshape((19,1)) # column vector
+
         # Pybullet Trajectory
         self.pybVisualizationTraj = PybVisualizationTraj(self.gait, self.footStepPlannerQP, self.statePlanner,  self.footTrajectoryGenerator, enable_pyb_GUI, ENV_URDF)
 
@@ -318,8 +325,22 @@ class Controller:
 
         # Process MPC once every k_mpc iterations of TSID
         if (self.k % self.k_mpc) == 0:
-            try:
-                self.mpc_wrapper.solve(self.k, xref, fsteps, cgait)
+            try:   
+                # Take into account only the leg configuration :
+                self.q_neutral[7:,:] = self.q[7:,:]
+                # Inertia matrix is computed in c = (0,0,0) with ccrba (frame of the body_0)
+                pin.ccrba(self.model, self.data, self.q_neutral, self.v)      
+                # Position of CoM in frame body_0 
+                CoM_offset = pin.centerOfMass(self.model, self.data, self.q_neutral).reshape((3,1))
+                # Compute the inertia matrix in CoM frame (body_0 expressed in CoM frame --> -CoM_offset )
+                inertia_CoM = inertiaTranslation(self.data.Ig.inertia , -CoM_offset , 2.5)
+                # xref is given for the position of body_0, apply offset for CoM 
+                xref_CoM = xref.copy()
+                xref_CoM[:3,:] +=  CoM_offset
+                # Update inertia matrix of MPC
+                self.mpc_wrapper.mpc.I = inertia_CoM
+                self.mpc_wrapper.solve(self.k, xref_CoM, fsteps, cgait)
+                
             except ValueError:
                 print("MPC Problem")
 
@@ -333,7 +354,7 @@ class Controller:
         self.x_f_wbc[0] = self.q_estim[0, 0]
         self.x_f_wbc[1] = self.q_estim[1, 0]
         # Get Z value using next xref
-        self.x_f_wbc[2] = - (self.dt_mpc - self.dt_wbc) * (xref[2, 2] - xref[2, 1])/self.dt_mpc + xref[2, 1]
+        self.x_f_wbc[2] = - (self.dt_mpc - self.dt_wbc) * (xref[2, 2] - xref[2, 1])/self.dt_mpc + xref[2, 1] 
         self.x_f_wbc[3] = - (self.dt_mpc - self.dt_wbc) * (xref[3, 2] - xref[3, 1])/self.dt_mpc + xref[3, 1]
         self.x_f_wbc[4] = - (self.dt_mpc - self.dt_wbc) * (xref[4, 2] - xref[4, 1])/self.dt_mpc + xref[4, 1]
         self.x_f_wbc[5] = self.yaw_estim
