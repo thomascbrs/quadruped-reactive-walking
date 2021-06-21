@@ -21,12 +21,12 @@ MPC::MPC(double dt_in, int n_steps_in, double T_gait_in, int N_gait) {
 
   // Predefined matrices
   footholds << 0.19, 0.19, -0.19, -0.19, 0.15005, -0.15005, 0.15005, -0.15005, 0.0, 0.0, 0.0, 0.0;
-  // gI << 3.09249e-2, -8.00101e-7, 1.865287e-5, -8.00101e-7, 5.106100e-2, 1.245813e-4, 1.865287e-5, 1.245813e-4,
-  //     6.939757e-2;
-  
-  gI <<  0.0292009 , 4.73423e-05 ,-0.00281861,
-        4.73423e-05   ,0.0663418 ,0.000141427,
-        -0.00281861 ,0.000141427  , 0.0831595 ;
+  gI << 3.09249e-2, -8.00101e-7, 1.865287e-5, -8.00101e-7, 5.106100e-2, 1.245813e-4, 1.865287e-5, 1.245813e-4,
+      6.939757e-2;
+
+  // gI <<  0.0292009 , 4.73423e-05 ,-0.00281861,
+  //       4.73423e-05   ,0.0663418 ,0.000141427,
+  //       -0.00281861 ,0.000141427  , 0.0831595 ;
 
   q << 0.0f, 0.0f, 0.2027682f, 0.0f, 0.0f, 0.0f;
   h_ref = q(2, 0);
@@ -331,7 +331,7 @@ int MPC::create_weight_matrices() {
   // Hand-tuning of parameters if you want to give more weight to specific components
   // double w[12] = {10.0f, 10.0f, 1.0f, 1.0f, 1.0f, 10.0f};
   // double w[12] = {2.0f, 2.0f, 20.0f, 0.25f, 0.25f, 10.0f, 0.2f, 0.2f, 0.2f, 0.0f, 0.0f, 0.3f};
-  double w[12] = {5.0f, 2.0f, 15.0f, 0.4f, 1.f, 0.5f, 10.f, 2.f, 10.f, 0.03f, 0.1f, 0.3f};
+  double w[12] = {2.0f, 2.0f, 150.0f, 0.25f, 0.25f, 5.f, 10.f, 0.2f, 10.f, 0.02f, 0.02f, 0.3f};
 
   /*w[6] = 2.0f * sqrt(w[0]);
   w[7] = 2.0f * sqrt(w[1]);
@@ -781,4 +781,12 @@ Eigen::MatrixXd MPC::get_Sgait() {
   Eigen::MatrixXd tmp;
   tmp = S_gait.cast<double>();
   return tmp;
+}
+
+Eigen::Matrix<double,3,3> MPC::get_I() {
+  return gI;
+}
+
+void MPC::set_I(Eigen::Matrix<double,3,3> inertia){
+  gI = inertia;
 }

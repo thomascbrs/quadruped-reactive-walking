@@ -122,6 +122,9 @@ class MPC {
 
   // Bindings
   void run_python(const matXd &xref_py, const matXd &fsteps_py);
+  // Binding for inertia matrix :
+  Eigen::Matrix<double, 3, 3> get_I();
+  void set_I(Eigen::Matrix<double, 3, 3>);
 
   // Eigen::Matrix<double, 12, 12> getA() { return A; }
   // Eigen::MatrixXf getML() { return ML; }
