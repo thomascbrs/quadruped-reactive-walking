@@ -29,7 +29,10 @@ struct MPCPythonVisitor : public bp::def_visitor<MPCPythonVisitor<MPC>>
             .def("get_latest_result", &MPC::get_latest_result,
                  "Get latest result (predicted trajectory  forces to apply).\n")
             .def("get_gait", &MPC::get_gait, "Get gait matrix.\n")
-            .def("get_Sgait", &MPC::get_Sgait, "Get S_gait matrix.\n");
+            .def("get_Sgait", &MPC::get_Sgait, "Get S_gait matrix.\n")
+            .add_property("I" , 
+                          bp::make_function(&MPC::get_I , bp::return_value_policy<bp::return_by_value>()) , 
+                          bp::make_function(&MPC::set_I ) , "Inertia matrix \n");
     }
 
     static void expose()
