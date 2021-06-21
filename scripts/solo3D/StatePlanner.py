@@ -53,9 +53,6 @@ class StatePlanner():
         self.referenceStates[6:9, 0] = v[:3, 0]
         self.referenceStates[9:12, 0] = v[3:6, 0]
 
-        self.referenceStates[:3,0] += pin.rpy.rpyToMatrix(RPY).dot(np.array([-0.04,0.,0.])) 
-
-
         for i in range(1, self.n_steps + 1):
             # Displacement following the reference velocity compared to current position
             if o_vref[5,0] < 10e-3 : 
