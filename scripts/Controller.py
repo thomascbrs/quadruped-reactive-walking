@@ -22,9 +22,7 @@ from solo3D.SurfacePlannerWrapper import SurfacePlanner_Wrapper
 from solo3D.tools.vizualization import PybVisualizationTraj
 
 
-
-
-ENV_URDF = "/home/thomas_cbrs/install/share/hpp_environments/urdf/Solo3D/object1.urdf"
+ENV_URDF = "/local/users/frisbourg/install/share/hpp_environments/urdf/Solo3D/stairs_rotation.urdf"
 
 class Result:
     """Object to store the result of the control loop
@@ -125,7 +123,7 @@ class Controller:
         # Enable/Disable hybrid control
         self.enable_hybrid_control = True
 
-        self.h_ref = self.h_init
+        self.h_ref = 0.241
         self.q = np.zeros((19, 1))
         self.q[0:7, 0] = np.array([0.0, 0.0, self.h_ref, 0.0, 0.0, 0.0, 1.0])
         self.q[7:, 0] = q_init
@@ -198,8 +196,8 @@ class Controller:
         dDevice.b_baseVel = np.zeros(3)
 
         # Load Heightmap, select stairs
-        object_stair = 1
-        surface_margin = 0.001
+        object_stair = 5
+        surface_margin = 0.05
         self.heightMap = HeightMap(object_stair, surface_margin)
 
         # Solo3D python class

@@ -317,7 +317,7 @@ def control_loop(name_interface, name_interface_clone=None):
         print(controller.error_value)
 
     # Print timing from cprofile
-    output_folder = "/home/thomas_cbrs/Desktop/edin/quadruped-reactive-walking/scripts/solo3D/tools/profile_results/"
+    output_folder = "/home/frisbourg/Bureau/"
     controller.footStepPlannerQP.print_profile(output_folder + "footStepPlanner.prof")
     controller.footTrajectoryGenerator.print_profile(output_folder + "bezier.prof")
     controller.surfacePlanner.surfacePlanner.print_profile(output_folder + "surfacePlanner.prof")

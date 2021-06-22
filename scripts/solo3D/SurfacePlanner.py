@@ -51,12 +51,18 @@ class SurfacePlanner:
         self.afftool = AffordanceTool()
         self.afftool.setAffordanceConfig('Support', [0.5, 0.03, 0.00005])
 
-        self.afftool.loadObstacleModel(environment_URDF, "environment", self.vf, reduceSizes=[0.05, 0., 0.])
+        self.afftool.loadObstacleModel(environment_URDF, "environment", self.vf, reduceSizes=[0.01, 0., 0.])
         self.ps.selectPathValidation("RbprmPathValidation", 0.05)
 
         self.all_surfaces = getAllSurfacesDict(self.afftool)
 
         self.potential_surfaces = []
+
+        self.pb = Problem(limb_names=limbs, other_names=others, constraint_paths=paths)
+
+        plot.draw_whole_scene(self.all_surfaces)
+        plt.show()
+
 
     def compute_gait(self, gait_in):
         """
@@ -146,15 +152,14 @@ class SurfacePlanner:
 
         initial_contacts = [current_contacts[:, i].tolist() for i in range(4)]
 
-        pb = Problem(limb_names=limbs, other_names=others, constraint_paths=paths)
-        pb.generate_problem(R, surfaces, gait, initial_contacts, c0=None,  com=False)
+        self.pb.generate_problem(R, surfaces, gait, initial_contacts, c0=None,  com=False)
 
         if empty_list:
             print("Surface planner: one step has no potential surface to use.")
-            return surfaces, pb.phaseData, None, None, False
+            return surfaces, self.pb.phaseData, None, None, False
 
         costs = {"step_size": [10.0, step_length]}
-        pb_data = solve_MIP(pb, costs=costs, com=False)
+        pb_data = solve_MIP(self.pb, costs=costs, com=False)
 
         if pb_data.success:
             surface_indices = pb_data.surface_indices
@@ -166,13 +171,10 @@ class SurfacePlanner:
             t1 = clock()
             print("Run took ", 1000. * (t1-t0))
 
-            return surfaces, pb.phaseData, surface_indices, pb_data.all_feet_pos, True
+            return surfaces, self.pb.phaseData, surface_indices, pb_data.all_feet_pos, True
 
         else:
             ax = plot.draw_whole_scene(self.all_surfaces)
-
-            plot.draw_surface(surfaces[0][0], pb.phaseData[0].moving[0], ax=ax)
-            plot.draw_surface(surfaces[0][1], pb.phaseData[0].moving[1], ax=ax)
             plot.plot_initial_contacts(initial_contacts, ax=ax)
             plt.show()
 

@@ -34,7 +34,7 @@ class PybVisualizationTraj():
         self.refresh = 1
 
         # Stair object to load
-        self.object_stair = 1
+        self.object_stair = 5
 
         # Objects for constraints
         self.constraints_objects = [0]*4
