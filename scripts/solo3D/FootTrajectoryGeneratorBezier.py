@@ -23,7 +23,7 @@ profileWrap = ProfileWrapper()
 
 class FootTrajectoryGeneratorBezier:
 
-    def __init__(self, T_gait, dt_tsid, k_mpc, fsteps_init, gait, footStepPlannerQP, heightMap):
+    def __init__(self, T_gait, dt_tsid, k_mpc, fsteps_init, gait, footStepPlannerQP):
 
         self.T_gait = T_gait
         self.dt_wbc = dt_tsid
@@ -64,11 +64,7 @@ class FootTrajectoryGeneratorBezier:
         self.Ay_s = np.zeros((6, 4))
         self.Az_s = np.zeros((7, 4))
 
-        # heightMap
-        self.heightMap = heightMap
-
         # Bezier parameters
-
         # dimension of our problem (here 3 as our curve is 3D)
         self.N_int = 15  # Number of points in the least square problem
         self.dim = 3

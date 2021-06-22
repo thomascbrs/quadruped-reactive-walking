@@ -23,7 +23,7 @@ class FootStepPlannerQP_mip:
     to avoid edges of surface.
     '''
 
-    def __init__(self, dt, dt_wbc, T_gait, h_ref, k_mpc, gait, N_gait, heightMap, surfacePlanner):
+    def __init__(self, dt, dt_wbc, T_gait, h_ref, k_mpc, gait, N_gait, surfacePlanner):
 
         # Time step of the contact sequence
         self.dt = dt  # dt mpc
@@ -43,10 +43,7 @@ class FootStepPlannerQP_mip:
         self.k_feedback = 0.03
         self.g = 9.81
         self.L = 0.155
-
-        # heightMap
-        self.heightMap = heightMap
-
+        
         # Coefficients QP
         self.weight_vref = 0.06
         self.weight_alpha = 1.

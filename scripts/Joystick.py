@@ -224,7 +224,7 @@ class Joystick:
                                                 0.0, 0.0, 0.0, 0.0, 0.3, 0.3, 0.0, 0.0,
                                                 -0.3, 0.0])
         elif velID == 2:
-            self.k_switch = np.array([0, 400, 1200, 30000])
+            self.k_switch = np.array([0, 400, 1500, 30000])
             self.v_switch = np.array([[0.0, 0.25, 0.25, 0.0],
                                       [0.0, 0.0, 0.0, 0.0],
                                       [0.0, 0.0, 0.0, 0.0],
@@ -233,7 +233,6 @@ class Joystick:
                                       [0.0, -0., -0.22, 0.0]])
 
         self.handle_v_switch(k_loop)
-        return 0
 
     def update_v_ref_multi_simu(self, k_loop):
         """Update the reference velocity of the robot along X, Y and Yaw in local frame

@@ -149,7 +149,6 @@ class PybVisualizationTraj():
                                                 ornObj=quat)
 
         # Update surface :
-
         a, b, c = self.statePlanner.surface_equation
         pos = self.statePlanner.surface_point
 

@@ -14,7 +14,6 @@ import libquadruped_reactive_walking as lqrw
 # from solo3D.FootStepPlannerQP import FootStepPlannerQP
 from solo3D.FootStepPlannerQP_mip import FootStepPlannerQP_mip
 from solo3D.FootTrajectoryGeneratorBezier import FootTrajectoryGeneratorBezier
-from solo3D.tools.HeightMap import HeightMap
 from solo3D.StatePlanner import StatePlanner
 from solo3D.LoggerPlanner import LoggerPlanner
 from solo3D.SurfacePlannerWrapper import SurfacePlanner_Wrapper
@@ -23,6 +22,8 @@ from solo3D.tools.vizualization import PybVisualizationTraj
 
 
 ENV_URDF = "/local/users/frisbourg/install/share/hpp_environments/urdf/Solo3D/stairs_rotation.urdf"
+HEIGHTMAP = "/local/users/frisbourg/install/share/hpp_environments/heightmaps/Solo3D/stairs_rotation.pickle"
+
 
 class Result:
     """Object to store the result of the control loop
@@ -123,7 +124,7 @@ class Controller:
         # Enable/Disable hybrid control
         self.enable_hybrid_control = True
 
-        self.h_ref = 0.241
+        self.h_ref = self.h_init
         self.q = np.zeros((19, 1))
         self.q[0:7, 0] = np.array([0.0, 0.0, self.h_ref, 0.0, 0.0, 0.0, 1.0])
         self.q[7:, 0] = q_init
@@ -195,17 +196,12 @@ class Controller:
         dDevice.dummyPos = np.array([0.0, 0.0, q_init[2]])
         dDevice.b_baseVel = np.zeros(3)
 
-        # Load Heightmap, select stairs
-        object_stair = 5
-        surface_margin = 0.05
-        self.heightMap = HeightMap(object_stair, surface_margin)
-
         # Solo3D python class
         n_surface_configs = 3
         self.surfacePlanner = SurfacePlanner_Wrapper(ENV_URDF, T_gait, N_gait, n_surface_configs)
-        self.footStepPlannerQP = FootStepPlannerQP_mip(dt_mpc, dt_wbc, T_gait, self.h_ref, k_mpc, self.gait, N_gait, self.heightMap, self.surfacePlanner)
-        self.footTrajectoryGenerator = FootTrajectoryGeneratorBezier(T_gait, dt_wbc, k_mpc,  self.fsteps_init, self.gait, self.footStepPlannerQP, self.heightMap)
-        self.statePlanner = StatePlanner(dt_mpc, T_mpc, self.h_ref, self.heightMap, n_surface_configs, T_gait)
+        self.footStepPlannerQP = FootStepPlannerQP_mip(dt_mpc, dt_wbc, T_gait, self.h_ref, k_mpc, self.gait, N_gait, self.surfacePlanner)
+        self.footTrajectoryGenerator = FootTrajectoryGeneratorBezier(T_gait, dt_wbc, k_mpc,  self.fsteps_init, self.gait, self.footStepPlannerQP)
+        self.statePlanner = StatePlanner(dt_mpc, T_mpc, self.h_ref, HEIGHTMAP, n_surface_configs, T_gait)
 
         # Pybullet Trajectory
         self.pybVisualizationTraj = PybVisualizationTraj(self.gait, self.footStepPlannerQP, self.statePlanner,  self.footTrajectoryGenerator, enable_pyb_GUI, ENV_URDF)
@@ -294,13 +290,10 @@ class Controller:
             else:
                 self.surfacePlanner.update_latest_results()
 
-        self.statePlanner.computeSurfaceHeightMap(self.q[0:3, 0:1])
-
         # Compute target footstep based on current and reference velocities
         self.statePlanner.computeReferenceStates(self.q[0:7, 0:1], self.v[0:6, 0:1].copy(), o_v_ref, 0.0, new_step)
         xref = self.statePlanner.getReferenceStates()
-        
-        
+
         targetFootstep = self.footStepPlannerQP.computeTargetFootstep(self.k, self.q[0:7, 0:1], self.v[0:6, 0:1].copy(), o_v_ref)
         fsteps = self.footStepPlannerQP.getFootsteps()
 
@@ -377,7 +370,7 @@ class Controller:
                                     self.footTrajectoryGenerator.getFootAcceleration(), targetFootstep,
                                     self.q, self.v)
         self.loggerPlanner.log_state(self.k, self.q[:7], self.v[:6], o_v_ref, self.joystick.v_ref[0:6, 0:1], oMb.rotation,  xref)
-        self.loggerPlanner.log_timing(self.k , self.footStepPlannerQP.timings , np.zeros(4))
+        self.loggerPlanner.log_timing(self.k, self.footStepPlannerQP.timings, np.zeros(4))
 
         # Increment loop counter
         self.k += 1

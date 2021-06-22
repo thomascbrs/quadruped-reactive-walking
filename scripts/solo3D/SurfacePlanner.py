@@ -51,7 +51,7 @@ class SurfacePlanner:
         self.afftool = AffordanceTool()
         self.afftool.setAffordanceConfig('Support', [0.5, 0.03, 0.00005])
 
-        self.afftool.loadObstacleModel(environment_URDF, "environment", self.vf, reduceSizes=[0.01, 0., 0.])
+        self.afftool.loadObstacleModel(environment_URDF, "environment", self.vf, reduceSizes=[0.07, 0., 0.])
         self.ps.selectPathValidation("RbprmPathValidation", 0.05)
 
         self.all_surfaces = getAllSurfacesDict(self.afftool)
@@ -59,9 +59,6 @@ class SurfacePlanner:
         self.potential_surfaces = []
 
         self.pb = Problem(limb_names=limbs, other_names=others, constraint_paths=paths)
-
-        plot.draw_whole_scene(self.all_surfaces)
-        plt.show()
 
 
     def compute_gait(self, gait_in):
@@ -176,12 +173,14 @@ class SurfacePlanner:
         else:
             ax = plot.draw_whole_scene(self.all_surfaces)
             plot.plot_initial_contacts(initial_contacts, ax=ax)
+            ax.scatter([c[0] for c in configs], [c[1] for c in configs], [c[2] for c in configs], marker='o', linewidth=5)
+            ax.plot([c[0] for c in configs], [c[1] for c in configs], [c[2] for c in configs])            
             plt.show()
 
             print("The MIP problem did NOT converge")
             # TODO what if the problem did not converge ???
 
-            return surfaces, pb.phaseData, None, None, False
+            return surfaces, self.pb.phaseData, None, None, False
 
     def print_profile(self, output_file):
         ''' Print the profile computed with cProfile
