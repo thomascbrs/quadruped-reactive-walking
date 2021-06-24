@@ -1,6 +1,6 @@
 import numpy as np
 import pinocchio as pin
-from solo3D.tools.optimisation import genCost, quadprog_solve_qp, to_least_square
+from solo3D.tools.optimisation import quadprog_solve_qp
 from solo3D.tools.collision_tool import fclObj_trimesh, simple_object, gjk
 import os
 
@@ -368,6 +368,9 @@ class FootStepPlannerQP_mip:
 
                     # Get future desired position of footsteps
                     nextFootstep = self.computeNextFootstep(i, j, b_vlin, b_vref, True)
+                    # print("nextFootstep : " , nextFootstep)
+                    # print("b_vlin : " , b_vlin)
+                    
 
                     # Get future desired position of footsteps without k_feedback
                     nextFootstep_qp = self.computeNextFootstep(i, j, b_vlin, b_vref, False)
@@ -376,6 +379,7 @@ class FootStepPlannerQP_mip:
                     RPY_tmp[2] = self.yaws[i-1]
                     Rz_tmp = pin.rpy.rpyToMatrix(RPY_tmp)
                     next_ft = Rz_tmp.dot(nextFootstep) + q_tmp + q_dxdy
+                    self.footsteps[i][:, j] = next_ft
                     next_ft_qp = Rz_tmp.dot(nextFootstep_qp) + q_tmp + q_dxdy
 
                     if j in self.feet and phase == 0:
@@ -415,6 +419,10 @@ class FootStepPlannerQP_mip:
 
         # Convert Problem to inequality matrix
         ineqMatrix, ineqVector = self.convert_pb_inequalities(L)
+
+        # np.set_printoptions(formatter={'float': lambda x: "{0:0.2f}".format(x)})
+        # print("ineqMatrix : \n" , ineqMatrix)
+        # print("ineqVector : \n" , ineqVector)
 
         t1 = clock()
         self.timings[1] = 1000*(t1-t0)
@@ -463,6 +471,7 @@ class FootStepPlannerQP_mip:
             for j in range(4):
                 if gait[i-1, j]*gait[i, j] > 0:
                     self.footsteps[i][:, j] = self.footsteps[i-1][:, j]
+                    # pass
             i += 1
 
         t1 = clock()
@@ -482,30 +491,34 @@ class FootStepPlannerQP_mip:
 
         t_stance = self.gait.getPhaseDuration(int(i), int(j), 1.0)  # 1.0 for stance phase
 
+        # print("t_stance : " , t_stance)
+
         # Add symmetry term
         nextFootstep = t_stance * 0.5 * b_vlin
+        nextFootstep[1] = 0
 
         # Add feedback term
+        nextFootstep += self.k_feedback * b_vlin
         if feedback_term:
-            nextFootstep += self.k_feedback * (b_vlin - b_vref[:3])
+            nextFootstep += - self.k_feedback * b_vref[:3]
 
         # Add centrifugal term
-        cross = self.cross3(b_vlin, b_vref[3:6])
-        nextFootstep += 0.5 * np.sqrt(self.h_ref / self.g) * cross[:, 0]
+        # cross = self.cross3(b_vlin, b_vref[3:6])
+        # nextFootstep += 0.5 * np.sqrt(self.h_ref / self.g) * cross[:, 0]
 
         # Legs have a limited length so the deviation has to be limited
-        nextFootstep[0] = min(self.nextFootstep[0, j], self.L)
-        nextFootstep[0] = max(self.nextFootstep[0, j], -self.L)
-        nextFootstep[1] = min(self.nextFootstep[1, j], self.L)
-        nextFootstep[1] = max(self.nextFootstep[1, j], -self.L)
+        nextFootstep[0] = min(nextFootstep[0], self.L)
+        nextFootstep[0] = max(nextFootstep[0], -self.L)
+        nextFootstep[1] = min(nextFootstep[1], self.L)
+        nextFootstep[1] = max(nextFootstep[1], -self.L)
 
         # Add shoulders
-        # self.nextFootstep[:,j] += self.shoulders[:,j]
+        nextFootstep += self.shoulders[:,j]
 
         # Taking into account Roll and Pitch (here base frame only takes yaw)
         RP = self.RPY.copy()
         RP[2] = 0.   # Remove Yaw, taking into account after
-        nextFootstep += pin.rpy.rpyToMatrix(RP).dot(self.shoulders[:, j])
+        # nextFootstep += pin.rpy.rpyToMatrix(RP).dot(self.shoulders[:, j])
 
         # Remove Z component (working on flat ground)
         nextFootstep[2] = 0.
@@ -539,8 +552,9 @@ class FootStepPlannerQP_mip:
 
         # vref in world frame
         o_vref = np.zeros((6, 1))
-        o_vref[:3, 0:1] = pin.rpy.rpyToMatrix(self.RPY_b).dot(b_vref[:3, 0:1])  # linear
-        o_vref[3:, 0:1] = pin.rpy.rpyToMatrix(self.RPY_b).dot(b_vref[3:7, 0:1])   # angular
+        o_vref = b_vref
+        # o_vref[:3, 0:1] = pin.rpy.rpyToMatrix(self.RPY_b).dot(b_vref[:3, 0:1])  # linear
+        # o_vref[3:, 0:1] = pin.rpy.rpyToMatrix(self.RPY_b).dot(b_vref[3:7, 0:1])   # angular
 
         # Compute the desired location of footsteps over the prediction horizon
         self.computeFootsteps(q, v, o_vref[:, 0:1])
