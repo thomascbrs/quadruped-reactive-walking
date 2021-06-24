@@ -86,13 +86,15 @@ class PybVisualizationTraj():
     def updateConstraints(self):
 
         gait = self.gait.getCurrentGait() 
-        footsteps = self.footStepPlannerQP.getFootstepsList()
+        fsteps =  self.footStepPlannerQP.getFootsteps()
+        footsteps = fsteps[0].reshape((3,4) , order ="F")
         
         feet = np.where(gait[0,:] == 1)[0]
+        
         for i in range(4):
             if i in feet :
                 pyb.resetBasePositionAndOrientation(int( self.constraints_objects[i]),
-                                                posObj=footsteps[0][:,i],
+                                                posObj=footsteps[:,i],
                                                 ornObj=np.array([0.0, 0.0, 0.0, 1.0]))           
 
             else :
@@ -166,7 +168,7 @@ class PybVisualizationTraj():
         '''
 
         gait = self.gait.getCurrentGait()
-        footsteps = self.footStepPlannerQP.getFootstepsList()
+        fsteps =  self.footStepPlannerQP.getFootsteps()
 
         for j in range(4):
 
@@ -179,12 +181,16 @@ class PybVisualizationTraj():
             init_pos = np.zeros(3)
 
             while gait[i, :].any():
+                footsteps = fsteps[i].reshape((3,4) , order ="F")
                 if i > 0:
                     if (1 - gait[i-1, j]) * gait[i, j] > 0:  # from flying phase to stance
 
+
+                        
+
                         # In any case plot target
                         pyb.resetBasePositionAndOrientation(int(self.ftps_Ids_target[c, j]),
-                                                            posObj=footsteps[i][:, j],
+                                                            posObj=footsteps[:, j],
                                                             ornObj=np.array([0.0, 0.0, 0.0, 1.0]))
                         if c == 0:
                             # Current flying phase, using coeff store in Bezier curve class
@@ -207,7 +213,7 @@ class PybVisualizationTraj():
                             t1 = self.gait.getPhaseDuration(i, j, 1.0)
                             t_vector = np.linspace(t0, t1, self.n_points)
 
-                            self.footTrajectoryGenerator.updatePolyCoeff_simple(j, init_pos, footsteps[i][:, j], t1)
+                            self.footTrajectoryGenerator.updatePolyCoeff_simple(j, init_pos, footsteps[:, j], t1)
                             for id_t, t in enumerate(t_vector):
                                 pos = self.footTrajectoryGenerator.evaluatePoly_simple(j, 0, t)
                                 pyb.resetBasePositionAndOrientation(int(self.trajectory_Ids[c, j, id_t]),
@@ -218,13 +224,14 @@ class PybVisualizationTraj():
 
                     if gait[i-1, j] * (1 - gait[i, j]) > 0:
                         # Starting a flying phase
-                        init_pos[:] = footsteps[i-1][:, j]
+                        footsteps_previous = fsteps[i-1].reshape((3,4) , order ="F")
+                        init_pos[:] = footsteps_previous[:, j]
 
                 else:
                     if gait[i, j] == 1:
                         # foot already on the ground
                         pyb.resetBasePositionAndOrientation(int(self.ftps_Ids_target[c, j]),
-                                                            posObj=footsteps[i][:, j],
+                                                            posObj=footsteps[:, j],
                                                             ornObj=np.array([0.0, 0.0, 0.0, 1.0]))
 
                         # not hidden in the floor, traj
