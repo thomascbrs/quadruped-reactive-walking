@@ -206,18 +206,31 @@ class Controller:
         # Solo3D python class
         n_surface_configs = 3
         self.surfacePlanner = SurfacePlanner_Wrapper(ENV_URDF, T_gait, N_gait, n_surface_configs)
-        self.footStepPlannerQP = FootStepPlannerQP_mip(dt_mpc, dt_wbc, T_gait, self.h_ref, k_mpc, self.gait, N_gait, self.heightMap, self.surfacePlanner)
-        self.footTrajectoryGenerator = FootTrajectoryGeneratorBezier(T_gait, dt_wbc, k_mpc,  self.fsteps_init, self.gait, self.footStepPlannerQP, self.heightMap)
+        
         self.statePlanner = StatePlanner(dt_mpc, T_mpc, self.h_ref, self.heightMap, n_surface_configs, T_gait)
+
+        # List of floor surface initialisation 
+        self.footstepPlanner = lqrw.FootStepPlannerQP()
+        floor_surface = lqrw.Surface(self.surfacePlanner.floor_surface.A,self.surfacePlanner.floor_surface.b,self.surfacePlanner.floor_surface.vertices )
+        self.surface_sl1m = lqrw.SurfaceDataList2()
+
+        self.footstepPlanner.initialize(dt_mpc, T_mpc, self.h_ref,k_mpc, dt_wbc, shoulders.copy(), self.gait, N_gait , floor_surface)        
+        self.footTrajectoryGenerator = FootTrajectoryGeneratorBezier(T_gait, dt_wbc, k_mpc,  self.fsteps_init, self.gait, self.footstepPlanner, self.heightMap)
+        # Pybullet Trajectory
+        self.pybVisualizationTraj = PybVisualizationTraj(self.gait, self.footstepPlanner, self.statePlanner,  self.footTrajectoryGenerator, enable_pyb_GUI, ENV_URDF)
+
+        # Python Footstep QP
+        # self.footStepPlannerQP = FootStepPlannerQP_mip(dt_mpc, dt_wbc, T_gait, self.h_ref, k_mpc, self.gait, N_gait, self.heightMap, self.surfacePlanner)
+        # self.footTrajectoryGenerator = FootTrajectoryGeneratorBezier(T_gait, dt_wbc, k_mpc,  self.fsteps_init, self.gait, self.footStepPlannerQP, self.heightMap)
+        # Pybullet Trajectory
+        self.pybVisualizationTraj = PybVisualizationTraj(self.gait, self.footStepPlannerQP, self.statePlanner,  self.footTrajectoryGenerator, enable_pyb_GUI, ENV_URDF)
+
 
         # pinocchio model and data, CoM and Inertia estimation for MPC
         robot = load('solo12')
         self.data = robot.data.copy()  # for velocity estimation (forward kinematics)
         self.model = robot.model.copy()  # for velocity estimation (forward kinematics)
-        self.q_neutral = pin.neutral(self.model).reshape((19,1)) # column vector
-
-        # Pybullet Trajectory
-        self.pybVisualizationTraj = PybVisualizationTraj(self.gait, self.footStepPlannerQP, self.statePlanner,  self.footTrajectoryGenerator, enable_pyb_GUI, ENV_URDF)
+        self.q_neutral = pin.neutral(self.model).reshape((19,1)) # column vector        
 
         # Log values for planner
         self.loggerPlanner = LoggerPlanner(dt_mpc, N_SIMULATION, T_gait, k_mpc)
@@ -294,7 +307,9 @@ class Controller:
         # Update footsteps if new contact phase
         new_step = self.k % self.k_mpc == 0 and self.gait.isNewPhase()
         if new_step and self.k != 0:
-            self.footStepPlannerQP.updateNewContact()
+            self.footstepPlanner.updateNewContact()
+            # Python QP
+            # self.footStepPlannerQP.updateNewContact()
 
             # New phase, results from MIP should be available
             # Only usefull for multiprocessing
@@ -303,15 +318,27 @@ class Controller:
             else:
                 self.surfacePlanner.update_latest_results()
 
+                # update results for cpp                                  
+                self.surface_sl1m = lqrw.SurfaceDataList2()
+                for index_phase, phase in enumerate(self.surfacePlanner.selected_surfaces):
+                    List_1 = lqrw.SurfaceDataList()
+                    for index_foot, surface in enumerate(phase):
+                        List_1.append(lqrw.Surface(np.array(surface.A) , np.array(surface.b) , np.array(surface.vertices) ))
+                    self.surface_sl1m.append(List_1)
+
+        
+        targetFootstep = self.footstepPlanner.computeTargetFootstep(self.k, self.q[0:7, 0:1], self.v[0:6, 0:1].copy(), o_v_ref, self.surface_sl1m 
+                                                                         , self.surfacePlanner.mip_success, self.surfacePlanner.mip_iteration)
+        fsteps = self.footstepPlanner.getFootsteps()
+        # Python QP
+        # targetFootstep = self.footStepPlannerQP.computeTargetFootstep(self.k, self.q[0:7, 0:1], self.v[0:6, 0:1].copy(), o_v_ref)
+        # fsteps = self.footStepPlannerQP.getFootsteps()
+
         self.statePlanner.computeSurfaceHeightMap(self.q[0:3, 0:1])
 
         # Compute target footstep based on current and reference velocities
         self.statePlanner.computeReferenceStates(self.q[0:7, 0:1], self.v[0:6, 0:1].copy(), o_v_ref, 0.0, new_step)
-        xref = self.statePlanner.getReferenceStates()
-        
-        
-        targetFootstep = self.footStepPlannerQP.computeTargetFootstep(self.k, self.q[0:7, 0:1], self.v[0:6, 0:1].copy(), o_v_ref)
-        fsteps = self.footStepPlannerQP.getFootsteps()
+        xref = self.statePlanner.getReferenceStates()     
 
         # Compute foot trajectory
         self.footTrajectoryGenerator.update(self.k, targetFootstep, device, self.q, self.v)
