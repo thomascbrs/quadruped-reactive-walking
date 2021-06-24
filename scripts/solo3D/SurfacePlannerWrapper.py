@@ -8,15 +8,20 @@ import ctypes
 from time import perf_counter as clock
 import numpy as np
 
+from solo3D.tools.ProfileWrapper import ProfileWrapper
+
+# Store the results from cprofile
+profileWrap = ProfileWrapper()
+
 # TODO : Modify this, should not be defined here
 N_VERTICES_MAX = 4
 N_SURFACE_MAX = 10
 EQ_AS_INEQ = True
-N_SURFACE_CONFIG = 5
+N_SURFACE_CONFIG = 3
 N_gait = 100
 N_POTENTIAL_SURFACE = 10
 N_MOVING_FEET = 2
-N_PHASE = 5
+N_PHASE = 3
 
 
 class SurfaceDataCtype(Structure):
@@ -135,10 +140,15 @@ class SurfacePlanner_Wrapper():
         self.selected_surfaces = []
         self.all_feet_pos = []
 
-        # MIP status
+        # MIP status 
         self.mip_iteration = 0
         self.mip_success = False
         self.first_iteration = True
+
+        # MIP status synchronous, this is updated just after the run of SL1M, 
+        # but used in the controller only at the next flying phase
+        self.mip_iteration_syn = 0
+        self.mip_success_syn = False
 
         self.multiprocessing = False
         if self.multiprocessing:  # Setup variables in the shared memory
@@ -154,6 +164,7 @@ class SurfacePlanner_Wrapper():
         else:
             self.surfacePlanner = SurfacePlanner(self.environment_URDF, self.T_gait)
 
+
     def run(self, configs, gait_in, current_contacts, o_v_ref):
 
         if self.multiprocessing:
@@ -164,8 +175,8 @@ class SurfacePlanner_Wrapper():
     def run_synchronous(self, configs, gait_in, current_contacts, o_v_ref):
 
         surfaces_vertices, surfaces_inequality, surfaces_indices, all_feet_pos, success = self.surfacePlanner.run(configs, gait_in, current_contacts, o_v_ref)
-        self.mip_iteration += 1
-        self.mip_success = success
+        self.mip_iteration_syn += 1
+        self.mip_success_syn = success
 
         # Retrieve potential data, usefull if solver not converged
         self.potential_surfaces.clear()
@@ -173,6 +184,7 @@ class SurfacePlanner_Wrapper():
                                      for index_sf, sf in enumerate(surfaces)]
                                     for index_foot, surfaces in enumerate(phase.S)]
                                    for index_phase, phase in enumerate(surfaces_inequality)]
+  
         if success:
             self.selected_surfaces = [[SurfaceData(surfaces_inequality[index_phase].S[index_foot][id_selected][0],
                                                    surfaces_inequality[index_phase].S[index_foot][id_selected][1],
@@ -317,7 +329,7 @@ class SurfacePlanner_Wrapper():
                 self.dataOut.success = False
 
         return 0
-
+    @profileWrap.profile
     def update_latest_results(self):
         ''' Update latest results : 2 list 
         - potential surfaces : used if MIP has not converged
@@ -357,7 +369,8 @@ class SurfacePlanner_Wrapper():
                     pass
         else:
             # Results have been already updated
-            pass
+            self.mip_success = self.mip_success_syn  
+            self.mip_iteration = self.mip_iteration_syn
 
         return 0
 
@@ -368,3 +381,12 @@ class SurfacePlanner_Wrapper():
         self.running.value = False
 
         return 0
+
+    def print_profile(self , output_file):
+        ''' Print the profile computed with cProfile
+        Args : 
+        - output_file (str) :  file name
+        '''
+        profileWrap.print_stats(output_file)
+        
+        return  0
