@@ -58,6 +58,8 @@ set(${PROJECT_NAME}_HEADERS
   include/qrw/QPWBC.hpp
   include/qrw/Params.hpp
   include/other/st_to_cc.hpp
+  include/qrw/Surface.hpp
+  include/qrw/FootstepPlannerQP.hpp
   )
 
 set(${PROJECT_NAME}_SOURCES
@@ -71,6 +73,8 @@ set(${PROJECT_NAME}_SOURCES
   src/InvKin.cpp
   src/QPWBC.cpp
   src/Params.cpp
+  src/Surface.cpp
+  src/FootstepPlannerQP.cpp
   )
 
 add_library(${PROJECT_NAME} SHARED ${${PROJECT_NAME}_SOURCES} ${${PROJECT_NAME}_HEADERS})
