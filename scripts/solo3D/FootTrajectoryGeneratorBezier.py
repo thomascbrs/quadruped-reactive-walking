@@ -124,8 +124,8 @@ class FootTrajectoryGeneratorBezier:
         self.footStepPlannerQP = footStepPlannerQP
         self.gait = gait
 
-        self.new_surface = [footStepPlannerQP.surface_selected[0]]*4
-        self.past_surface = [footStepPlannerQP.surface_selected[0]]*4
+        self.new_surface = [self.footStepPlannerQP.get_selected_surface(0)]*4
+        self.past_surface = [self.footStepPlannerQP.get_selected_surface(0)]*4
 
     def updatePolyCoeff_XY(self, i_foot, x_init, v_init, a_init, x_end,  t0, t1, h):
         ''' Compute coefficient for polynomial 5D curve for X and Y trajectory. Vel, Acc final is nulle. 
@@ -297,7 +297,7 @@ class FootTrajectoryGeneratorBezier:
             # compute polynoms coefficients for x and y
             if self.t0s[i_foot] < 10e-4 or k == 0:
 
-                if self.new_surface[i_foot].getHeight(self.footsteps_target[:, i_foot]) >= 10-4:
+                if self.new_surface[i_foot].get_height(self.footsteps_target[:2, i_foot]) >= 10-4:
                     self.updatePolyCoeff_Z(i_foot, self.goals[:, i_foot], np.zeros(3), np.zeros(
                         3), self.footsteps_target[:, i_foot], t0, t1, 0.03 + self.footsteps_target[:, i_foot][2])
                 else:
@@ -314,7 +314,7 @@ class FootTrajectoryGeneratorBezier:
 
                 self.t_stop[i_foot] = 0.
 
-                if abs(self.past_surface[i_foot].getHeight(self.footsteps_target[:, i_foot]) - self.new_surface[i_foot].getHeight(self.footsteps_target[:, i_foot])) >= 10e-4:
+                if abs(self.past_surface[i_foot].get_height(self.footsteps_target[:2, i_foot]) - self.new_surface[i_foot].get_height(self.footsteps_target[:2, i_foot])) >= 10e-4:
                     surface = self.new_surface[i_foot]
                     nb_vert = surface.vertices.shape[0]
                     vert = surface.vertices
@@ -528,7 +528,7 @@ class FootTrajectoryGeneratorBezier:
             for i_foot in range(4):
                 if self.t0s[i_foot] < 10e-6:
                     self.past_surface[i_foot] = self.new_surface[i_foot]
-                    self.new_surface[i_foot] = self.footStepPlannerQP.surface_selected[i_foot]
+                    self.new_surface[i_foot] = self.footStepPlannerQP.get_selected_surface(i_foot)
         
         for i in self.feet:
             # Only for 5th order polynomial curve

@@ -1,16 +1,19 @@
 #include "qrw/gepadd.hpp"
-#include "qrw/InvKin.hpp"
-#include "qrw/MPC.hpp"
-// #include "qrw/Planner.hpp"
 #include "qrw/FootTrajectoryGenerator.hpp"
 #include "qrw/FootstepPlanner.hpp"
+#include "qrw/FootstepPlannerQP.hpp"
 #include "qrw/Gait.hpp"
+#include "qrw/InvKin.hpp"
+#include "qrw/MPC.hpp"
 #include "qrw/Params.hpp"
 #include "qrw/QPWBC.hpp"
 #include "qrw/StatePlanner.hpp"
+#include "qrw/Surface.hpp"
 
 #include <boost/python.hpp>
 #include <eigenpy/eigenpy.hpp>
+
+#include <boost/python/suite/indexing/vector_indexing_suite.hpp>
 
 namespace bp = boost::python;
 
@@ -30,9 +33,9 @@ struct MPCPythonVisitor : public bp::def_visitor<MPCPythonVisitor<MPC>>
                  "Get latest result (predicted trajectory  forces to apply).\n")
             .def("get_gait", &MPC::get_gait, "Get gait matrix.\n")
             .def("get_Sgait", &MPC::get_Sgait, "Get S_gait matrix.\n")
-            .add_property("I" , 
-                          bp::make_function(&MPC::get_I , bp::return_value_policy<bp::return_by_value>()) , 
-                          bp::make_function(&MPC::set_I ) , "Inertia matrix \n");
+            .add_property("I",
+                          bp::make_function(&MPC::get_I, bp::return_value_policy<bp::return_by_value>()),
+                          bp::make_function(&MPC::set_I), "Inertia matrix \n");
     }
 
     static void expose()
@@ -77,6 +80,34 @@ struct StatePlannerPythonVisitor : public bp::def_visitor<StatePlannerPythonVisi
 void exposeStatePlanner() { StatePlannerPythonVisitor<StatePlanner>::expose(); }
 
 /////////////////////////////////
+/// Binding Surface class
+/////////////////////////////////
+template <typename Surface>
+struct SurfacePythonVisitor : public bp::def_visitor<SurfacePythonVisitor<Surface>>
+{
+    template <class PyClassSurface>
+    void visit(PyClassSurface& cl) const
+    {
+        cl.def(bp::init<>(bp::arg(""), "Default constructor."))
+            .def(bp::init<MatrixN, VectorN, MatrixN>(bp::args("A", "b", "vertices"), "Constructor with parameters."))
+
+            .def("get_height", &Surface::getHeight, bp::args("point"),
+                 "get the height of a point of the surface.\n")
+
+            .def("has_point", &Surface::hasPoint, bp::args("point"),
+                 "return true if the point is in the surface.\n");
+    }
+
+    static void expose()
+    {
+        bp::class_<Surface>("Surface", bp::no_init).def(SurfacePythonVisitor<Surface>());
+
+        ENABLE_SPECIFIC_MATRIX_TYPE(MatrixN);
+    }
+};
+void exposeSurface() { SurfacePythonVisitor<Surface>::expose(); }
+
+/////////////////////////////////
 /// Binding Gait class
 /////////////////////////////////
 template <typename Gait>
@@ -102,7 +133,7 @@ struct GaitPythonVisitor : public bp::def_visitor<GaitPythonVisitor<Gait>>
 
             .def("getPhaseDuration", &Gait::getPhaseDuration, bp::args("i", "j", "value"),
                  "Compute the remaining and total duration of a phase.\n")
-                 
+
             .def("getRemainingTime", &Gait::getRemainingTime, "get remaining time of the current phase\n");
     }
 
@@ -146,6 +177,48 @@ struct FootstepPlannerPythonVisitor : public bp::def_visitor<FootstepPlannerPyth
     }
 };
 void exposeFootstepPlanner() { FootstepPlannerPythonVisitor<FootstepPlanner>::expose(); }
+
+
+/////////////////////////////////
+/// Binding FootstepPlannerQP class
+/////////////////////////////////
+template <typename FootstepPlannerQP>
+struct FootstepPlannerQPPythonVisitor : public bp::def_visitor<FootstepPlannerQPPythonVisitor<FootstepPlannerQP>>
+{
+    template <class PyClassFootstepPlannerQP>
+    void visit(PyClassFootstepPlannerQP& cl) const
+    {
+        cl.def(bp::init<>(bp::arg(""), "Default constructor."))
+
+
+            .def("initialize", &FootstepPlannerQP::initialize, bp::args("dt_in", "T_mpc_in", "h_ref_in", "k_mpc", "dt_tsid", "shouldersIn", "gaitIn", "N_gait", "floor_surface_in"),
+                 "Initialize FootstepPlannerQP from Python.\n")
+
+            // Compute target location of footsteps from Python
+            .def("computeTargetFootstep", &FootstepPlannerQP::computeTargetFootstep, bp::args("k_in", "q", "v", "b_vref", "potentialSurfaces", "surfaces", "status", "iteration"),
+                 "Compute target location of footsteps from Python.\n")
+
+            .def("updateNewContact", &FootstepPlannerQP::updateNewContact, "Refresh feet position when entering a new contact phase.\n")
+            .def("get_selected_surfaces", &FootstepPlannerQP::getSelectedSurfaces, "get the selected surfaces \n")
+            .def("get_selected_surface", &FootstepPlannerQP::getSelectedSurface, bp::args("foot"), "get the selected surfaces \n")
+            .def("getFootsteps", &FootstepPlannerQP::getFootsteps, "Get footsteps_ matrix.\n");
+    }
+
+    static void expose()
+    {
+        bp::class_<FootstepPlannerQP>("FootstepPlannerQP", bp::no_init).def(FootstepPlannerQPPythonVisitor<FootstepPlannerQP>());
+
+        ENABLE_SPECIFIC_MATRIX_TYPE(MatrixN);
+    }
+};
+void exposeFootstepPlannerQP()
+{
+    bp::class_<SurfaceVector>("SurfaceVector")
+        .def(bp::vector_indexing_suite<SurfaceVector>());
+    bp::class_<SurfaceVectorVector>("SurfaceVectorVector")
+        .def(bp::vector_indexing_suite<SurfaceVectorVector>());
+    FootstepPlannerQPPythonVisitor<FootstepPlannerQP>::expose();
+}
 
 /////////////////////////////////
 /// Binding FootTrajectoryGenerator class
@@ -294,8 +367,10 @@ BOOST_PYTHON_MODULE(libquadruped_reactive_walking)
 
     exposeMPC();
     exposeStatePlanner();
+    exposeSurface();
     exposeGait();
     exposeFootstepPlanner();
+    exposeFootstepPlannerQP();
     exposeFootTrajectoryGenerator();
     exposeInvKin();
     exposeQPWBC();

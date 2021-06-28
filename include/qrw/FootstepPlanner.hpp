@@ -30,7 +30,7 @@ public:
 
     ////////////////////////////////////////////////////////////////////////////////////////////////
     ///
-    /// \brief Default constructor
+    /// \brief Initializer
     ///
     /// \param[in] dt_in Time step of the contact sequence (time step of the MPC)
     /// \param[in] T_mpc_in MPC period (prediction horizon)
@@ -96,8 +96,6 @@ private:
     ///
     /// \param[in] i considered phase (row of the gait matrix)
     /// \param[in] j considered foot (col of the gait matrix)
-    ///
-    /// \retval Matrix with the next footstep positions
     ///
     ////////////////////////////////////////////////////////////////////////////////////////////////
     void computeNextFootstep(int i, int j);

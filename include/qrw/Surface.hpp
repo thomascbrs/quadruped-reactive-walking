@@ -2,49 +2,67 @@
 ///
 /// \brief This is the header for Surface class
 ///
-/// \details Surface data structure 
+/// \details Surface data structure
 ///
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
 #ifndef SURFACE_H_INCLUDED
 #define SURFACE_H_INCLUDED
 
-
 #include "qrw/Types.h"
-#include <Eigen/Core>
-#include <Eigen/Dense>
-
-
 
 class Surface
 {
 public:
     // Constructor
-    Surface() ; 
-    Surface(const  Eigen::MatrixXd &A_in , const Eigen::VectorXd &b_in, const Eigen::MatrixXd &vertices_in);
+    Surface();
+    Surface(MatrixN const& A_in, VectorN const& b_in, MatrixN const& vertices_in);
 
-    bool operator==(const Surface& other) const {return false;}
-    bool operator!=(const Surface& other) const {return true;}
+    bool operator==(const Surface& other) const
+    {
+        return A_ == other.A_ && b_ == other.b_ && vertices_ == other.vertices_;
+    }
+
+    bool operator!=(const Surface& other) const
+    {
+        return A_ != other.A_ or b_ != other.b_ or vertices_ != other.vertices_;
+    }
 
     // Destructor
-    ~Surface() {} 
+    ~Surface() {}
 
     // Usefull for python binding
-    Eigen::MatrixXd get_A() ;
-    void set_A(const  Eigen::MatrixXd &A_i) ;
+    MatrixN getA();
+    void setA(MatrixN const& A_in);
 
-    Eigen::VectorXd get_b() ;
-    void set_b(const  Eigen::VectorXd &b_i) ;
+    VectorN getb();
+    void setb(VectorN const& b_in);
 
-    Eigen::MatrixXd get_vertices() ;
-    void set_vertices(const  Eigen::MatrixXd &vertices_i) ;
+    MatrixN getVertices();
+    void setVertices(MatrixN const& vertices_in);
 
-    double getHeight(Vector3 point);
+    //////////////////////////////////////////////////////////////////////////////////////////////////
+    ///
+    /// \brief For a given X,Y point that belongs to the surface, return the height
+    ///        d/c -a/c*x -b/c*y
+    ///
+    /// \param[in] point Vecto3 [x, y, z]
+    ///
+    //////////////////////////////////////////////////////////////////////////////////////////////////
+    double getHeight(Vector2 const& point);
 
+    //////////////////////////////////////////////////////////////////////////////////////////////////
+    ///
+    /// \brief For a given X,Y point return true if the point is in the surface
+    ///
+    /// \param[in] point Vecto3 [x, y]
+    ///
+    //////////////////////////////////////////////////////////////////////////////////////////////////
+    bool hasPoint(Vector2 const& point);
 
-    Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic > A;
-    Eigen::Matrix<double, Eigen::Dynamic, 1 > b;
-    Eigen::Matrix<double, Eigen::Dynamic, 3 > vertices;
+    MatrixN A_;
+    VectorN b_;
+    Matrix3N vertices_;
 };
 
 #endif  // SURFACE_H_INCLUDED

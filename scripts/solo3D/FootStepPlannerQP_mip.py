@@ -503,8 +503,8 @@ class FootStepPlannerQP_mip:
             nextFootstep += - self.k_feedback * b_vref[:3]
 
         # Add centrifugal term
-        # cross = self.cross3(b_vlin, b_vref[3:6])
-        # nextFootstep += 0.5 * np.sqrt(self.h_ref / self.g) * cross[:, 0]
+        cross = self.cross3(b_vlin, b_vref[3:6])
+        nextFootstep += 0.5 * np.sqrt(self.h_ref / self.g) * cross[:, 0]
 
         # Legs have a limited length so the deviation has to be limited
         nextFootstep[0] = min(nextFootstep[0], self.L)

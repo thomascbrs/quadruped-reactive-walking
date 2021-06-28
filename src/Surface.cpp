@@ -1,51 +1,63 @@
 #include "qrw/Surface.hpp"
 
-Surface::Surface(){}
-
-Surface::Surface(const  Eigen::MatrixXd &A_in , const Eigen::VectorXd &b_in, const Eigen::MatrixXd &vertices_in){
-    
-    A = A_in ;
-    b = b_in ;
-    vertices = vertices_in ;
-
+Surface::Surface()
+{
+    // Empty
 }
 
-void Surface::set_A(const  Eigen::MatrixXd &A_i){
-    A = A_i ;
+Surface::Surface(const MatrixN& A_in, const VectorN& b_in, const MatrixN& vertices_in)
+    : A_ {A_in}
+    , b_ {b_in}
+    , vertices_ {vertices_in}
+{
+    // Empty
 }
 
-Eigen::MatrixXd Surface::get_A() {
-    return A; 
+void Surface::setA(MatrixN const& A_in)
+{
+    A_ = A_in;
 }
 
-Eigen::VectorXd Surface::get_b() {
-    return b; 
+MatrixN Surface::getA()
+{
+    return A_;
 }
 
-void Surface::set_b(const  Eigen::VectorXd &b_i){
-    b = b_i ;
+VectorN Surface::getb()
+{
+    return b_;
 }
 
-Eigen::MatrixXd Surface::get_vertices() {
-    return vertices; 
+void Surface::setb(VectorN const& b_in)
+{
+    b_ = b_in;
 }
 
-void Surface::set_vertices(const  Eigen::MatrixXd &vertices_i){
-    vertices = vertices_i ;
+MatrixN Surface::getVertices()
+{
+    return vertices_;
 }
 
-// For a given X,Y point that belongs to the surface, return the height
-//     d/c -a/c*x -b/c*y
-//     Args : 
-//     - point (array x2), works with arrayx3
-double Surface::getHeight(Vector3 point){
-    int id = A.rows() -1 ;
-    return abs( b(id) - point(0)*A(id,0) / A(id,2)  - point(1)*A(id,1) / A(id,2)  ) ;
+void Surface::setVertices(const MatrixN& vertices_in)
+{
+    vertices_ = vertices_in;
 }
 
+double Surface::getHeight(Vector2 const& point)
+{
+    int id = A_.rows() - 1;
+    return abs(b_(id) - point(0) * A_(id, 0) / A_(id, 2) - point(1) * A_(id, 1) / A_(id, 2));
+}
 
-
-
-
-
-
+bool Surface::hasPoint(Vector2 const& point)
+{
+    VectorN Ax = A_.block(0, 0, A_.rows() - 2, 2) * point;
+    for (int i; i < b_.size() - 2; i++)
+    {
+        if (Ax(i) > b_(i))
+        {
+            return false;
+        }
+    }
+    return true;
+}
