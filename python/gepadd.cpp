@@ -8,6 +8,9 @@
 #include "qrw/Params.hpp"
 #include "qrw/QPWBC.hpp"
 #include "qrw/StatePlanner.hpp"
+#include "qrw/Surface.hpp"
+#include "qrw/FootstepPlannerQP.hpp"
+#include <boost/python/suite/indexing/vector_indexing_suite.hpp>
 
 #include <boost/python.hpp>
 #include <eigenpy/eigenpy.hpp>
@@ -240,6 +243,76 @@ struct QPWBCPythonVisitor : public bp::def_visitor<QPWBCPythonVisitor<QPWBC>>
 void exposeQPWBC() { QPWBCPythonVisitor<QPWBC>::expose(); }
 
 /////////////////////////////////
+/// Binding Surface class
+/////////////////////////////////
+template <typename Surface>
+struct SurfacePythonVisitor : public bp::def_visitor<SurfacePythonVisitor<Surface>>
+{
+    template <class PyClassSurface>
+    void visit(PyClassSurface& cl) const
+    {
+        cl.def(bp::init<>(bp::arg(""), "Default constructor."))
+            .def(bp::init<matXd, matXd, matXd>(bp::args("A", "b", "vertices"),
+                                                    "Constructor with parameters."))
+
+            .add_property("A" , 
+                          bp::make_function(&Surface::get_A , bp::return_value_policy<bp::return_by_value>()))
+            .add_property("b" , 
+                          bp::make_function(&Surface::get_b , bp::return_value_policy<bp::return_by_value>()))
+            .add_property("vertices" , 
+                          bp::make_function(&Surface::get_vertices , bp::return_value_policy<bp::return_by_value>()))
+            .def("getHeight", &Surface::getHeight, "Get getHeight of the surface\n");
+    }
+
+    static void expose()
+    {
+        bp::class_<Surface>("Surface", bp::no_init).def(SurfacePythonVisitor<Surface>());
+
+        ENABLE_SPECIFIC_MATRIX_TYPE(matXd);
+    }
+};
+void exposeSurface() { SurfacePythonVisitor<Surface>::expose(); }
+
+////////////////////////////////////
+/// Binding FootstepPlannerQP class
+////////////////////////////////////
+template <typename FootstepPlannerQP>
+struct FootstepPlannerQPPythonVisitor : public bp::def_visitor<FootstepPlannerQPPythonVisitor<FootstepPlannerQP>>
+{
+    template <class PyClassFootstepPlannerQP>
+    void visit(PyClassFootstepPlannerQP& cl) const
+    {
+         cl.def(bp::init<>(bp::arg(""), "Default constructor."))
+
+            .def("getFootsteps", &FootstepPlannerQP::getFootsteps, "Get footsteps_ matrix.\n")
+
+            .def("initialize", &FootstepPlannerQP::initialize, bp::args("dt_in", "T_mpc_in", "h_ref_in", "shouldersIn", "gaitIn", "N_gait"),
+                 "Initialize FootstepPlanner from Python.\n")
+
+            // Compute target location of footsteps from Python
+            .def("computeTargetFootstep", &FootstepPlannerQP::computeTargetFootstep, bp::args("q", "v", "b_vref"),
+                 "Compute target location of footsteps from Python.\n")
+            .add_property("surface_selected" , 
+                          bp::make_function(&FootstepPlannerQP::getSurfacesSelected , bp::return_value_policy<bp::return_by_value>()))
+
+            .def("updateNewContact", &FootstepPlannerQP::updateNewContact, "Refresh feet position when entering a new contact phase.\n");
+    }
+
+    static void expose()
+    {   
+        bp::class_<SurfaceDataList>("SurfaceDataList")
+        .def(bp::vector_indexing_suite<SurfaceDataList>() );
+        bp::class_<SurfaceDataList2>("SurfaceDataList2")
+        .def(bp::vector_indexing_suite<SurfaceDataList2>() );
+        bp::class_<SurfaceDataList3>("SurfaceDataList3")
+        .def(bp::vector_indexing_suite<SurfaceDataList3>() );
+        bp::class_<FootstepPlannerQP>("FootstepPlannerQP", bp::no_init).def(FootstepPlannerQPPythonVisitor<FootstepPlannerQP>());
+
+    }
+};
+void exposeFootstepPlannerQP() { FootstepPlannerQPPythonVisitor<FootstepPlannerQP>::expose(); }
+
+/////////////////////////////////
 /// Binding Params class
 /////////////////////////////////
 template <typename Params>
@@ -300,4 +373,6 @@ BOOST_PYTHON_MODULE(libquadruped_reactive_walking)
     exposeInvKin();
     exposeQPWBC();
     exposeParams();
+    exposeSurface();
+    exposeFootstepPlannerQP();
 }
