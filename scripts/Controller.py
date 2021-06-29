@@ -24,9 +24,13 @@ from time import perf_counter as clock
 # HEIGHTMAP = "/local/users/frisbourg/install/share/hpp_environments/heightmaps/Solo3D/stairs_rotation.pickle"
 # STL = None
 
-URDF = "/local/users/frisbourg/install/share/hpp_environments/urdf/Solo3D/floor_sparse.urdf"
-HEIGHTMAP = "/local/users/frisbourg/install/share/hpp_environments/heightmaps/Solo3D/floor_sparse.pickle"
-STL = "/local/users/frisbourg/install/share/hpp_environments/meshes/Solo3D/floor_sparse.stl"
+HEIGHTMAP = "/local/users/frisbourg/install/share/hpp_environments/heightmaps/Solo3D/floor_4_4.pickle"
+
+URDF = "/local/users/frisbourg/install/share/hpp_environments/urdf/Solo3D/floor_rectangle.urdf"
+STL = "/local/users/frisbourg/install/share/hpp_environments/meshes/Solo3D/floor_rectangle.stl"
+
+# URDF = "/local/users/frisbourg/install/share/hpp_environments/urdf/Solo3D/floor_angles.urdf"
+# STL = "/local/users/frisbourg/install/share/hpp_environments/meshes/Solo3D/floor_angles.stl"
 
 
 class Result:
@@ -127,7 +131,7 @@ class Controller:
         # Create Joystick, FootstepPlanner, Logger and Interface objects
         self.joystick, self.logger, self.estimator = utils_mpc.init_objects(
             dt_wbc, dt_mpc, N_SIMULATION, k_mpc, T_gait, type_MPC, predefined_vel, self.h_init, kf_enabled,
-            perfectEstimator)
+            perfectEstimator, qc=qc)
 
         # Enable/Disable hybrid control
         self.enable_hybrid_control = True
