@@ -51,7 +51,7 @@ class SurfacePlanner:
         self.afftool = AffordanceTool()
         self.afftool.setAffordanceConfig('Support', [0.5, 0.03, 0.00005])
 
-        self.afftool.loadObstacleModel(environment_URDF, "environment", self.vf, reduceSizes=[0.05, 0., 0.])
+        self.afftool.loadObstacleModel(environment_URDF, "environment", self.vf, reduceSizes=[0.01, 0.01, 0.])
         self.ps.selectPathValidation("RbprmPathValidation", 0.05)
 
         self.all_surfaces = getAllSurfacesDict(self.afftool)
@@ -126,6 +126,36 @@ class SurfacePlanner:
 
         return surfaces_list, empty_list
 
+    def retrieve_surfaces(self, surfaces, indices=None):
+        """
+        Get the surface vertices,  inequalities and selected surface indices if need be
+        """
+        vertices = []
+        surfaces_inequalities = []
+        if indices is not None:
+            surface_indices = []
+        else:
+            surface_indices=None
+        first_phase_i = 0
+        second_phase_i = 0
+        for foot in range(4):
+            if foot in self.pb.phaseData[0].moving:
+                vertices.append(surfaces[0][first_phase_i])
+                surfaces_inequalities.append(self.pb.phaseData[0].S[first_phase_i])
+                if indices is not None:
+                    surface_indices.append(indices[0][first_phase_i])
+                first_phase_i += 1
+            elif foot in self.pb.phaseData[1].moving:
+                vertices.append(surfaces[1][second_phase_i])
+                surfaces_inequalities.append(self.pb.phaseData[1].S[second_phase_i])
+                if indices is not None:
+                    surface_indices.append(indices[1][second_phase_i])
+                second_phase_i += 1
+            else:
+                print("Error : the foot is not moving in any of the first two phases")
+
+        return vertices, surfaces_inequalities, surface_indices
+
     @profileWrap.profile
     def run(self, configs, gait_in, current_contacts, o_v_ref):
         """
@@ -152,7 +182,8 @@ class SurfacePlanner:
 
         if empty_list:
             print("Surface planner: one step has no potential surface to use.")
-            return surfaces, self.pb.phaseData, None, None, False
+            vertices, inequalities, indices = self.retrieve_surfaces(surfaces)
+            return vertices, inequalities, indices, None, False
 
         costs = {"step_size": [10.0, step_length]}
         pb_data = solve_MIP(self.pb, costs=costs, com=False)
@@ -170,26 +201,9 @@ class SurfacePlanner:
             # ax = plot.draw_whole_scene(self.all_surfaces)
             # plot.plot_planner_result(pb_data.all_feet_pos, step_size=step_length, ax=ax, show=True)
 
-            surfaces_vertices = []
-            surfaces_inequalities = []
-            surfaces_indices = []
-            first_phase_i = 0
-            second_phase_i = 0
-            for foot in range(4):
-                if foot in self.pb.phaseData[0].moving:
-                    surfaces_vertices.append(surfaces[0][first_phase_i])
-                    surfaces_inequalities.append(self.pb.phaseData[0].S[first_phase_i])
-                    surfaces_indices.append(surface_indices[0][first_phase_i])
-                    first_phase_i += 1
-                elif foot in self.pb.phaseData[1].moving:
-                    surfaces_vertices.append(surfaces[1][second_phase_i])
-                    surfaces_inequalities.append(self.pb.phaseData[1].S[second_phase_i])
-                    surfaces_indices.append(surface_indices[1][second_phase_i])
-                    second_phase_i += 1
-                else:
-                    print("Error : the foot is not moving in any of the first two phases")
+            vertices, inequalities, indices = self.retrieve_surfaces(surfaces, surface_indices)
 
-            return surfaces_vertices, surfaces_inequalities, surfaces_indices, pb_data.all_feet_pos, True
+            return vertices, inequalities, indices, pb_data.all_feet_pos, True
 
         else:
             ax = plot.draw_whole_scene(self.all_surfaces)
@@ -208,23 +222,9 @@ class SurfacePlanner:
             print("The MIP problem did NOT converge")
             # TODO what if the problem did not converge ???
 
-            surfaces_vertices = []
-            surfaces_inequalities = []
-            first_phase_i = 0
-            second_phase_i = 0
-            for foot in range(4):
-                if foot in self.pb.phaseData[0].moving:
-                    surfaces_vertices.append(surfaces[0][first_phase_i])
-                    surfaces_inequalities.append(self.pb.phaseData[0].S[first_phase_i])
-                    first_phase_i += 1
-                elif foot in self.pb.phaseData[1].moving:
-                    surfaces_vertices.append(surfaces[1][second_phase_i])
-                    surfaces_inequalities.append(self.pb.phaseData[1].S[second_phase_i])
-                    second_phase_i += 1
-                else:
-                    print("Error : the foot is not moving in any of the first two phases")
+            vertices, inequalities, indices = self.retrieve_surfaces(surfaces)
 
-            return surfaces_vertices, surfaces_inequalities, None, None, False
+            return vertices, inequalities, indices, None, False
 
     def print_profile(self, output_file):
         ''' Print the profile computed with cProfile

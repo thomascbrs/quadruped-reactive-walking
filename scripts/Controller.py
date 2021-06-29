@@ -22,8 +22,12 @@ from example_robot_data import load
 from solo3D.tools.geometry import inertiaTranslation
 from time import perf_counter as clock
 
-ENV_URDF = "/local/users/frisbourg/install/share/hpp_environments/urdf/Solo3D/stairs_rotation.urdf"
-HEIGHTMAP = "/local/users/frisbourg/install/share/hpp_environments/heightmaps/Solo3D/stairs_rotation.pickle"
+# ENV_URDF = "/local/users/frisbourg/install/share/hpp_environments/urdf/Solo3D/stairs_rotation.urdf"
+# HEIGHTMAP = "/local/users/frisbourg/install/share/hpp_environments/heightmaps/Solo3D/stairs_rotation.pickle"
+
+ENV_URDF = "/local/users/frisbourg/install/share/hpp_environments/urdf/Solo3D/floor_sparse.urdf"
+HEIGHTMAP = "/local/users/frisbourg/install/share/hpp_environments/heightmaps/Solo3D/floor_sparse.pickle"
+STL = "/local/users/frisbourg/install/share/hpp_environments/meshes/Solo3D/floor_sparse.stl"
 
 
 class Result:
@@ -209,10 +213,7 @@ class Controller:
         self.footstepPlanner.initialize(dt_mpc, T_mpc, self.h_ref, k_mpc, dt_wbc, shoulders.copy(), self.gait, N_gait, self.surfacePlanner.floor_surface)
         self.footTrajectoryGenerator = FootTrajectoryGeneratorBezier(T_gait, dt_wbc, k_mpc,  self.fsteps_init, self.gait, self.footstepPlanner)
         # Pybullet Trajectory
-        self.pybVisualizationTraj = PybVisualizationTraj(self.gait, self.footstepPlanner, self.statePlanner,  self.footTrajectoryGenerator, enable_pyb_GUI, ENV_URDF)
-
-        # Pybullet Trajectory
-        self.pybVisualizationTraj = PybVisualizationTraj(self.gait, self.footstepPlanner, self.statePlanner,  self.footTrajectoryGenerator, enable_pyb_GUI, ENV_URDF)
+        self.pybVisualizationTraj = PybVisualizationTraj(self.gait, self.footstepPlanner, self.statePlanner,  self.footTrajectoryGenerator, enable_pyb_GUI, STL)
 
         # pinocchio model and data, CoM and Inertia estimation for MPC
         robot = load('solo12')

@@ -220,13 +220,13 @@ class Joystick:
                                                 0.0, 0.0, 0.0, 0.0, 0.3, 0.3, 0.0, 0.0,
                                                 -0.3, 0.0])
         elif velID == 2:
-            self.k_switch = np.array([0, 400, 1500])
-            self.v_switch = np.array([[0.0, 0.3, 0.3],
+            self.k_switch = np.array([0, 400, 2000])
+            self.v_switch = np.array([[0.0, 0.2, 0.2],
                                       [0.0, 0.0, 0.0],
                                       [0.0, 0.0, 0.0],
                                       [0.0, 0.0, 0.0],
                                       [0.0, 0.0, 0.0],
-                                      [0.0, 0., -0.22]])
+                                      [0.0, 0., 0.0]])
 
         self.handle_v_switch(k_loop)
 
