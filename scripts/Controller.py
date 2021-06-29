@@ -18,7 +18,6 @@ from solo3D.tools.vizualization import PybVisualizationTraj
 from example_robot_data import load
 
 from solo3D.tools.geometry import inertiaTranslation
-from time import perf_counter as clock
 
 # URDF = "/local/users/frisbourg/install/share/hpp_environments/urdf/Solo3D/stairs_rotation.urdf"
 # HEIGHTMAP = "/local/users/frisbourg/install/share/hpp_environments/heightmaps/Solo3D/stairs_rotation.pickle"
@@ -26,7 +25,10 @@ from time import perf_counter as clock
 
 HEIGHTMAP = "/local/users/frisbourg/install/share/hpp_environments/heightmaps/Solo3D/floor_4_4.pickle"
 
-URDF = "/local/users/frisbourg/install/share/hpp_environments/urdf/Solo3D/floor_rectangle.urdf"
+URDF = "/local/users/frisbourg/install/share/hpp_environments/urdf/multicontact/ground.urdf"
+
+# URDF = "/local/users/frisbourg/install/share/hpp_environments/urdf/Solo3D/floor_rectangle.urdf"
+# STL = "/local/users/frisbourg/install/share/hpp_environments/meshes/Solo3D/floor_rectangle.stl"
 STL = "/local/users/frisbourg/install/share/hpp_environments/meshes/Solo3D/floor_rectangle.stl"
 
 # URDF = "/local/users/frisbourg/install/share/hpp_environments/urdf/Solo3D/floor_angles.urdf"

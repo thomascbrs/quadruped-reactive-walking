@@ -1,6 +1,6 @@
 robot:
     interface: enp2s0
-    SIMULATION: true  # Enable/disable PyBullet simulation or running on real robot
+    SIMULATION: false  # Enable/disable PyBullet simulation or running on real robot
     LOGGING: false  # Enable/disable logging during the experiment
     PLOTTING: false  # Enable/disable automatic plotting at the end of the experiment
     dt_wbc: 0.002  # Time step of the whole body control
@@ -16,4 +16,4 @@ robot:
     use_flat_plane: true  # If True the ground is flat, otherwise it has bumps
     predefined_vel: true  # If we are using a predefined reference velocity (True) or a joystick (False)
     kf_enabled: false  # Use complementary filter (False) or kalman filter (True) for the estimator 
-    enable_pyb_GUI: true  # Enable/disable PyBullet GUI
+    enable_pyb_GUI: false  # Enable/disable PyBullet GUI

@@ -268,55 +268,55 @@ class PybVisualizationTraj():
         # Add environment
         path_mesh = "solo3D/objects/object_" + str(self.object_stair) + "/meshes/"
 
-        if self.STL is not None:
-            name_object = self.STL
+        # if self.STL is not None:
+        #     name_object = self.STL
 
-            mesh_scale = [1.0, 1., 1.]
-            # Add stairs with platform and bridge
-            visualShapeId = pyb.createVisualShape(shapeType=pyb.GEOM_MESH,
-                                                  fileName=name_object,
-                                                  rgbaColor=[.3, 0.3, 0.3, 1.0],
-                                                  specularColor=[0.4, .4, 0],
-                                                  visualFramePosition=[0.0, 0.0, 0.0],
-                                                  meshScale=mesh_scale)
+        #     mesh_scale = [1.0, 1., 1.]
+        #     # Add stairs with platform and bridge
+        #     visualShapeId = pyb.createVisualShape(shapeType=pyb.GEOM_MESH,
+        #                                           fileName=name_object,
+        #                                           rgbaColor=[.3, 0.3, 0.3, 1.0],
+        #                                           specularColor=[0.4, .4, 0],
+        #                                           visualFramePosition=[0.0, 0.0, 0.0],
+        #                                           meshScale=mesh_scale)
 
-            collisionShapeId = pyb.createCollisionShape(shapeType=pyb.GEOM_MESH,
-                                                        fileName=name_object,
-                                                        collisionFramePosition=[0.0, 0.0, 0.0],
-                                                        meshScale=mesh_scale)
+        #     collisionShapeId = pyb.createCollisionShape(shapeType=pyb.GEOM_MESH,
+        #                                                 fileName=name_object,
+        #                                                 collisionFramePosition=[0.0, 0.0, 0.0],
+        #                                                 meshScale=mesh_scale)
 
-            tmpId = pyb.createMultiBody(baseMass=0.0,
-                                        baseInertialFramePosition=[0, 0, 0],
-                                        baseCollisionShapeIndex=collisionShapeId,
-                                        baseVisualShapeIndex=visualShapeId,
-                                        basePosition=[0.0, 0., 0.0],
-                                        useMaximalCoordinates=True)
-            pyb.changeDynamics(tmpId, -1, lateralFriction=1.0)
-        else:
-            for elt in os.listdir(path_mesh):
-                name_object = path_mesh + elt
+        #     tmpId = pyb.createMultiBody(baseMass=0.0,
+        #                                 baseInertialFramePosition=[0, 0, 0],
+        #                                 baseCollisionShapeIndex=collisionShapeId,
+        #                                 baseVisualShapeIndex=visualShapeId,
+        #                                 basePosition=[0.0, 0., 0.0],
+        #                                 useMaximalCoordinates=True)
+        #     pyb.changeDynamics(tmpId, -1, lateralFriction=1.0)
+        # else:
+        #     for elt in os.listdir(path_mesh):
+        #         name_object = path_mesh + elt
 
-                mesh_scale = [1.0, 1., 1.]
-                # Add stairs with platform and bridge
-                visualShapeId = pyb.createVisualShape(shapeType=pyb.GEOM_MESH,
-                                                      fileName=name_object,
-                                                      rgbaColor=[.3, 0.3, 0.3, 1.0],
-                                                      specularColor=[0.4, .4, 0],
-                                                      visualFramePosition=[0.0, 0.0, 0.0],
-                                                      meshScale=mesh_scale)
+        #         mesh_scale = [1.0, 1., 1.]
+        #         # Add stairs with platform and bridge
+        #         visualShapeId = pyb.createVisualShape(shapeType=pyb.GEOM_MESH,
+        #                                               fileName=name_object,
+        #                                               rgbaColor=[.3, 0.3, 0.3, 1.0],
+        #                                               specularColor=[0.4, .4, 0],
+        #                                               visualFramePosition=[0.0, 0.0, 0.0],
+        #                                               meshScale=mesh_scale)
 
-                collisionShapeId = pyb.createCollisionShape(shapeType=pyb.GEOM_MESH,
-                                                            fileName=name_object,
-                                                            collisionFramePosition=[0.0, 0.0, 0.0],
-                                                            meshScale=mesh_scale)
+        #         collisionShapeId = pyb.createCollisionShape(shapeType=pyb.GEOM_MESH,
+        #                                                     fileName=name_object,
+        #                                                     collisionFramePosition=[0.0, 0.0, 0.0],
+        #                                                     meshScale=mesh_scale)
 
-                tmpId = pyb.createMultiBody(baseMass=0.0,
-                                            baseInertialFramePosition=[0, 0, 0],
-                                            baseCollisionShapeIndex=collisionShapeId,
-                                            baseVisualShapeIndex=visualShapeId,
-                                            basePosition=[0.0, 0., 0.0],
-                                            useMaximalCoordinates=True)
-                pyb.changeDynamics(tmpId, -1, lateralFriction=1.0)
+        #         tmpId = pyb.createMultiBody(baseMass=0.0,
+        #                                     baseInertialFramePosition=[0, 0, 0],
+        #                                     baseCollisionShapeIndex=collisionShapeId,
+        #                                     baseVisualShapeIndex=visualShapeId,
+        #                                     basePosition=[0.0, 0., 0.0],
+        #                                     useMaximalCoordinates=True)
+        #         pyb.changeDynamics(tmpId, -1, lateralFriction=1.0)
 
         # Sphere Object for target footsteps :
         for i in range(self.ftps_Ids_target.shape[0]):  # nb of feet target in futur
