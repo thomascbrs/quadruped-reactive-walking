@@ -4,13 +4,14 @@ import pybullet_data
 from time import perf_counter as clock
 import pinocchio as pin
 from solo3D.tools.geometry import EulerToQuaternion
-import os 
+import os
+
 
 class PybVisualizationTraj():
     ''' Class used to vizualise the feet trajectory on the pybullet simulation 
     '''
 
-    def __init__(self, gait, footStepPlannerQP, statePlanner,  footTrajectoryGenerator, enable_pyb_GUI , STL):
+    def __init__(self, gait, footStepPlannerQP, statePlanner,  footTrajectoryGenerator, enable_pyb_GUI, STL):
 
         # Pybullet enabled
         self.enable_pyb_GUI = enable_pyb_GUI
@@ -45,8 +46,7 @@ class PybVisualizationTraj():
         # Sl1m position (6 phases + inital)
         self.sl1m_Ids_target = np.zeros((7, 4))
 
-
-    def update(self, k , device ) :
+    def update(self, k, device):
         ''' Update position of the objects in pybullet environment.
         Args :
         - k (int) : step of the simulation
@@ -75,7 +75,7 @@ class PybVisualizationTraj():
                 # update constraints
                 # self.updateConstraints()
 
-                #update Sl1M :
+                # update Sl1M :
                 # self.updateSl1M_target(all_feet_pos)
 
                 t_end = clock() - t_init
@@ -85,22 +85,22 @@ class PybVisualizationTraj():
 
     def updateConstraints(self):
 
-        gait = self.gait.getCurrentGait() 
-        fsteps =  self.footStepPlannerQP.getFootsteps()
-        footsteps = fsteps[0].reshape((3,4) , order ="F")
-        
-        feet = np.where(gait[0,:] == 1)[0]
-        
-        for i in range(4):
-            if i in feet :
-                pyb.resetBasePositionAndOrientation(int( self.constraints_objects[i]),
-                                                posObj=footsteps[:,i],
-                                                ornObj=np.array([0.0, 0.0, 0.0, 1.0]))           
+        gait = self.gait.getCurrentGait()
+        fsteps = self.footStepPlannerQP.getFootsteps()
+        footsteps = fsteps[0].reshape((3, 4), order="F")
 
-            else :
-                pyb.resetBasePositionAndOrientation(int( self.constraints_objects[i]),
-                                                posObj=np.array([0.,0.,-1]),
-                                                ornObj=np.array([0.0, 0.0, 0.0, 1.0]))     
+        feet = np.where(gait[0, :] == 1)[0]
+
+        for i in range(4):
+            if i in feet:
+                pyb.resetBasePositionAndOrientation(int(self.constraints_objects[i]),
+                                                    posObj=footsteps[:, i],
+                                                    ornObj=np.array([0.0, 0.0, 0.0, 1.0]))
+
+            else:
+                pyb.resetBasePositionAndOrientation(int(self.constraints_objects[i]),
+                                                    posObj=np.array([0., 0., -1]),
+                                                    ornObj=np.array([0.0, 0.0, 0.0, 1.0]))
 
         return 0
 
@@ -114,28 +114,25 @@ class PybVisualizationTraj():
 
         return 0
 
-    def updateSl1M_target(self,all_feet_pos) :
+    def updateSl1M_target(self, all_feet_pos):
         ''' Update position of the SL1M target
         Args : 
             -  all_feet_pos : list of optimized position such as : [[Foot 1 next_pos, None , Foot1 next_pos] , [Foot 2 next_pos, None , Foot2 next_pos] ]
         '''
 
-        for i in range(len(all_feet_pos[0])) :
-            for j in range(len(all_feet_pos)) :
-                if all_feet_pos[j][i] is None : 
+        for i in range(len(all_feet_pos[0])):
+            for j in range(len(all_feet_pos)):
+                if all_feet_pos[j][i] is None:
                     pyb.resetBasePositionAndOrientation(int(self.sl1m_Ids_target[i, j]),
-                                                                    posObj=np.array([0., 0., -0.5]),
-                                                                    ornObj=np.array([0.0, 0.0, 0.0, 1.0]))                   
-                
-                else :
+                                                        posObj=np.array([0., 0., -0.5]),
+                                                        ornObj=np.array([0.0, 0.0, 0.0, 1.0]))
+
+                else:
                     pyb.resetBasePositionAndOrientation(int(self.sl1m_Ids_target[i, j]),
-                                                                    posObj=all_feet_pos[j][i],
-                                                                    ornObj=np.array([0.0, 0.0, 0.0, 1.0]))     
-                    
-                
+                                                        posObj=all_feet_pos[j][i],
+                                                        ornObj=np.array([0.0, 0.0, 0.0, 1.0]))
 
-
-        return 0 
+        return 0
 
     def updateRefTrajectory(self):
         ''' Update the reference state trajectory given by StatePlanner Class.
@@ -167,7 +164,7 @@ class PybVisualizationTraj():
         '''
 
         gait = self.gait.getCurrentGait()
-        fsteps =  self.footStepPlannerQP.getFootsteps()
+        fsteps = self.footStepPlannerQP.getFootsteps()
 
         for j in range(4):
 
@@ -180,7 +177,7 @@ class PybVisualizationTraj():
             init_pos = np.zeros(3)
 
             while gait[i, :].any():
-                footsteps = fsteps[i].reshape((3,4) , order ="F")
+                footsteps = fsteps[i].reshape((3, 4), order="F")
                 if i > 0:
                     if (1 - gait[i-1, j]) * gait[i, j] > 0:  # from flying phase to stance
                         # In any case plot target
@@ -219,7 +216,7 @@ class PybVisualizationTraj():
 
                     if gait[i-1, j] * (1 - gait[i, j]) > 0:
                         # Starting a flying phase
-                        footsteps_previous = fsteps[i-1].reshape((3,4) , order ="F")
+                        footsteps_previous = fsteps[i-1].reshape((3, 4), order="F")
                         init_pos[:] = footsteps_previous[:, j]
 
                 else:
@@ -266,60 +263,61 @@ class PybVisualizationTraj():
 
         print("Loading pybullet object ...")
 
-        pyb.setAdditionalSearchPath(pybullet_data.getDataPath())    
+        pyb.setAdditionalSearchPath(pybullet_data.getDataPath())
 
         # Add environment
         path_mesh = "solo3D/objects/object_" + str(self.object_stair) + "/meshes/"
 
-        name_object = self.STL
-        
-        mesh_scale = [1.0, 1., 1.]
-        # Add stairs with platform and bridge
-        visualShapeId = pyb.createVisualShape(shapeType=pyb.GEOM_MESH,
-                                            fileName=name_object,
-                                            rgbaColor=[.3, 0.3, 0.3, 1.0],
-                                            specularColor=[0.4, .4, 0],
-                                            visualFramePosition=[0.0, 0.0, 0.0],
-                                            meshScale=mesh_scale)
+        if self.STL is not None:
+            name_object = self.STL
 
-        collisionShapeId = pyb.createCollisionShape(shapeType=pyb.GEOM_MESH,
-                                                    fileName=name_object,
-                                                    collisionFramePosition=[0.0, 0.0, 0.0],
-                                                    meshScale=mesh_scale)
+            mesh_scale = [1.0, 1., 1.]
+            # Add stairs with platform and bridge
+            visualShapeId = pyb.createVisualShape(shapeType=pyb.GEOM_MESH,
+                                                  fileName=name_object,
+                                                  rgbaColor=[.3, 0.3, 0.3, 1.0],
+                                                  specularColor=[0.4, .4, 0],
+                                                  visualFramePosition=[0.0, 0.0, 0.0],
+                                                  meshScale=mesh_scale)
 
-        tmpId = pyb.createMultiBody(baseMass=0.0,
+            collisionShapeId = pyb.createCollisionShape(shapeType=pyb.GEOM_MESH,
+                                                        fileName=name_object,
+                                                        collisionFramePosition=[0.0, 0.0, 0.0],
+                                                        meshScale=mesh_scale)
+
+            tmpId = pyb.createMultiBody(baseMass=0.0,
                                         baseInertialFramePosition=[0, 0, 0],
                                         baseCollisionShapeIndex=collisionShapeId,
                                         baseVisualShapeIndex=visualShapeId,
                                         basePosition=[0.0, 0., 0.0],
                                         useMaximalCoordinates=True)
-        pyb.changeDynamics(tmpId, -1, lateralFriction=1.0)   
+            pyb.changeDynamics(tmpId, -1, lateralFriction=1.0)
+        else:
+            for elt in os.listdir(path_mesh):
+                name_object = path_mesh + elt
 
-        # for elt in os.listdir(path_mesh) :
-        #     name_object = path_mesh + elt
-        
-        #     mesh_scale = [1.0, 1., 1.]
-        #     # Add stairs with platform and bridge
-        #     visualShapeId = pyb.createVisualShape(shapeType=pyb.GEOM_MESH,
-        #                                         fileName=name_object,
-        #                                         rgbaColor=[.3, 0.3, 0.3, 1.0],
-        #                                         specularColor=[0.4, .4, 0],
-        #                                         visualFramePosition=[0.0, 0.0, 0.0],
-        #                                         meshScale=mesh_scale)
+                mesh_scale = [1.0, 1., 1.]
+                # Add stairs with platform and bridge
+                visualShapeId = pyb.createVisualShape(shapeType=pyb.GEOM_MESH,
+                                                      fileName=name_object,
+                                                      rgbaColor=[.3, 0.3, 0.3, 1.0],
+                                                      specularColor=[0.4, .4, 0],
+                                                      visualFramePosition=[0.0, 0.0, 0.0],
+                                                      meshScale=mesh_scale)
 
-        #     collisionShapeId = pyb.createCollisionShape(shapeType=pyb.GEOM_MESH,
-        #                                                             fileName=name_object,
-        #                                                             collisionFramePosition=[0.0, 0.0, 0.0],
-        #                                                             meshScale=mesh_scale)
+                collisionShapeId = pyb.createCollisionShape(shapeType=pyb.GEOM_MESH,
+                                                            fileName=name_object,
+                                                            collisionFramePosition=[0.0, 0.0, 0.0],
+                                                            meshScale=mesh_scale)
 
-        #     tmpId = pyb.createMultiBody(baseMass=0.0,
-        #                                                 baseInertialFramePosition=[0, 0, 0],
-        #                                                 baseCollisionShapeIndex=collisionShapeId,
-        #                                                 baseVisualShapeIndex=visualShapeId,
-        #                                                 basePosition=[0.0, 0., 0.0],
-        #                                                 useMaximalCoordinates=True)
-        #     pyb.changeDynamics(tmpId, -1, lateralFriction=1.0)   
-        
+                tmpId = pyb.createMultiBody(baseMass=0.0,
+                                            baseInertialFramePosition=[0, 0, 0],
+                                            baseCollisionShapeIndex=collisionShapeId,
+                                            baseVisualShapeIndex=visualShapeId,
+                                            basePosition=[0.0, 0., 0.0],
+                                            useMaximalCoordinates=True)
+                pyb.changeDynamics(tmpId, -1, lateralFriction=1.0)
+
         # Sphere Object for target footsteps :
         for i in range(self.ftps_Ids_target.shape[0]):  # nb of feet target in futur
 
@@ -407,13 +405,13 @@ class PybVisualizationTraj():
                                               meshScale=mesh_scale)
 
         self.surface_Id = pyb.createMultiBody(baseMass=0.0,
-                                                        baseInertialFramePosition=[0, 0, 0],
-                                                        baseVisualShapeIndex=visualShapeId,
-                                                        basePosition=[0.0, 0.0, -0.1],
-                                                        useMaximalCoordinates=True)
+                                              baseInertialFramePosition=[0, 0, 0],
+                                              baseVisualShapeIndex=visualShapeId,
+                                              basePosition=[0.0, 0.0, -0.1],
+                                              useMaximalCoordinates=True)
 
-        # Object for constraints : 
-        # n_effectors = 4 
+        # Object for constraints :
+        # n_effectors = 4
         # # kinematic_constraints_path = "/home/thomas_cbrs/Library/solo-rbprm/data/com_inequalities/feet_quasi_flat/"
         # # limbs_names = ["FLleg" , "FRleg" , "HLleg" , "HRleg"]
         # kinematic_constraints_path = os.getcwd() + "/solo3D/objects/constraints_sphere/"
@@ -425,11 +423,11 @@ class PybVisualizationTraj():
         #     filekin = kinematic_constraints_path + "COM_constraints_" + \
         #         foot_name + "3.obj"
 
-        #     mesh_scale = [1.,1.,1.] 
+        #     mesh_scale = [1.,1.,1.]
         #     rgba = [0.,0.,1.,0.2]
         #     visualShapeId = pyb.createVisualShape(shapeType=pyb.GEOM_MESH,
         #                                             fileName=filekin,
-        #                                             rgbaColor=rgba,   
+        #                                             rgbaColor=rgba,
         #                                             specularColor=[0.4, .4, 0],
         #                                             visualFramePosition=[0.0, 0.0, 0.0],
         #                                             meshScale=mesh_scale)
@@ -450,33 +448,29 @@ class PybVisualizationTraj():
             # else :
             #     rgba = [1., (1/7)*i, 0., 1.]
 
-            rgba_list = [[1.,0.,0.,1.],
-                    [1.,0.,1.,1.],
-                    [1.,1.,0.,1.],
-                    [0.,0.,1.,1.]]
-            
+            rgba_list = [[1., 0., 0., 1.],
+                         [1., 0., 1., 1.],
+                         [1., 1., 0., 1.],
+                         [0., 0., 1., 1.]]
 
             mesh_scale = [0.01, 0.01, 0.01]
-            
+
             for j in range(4):
                 rgba = rgba_list[j]
                 rgba[-1] = 1 - (1/9)*i
                 visualShapeId = pyb.createVisualShape(shapeType=pyb.GEOM_MESH,
-                                                  fileName="sphere_smooth.obj",
-                                                  halfExtents=[0.5, 0.5, 0.1],
-                                                  rgbaColor=rgba,
-                                                  specularColor=[0.4, .4, 0],
-                                                  visualFramePosition=[0.0, 0.0, 0.0],
-                                                  meshScale=mesh_scale)
-                
-                
-                self.sl1m_Ids_target[i, j] = pyb.createMultiBody(baseMass=0.0,
-                                                                        baseInertialFramePosition=[0, 0, 0],
-                                                                        baseVisualShapeIndex=visualShapeId,
-                                                                        basePosition=[0.0, 0.0, -0.1],
-                                                                        useMaximalCoordinates=True)
+                                                      fileName="sphere_smooth.obj",
+                                                      halfExtents=[0.5, 0.5, 0.1],
+                                                      rgbaColor=rgba,
+                                                      specularColor=[0.4, .4, 0],
+                                                      visualFramePosition=[0.0, 0.0, 0.0],
+                                                      meshScale=mesh_scale)
 
-        
+                self.sl1m_Ids_target[i, j] = pyb.createMultiBody(baseMass=0.0,
+                                                                 baseInertialFramePosition=[0, 0, 0],
+                                                                 baseVisualShapeIndex=visualShapeId,
+                                                                 basePosition=[0.0, 0.0, -0.1],
+                                                                 useMaximalCoordinates=True)
 
         print("pybullet object loaded")
 

@@ -230,6 +230,7 @@ class SurfacePlanner_Wrapper():
         with self.dataOut.get_lock():
             # Compress potential surfaces :
             for foot, foot_surfaces in enumerate(surface_inequalities):
+                i=0
                 for i, (S, s) in enumerate(foot_surfaces):
                     A = np.frombuffer(self.dataOut.potentialSurfaces[foot][i].A).reshape((nrow, 3))
                     b = np.frombuffer(self.dataOut.potentialSurfaces[foot][i].b)

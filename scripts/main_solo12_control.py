@@ -110,17 +110,12 @@ def control_loop(name_interface, name_interface_clone=None):
     t = 0.0
 
     # Default position after calibration
-    # q_init = np.array([0.0, 0.7, -1.4, -0.0, 0.7, -1.4, 0.0, -0.7, +1.4, -0.0, -0.7, +1.4])
+    q_init = np.array([0.0, 0.7, -1.4, -0.0, 0.7, -1.4, 0.0, -0.7, +1.4, -0.0, -0.7, +1.4])
+    # q_init = np.array([0.0, 0.9, -1.6, -0.0, 0.9, -1.6, 0.0, 0.9, -1.6, -0.0, 0.9, -1.6])
 
-    q_init = np.array([0.0, 0.9, -1.6, -0.0, 0.9, -1.6, 0.0, 0.9, -1.6, -0.0, 0.9, -1.6])
     # q_init = np.array([0.0, 0.7, -1.4, -0.0, 0.7, -1.4, 0.0, 0.7, -1.4, -0.0, 0.7, -1.4])
 
     # Run a scenario and retrieve data thanks to the logger
-    controller = Controller(q_init, params.envID, params.velID, params.dt_wbc, params.dt_mpc,
-                            int(params.dt_mpc / params.dt_wbc), t, params.T_gait,
-                            params.T_mpc, params.N_SIMULATION, params.type_MPC, params.use_flat_plane,
-                            params.predefined_vel, enable_pyb_GUI, params.kf_enabled, params.N_gait,
-                            params.SIMULATION)
 
     ####
 
@@ -130,6 +125,12 @@ def control_loop(name_interface, name_interface_clone=None):
     else:
         device = Solo12(name_interface, dt=params.dt_wbc)
         qc = QualisysClient(ip="140.93.16.160", body_id=0)
+
+    controller = Controller(q_init, params.envID, params.velID, params.dt_wbc, params.dt_mpc,
+                            int(params.dt_mpc / params.dt_wbc), t, params.T_gait,
+                            params.T_mpc, params.N_SIMULATION, params.type_MPC, params.use_flat_plane,
+                            params.predefined_vel, enable_pyb_GUI, params.kf_enabled, params.N_gait,
+                            params.SIMULATION, qc=qc)
 
     if name_interface_clone is not None:
         print("PASS")
@@ -284,13 +285,16 @@ def control_loop(name_interface, name_interface_clone=None):
     from matplotlib import pyplot as plt
     plt.figure()
     plt.plot(controller.t_list_filter[1:], 'r+')
-    plt.plot(controller.t_list_planner[1:], 'g+')
+    plt.plot(controller.t_list_gait[1:], 'y+')
+    plt.plot(controller.t_list_footstep[1:], 'r+')
+    plt.plot(controller.t_list_state[1:], 'g+')
+    plt.plot(controller.t_list_foottraj[1:], 'b+')
     plt.plot(controller.t_list_mpc[1:], 'b+')
     plt.plot(controller.t_list_wbc[1:], '+', color="violet")
     plt.plot(controller.t_list_loop[1:], 'k+')
     plt.plot(controller.t_list_InvKin[1:], 'o', color="darkgreen")
     plt.plot(controller.t_list_QPWBC[1:], 'o', color="royalblue")
-    plt.legend(["Estimator", "Planner", "MPC", "WBC", "Whole loop", "InvKin", "QP WBC"])
+    plt.legend(["Estimator", "gait", "footstep planner", "state planner", "trajectory planner", "MPC", "WBC", "Whole loop", "InvKin", "QP WBC"])
     plt.title("Loop time [s]")
     plt.show(block=True)
 

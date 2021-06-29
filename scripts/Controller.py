@@ -2,8 +2,6 @@
 import numpy as np
 import utils_mpc
 import time
-from time import perf_counter as clock
-
 from QP_WBC import wbc_controller
 import MPC_Wrapper
 import pybullet as pyb
@@ -22,12 +20,13 @@ from example_robot_data import load
 from solo3D.tools.geometry import inertiaTranslation
 from time import perf_counter as clock
 
-# URDF = "/local/users/frisbourg/install/share/hpp_environments/urdf/Solo3D/stairs_rotation.urdf"
-# HEIGHTMAP = "/local/users/frisbourg/install/share/hpp_environments/heightmaps/Solo3D/stairs_rotation.pickle"
+URDF = "/local/users/frisbourg/install/share/hpp_environments/urdf/Solo3D/stairs_rotation.urdf"
+HEIGHTMAP = "/local/users/frisbourg/install/share/hpp_environments/heightmaps/Solo3D/stairs_rotation.pickle"
+STL = None
 
-URDF = "/local/users/frisbourg/install/share/hpp_environments/urdf/Solo3D/floor_sparse.urdf"
-HEIGHTMAP = "/local/users/frisbourg/install/share/hpp_environments/heightmaps/Solo3D/floor_sparse.pickle"
-STL = "/local/users/frisbourg/install/share/hpp_environments/meshes/Solo3D/floor_sparse.stl"
+# URDF = "/local/users/frisbourg/install/share/hpp_environments/urdf/Solo3D/floor_sparse.urdf"
+# HEIGHTMAP = "/local/users/frisbourg/install/share/hpp_environments/heightmaps/Solo3D/floor_sparse.pickle"
+# STL = "/local/users/frisbourg/install/share/hpp_environments/meshes/Solo3D/floor_sparse.stl"
 
 
 class Result:
@@ -67,7 +66,7 @@ class dummyDevice:
 class Controller:
 
     def __init__(self, q_init, envID, velID, dt_wbc, dt_mpc, k_mpc, t, T_gait, T_mpc, N_SIMULATION, type_MPC,
-                 use_flat_plane, predefined_vel, enable_pyb_GUI, kf_enabled, N_gait, isSimulation):
+                 use_flat_plane, predefined_vel, enable_pyb_GUI, kf_enabled, N_gait, isSimulation, qc=None):
         """Function that runs a simulation scenario based on a reference velocity profile, an environment and
         various parameters to define the gait
 
@@ -96,7 +95,11 @@ class Controller:
 
         # Lists to log the duration of 1 iteration of the MPC/TSID
         self.t_list_filter = [0] * int(N_SIMULATION)
-        self.t_list_planner = [0] * int(N_SIMULATION)
+        self.t_list_gait = [0] * int(N_SIMULATION)
+        self.t_list_footstep = [0] * int(N_SIMULATION)
+        self.t_list_state = [0] * int(N_SIMULATION)
+        self.t_list_foottraj = [0] * int(N_SIMULATION)
+        # self.t_list_planner = [0] * int(N_SIMULATION)
         self.t_list_mpc = [0] * int(N_SIMULATION)
         self.t_list_wbc = [0] * int(N_SIMULATION)
         self.t_list_loop = [0] * int(N_SIMULATION)
@@ -149,7 +152,7 @@ class Controller:
 
         # Wrapper that makes the link with the solver that you want to use for the MPC
         # First argument to True to have PA's MPC, to False to have Thomas's MPC
-        self.enable_multiprocessing = False
+        self.enable_multiprocessing = True
         self.mpc_wrapper = MPC_Wrapper.MPC_Wrapper(type_MPC, dt_mpc, np.int(T_mpc/dt_mpc),
                                                    k_mpc, T_mpc, N_gait, self.q, self.enable_multiprocessing)
 
@@ -205,9 +208,9 @@ class Controller:
         self.footstepPlanner = lqrw.FootstepPlannerQP()
         self.footstepPlanner.initialize(dt_mpc, T_mpc, self.h_ref, k_mpc, dt_wbc, shoulders.copy(), self.gait, N_gait, self.surfacePlanner.floor_surface)
         
-        self.footTrajectoryGenerator = lqrw.FootTrajectoryGenerator()
-        self.footTrajectoryGenerator.initialize(0.05, 0.07, self.fsteps_init.copy(), shoulders.copy(), dt_wbc, k_mpc, self.gait)
-        # self.footTrajectoryGenerator = FootTrajectoryGeneratorBezier(T_gait, dt_wbc, k_mpc,  self.fsteps_init, self.gait, self.footstepPlanner)
+        # self.footTrajectoryGenerator = lqrw.FootTrajectoryGenerator()
+        # self.footTrajectoryGenerator.initialize(0.05, 0.07, self.fsteps_init.copy(), shoulders.copy(), dt_wbc, k_mpc, self.gait)
+        self.footTrajectoryGenerator = FootTrajectoryGeneratorBezier(T_gait, dt_wbc, k_mpc,  self.fsteps_init, self.gait, self.footstepPlanner)
         
         # Pybullet Trajectory
         self.pybVisualizationTraj = PybVisualizationTraj(self.gait, self.footstepPlanner, self.statePlanner,  self.footTrajectoryGenerator, enable_pyb_GUI, STL)
@@ -264,9 +267,12 @@ class Controller:
             oMb = pin.SE3(pin.Quaternion(self.q[3:7, 0:1]), self.q[0:3, 0:1])
             self.v_estim = self.v.copy()
 
+
         # Update gait
         self.gait.updateGait(self.k, self.k_mpc, self.q[0:7, 0:1], self.joystick.joystick_code)
         cgait = self.gait.getCurrentGait()
+
+        t_gait = time.time()
 
         o_v_ref = np.zeros((6, 1))
         o_v_ref[0:3, 0:1] = oMb.rotation @ self.joystick.v_ref[0:3, 0:1]
@@ -305,13 +311,19 @@ class Controller:
         ), o_v_ref, self.surfacePlanner.potential_surfaces, self.surfacePlanner.selected_surfaces, self.surfacePlanner.mip_success, self.surfacePlanner.mip_iteration)
         fsteps = self.footstepPlanner.getFootsteps()
 
+        t_footstep = time.time()
+
         # Compute target footstep based on current and reference velocities
         self.statePlanner.computeReferenceStates(self.q[:7, 0].copy(), self.v[:6, 0].copy(), o_v_ref[:, 0].copy(), new_step)
         xref = self.statePlanner.getReferenceStates()
 
+        t_state = time.time()
+
         # Compute foot trajectory
-        self.footTrajectoryGenerator.update(self.k, targetFootstep)
-        # self.footTrajectoryGenerator.update(self.k, targetFootstep, device, self.q, self.v)
+        # self.footTrajectoryGenerator.update(self.k, targetFootstep)
+        self.footTrajectoryGenerator.update(self.k, targetFootstep, device, self.q, self.v)
+
+        t_foottraj = time.time()
 
         if new_step:
             self.surfacePlanner.run(self.statePlanner.configs, cgait, targetFootstep, o_v_ref)
@@ -335,7 +347,7 @@ class Controller:
                 xref_CoM = xref.copy()
                 xref_CoM[:3, :] += CoM_offset
                 # Update inertia matrix of MPC
-                self.mpc_wrapper.mpc.I = inertia_CoM
+                # self.mpc_wrapper.mpc.I = inertia_CoM
                 self.mpc_wrapper.solve(self.k, xref_CoM, fsteps, cgait)
 
             except ValueError:
@@ -388,7 +400,7 @@ class Controller:
         self.pybVisualizationTraj.update(self.k, device)
 
         # Logs
-        self.log_misc(t_start, t_filter, t_planner, t_mpc, t_wbc)
+        self.log_misc(t_start, t_filter, t_gait, t_footstep, t_state, t_foottraj, t_planner, t_mpc, t_wbc)
 
         # Log Planner
         self.loggerPlanner.log_mpc(self.k, self.x_f_mpc)
@@ -441,14 +453,17 @@ class Controller:
             self.result.v_des[:] = np.zeros(12)
             self.result.tau_ff[:] = np.zeros(12)
 
-    def log_misc(self, tic, t_filter, t_planner, t_mpc, t_wbc):
+    def log_misc(self, tic, t_filter, t_gait, t_footstep, t_state, t_foottraj, t_planner, t_mpc, t_wbc):
 
         # Log joystick command
         if self.joystick is not None:
             self.estimator.v_ref = self.joystick.v_ref
 
         self.t_list_filter[self.k] = t_filter - tic
-        self.t_list_planner[self.k] = t_planner - t_filter
+        self.t_list_gait[self.k] = t_gait - t_filter
+        self.t_list_footstep[self.k] = t_footstep - t_gait
+        self.t_list_state[self.k] = t_state - t_footstep
+        self.t_list_foottraj[self.k] = t_foottraj - t_state
         self.t_list_mpc[self.k] = t_mpc - t_planner
         self.t_list_wbc[self.k] = t_wbc - t_mpc
         self.t_list_loop[self.k] = time.time() - tic
