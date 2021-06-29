@@ -21,7 +21,7 @@ N_SURFACE_MAX = 10
 N_SURFACE_CONFIG = 3
 N_gait = 100
 N_POTENTIAL_SURFACE = 5
-N_MOVING_FEET = 2
+N_FEET = 4
 N_PHASE = 3
 
 
@@ -49,8 +49,8 @@ class DataOutCtype(Structure):
     Data Out, list of potential and the selected surfaces given by the MIP
     Potential surfaces are used if the MIP has not converged
     '''
-    _fields_ = [('potentialSurfaces',  SurfaceDataCtype * N_POTENTIAL_SURFACE * N_MOVING_FEET),
-                ('selectedSurfaces',   SurfaceDataCtype * N_MOVING_FEET),
+    _fields_ = [('potentialSurfaces',  SurfaceDataCtype * N_POTENTIAL_SURFACE * N_FEET),
+                ('selectedSurfaces',   SurfaceDataCtype * N_FEET),
                 ('all_feet', ctypes.c_double * 12 * N_PHASE),
                 ('success', ctypes.c_bool)]
 
@@ -69,6 +69,7 @@ class DataInCtype(Structure):
 class SurfacePlanner_Wrapper():
     ''' Wrapper for the class SurfacePlanner for the paralellisation
     '''
+
     def __init__(self, urdf, T_gait, N_gait, n_surfaces_configs):
         self.urdf = urdf
         self.T_gait = T_gait
@@ -108,7 +109,7 @@ class SurfacePlanner_Wrapper():
         self.mip_iteration_syn = 0
         self.mip_success_syn = False
 
-        self.multiprocessing = False
+        self.multiprocessing = True
         if self.multiprocessing:  # Setup variables in the shared memory
             self.newData = Value('b', False)
             self.newResult = Value('b', True)
@@ -270,11 +271,11 @@ class SurfacePlanner_Wrapper():
                     self.newResult.value = False
 
                     self.potential_surfaces = lqrw.SurfaceVectorVector()
-                    for foot, foot_surfaces in enumerate(self.dataOut.potentialSurfaces):
+                    for foot_surfaces in self.dataOut.potentialSurfaces:
                         list_surfaces = lqrw.SurfaceVector()
-                        for foot_surface in foot_surfaces:
-                            if foot_surface.on:
-                                list_surfaces.append(lqrw.Surface(foot_surface.A, foot_surface.b, foot_surface.vertices))
+                        for s in foot_surfaces:
+                            if s.on:
+                                list_surfaces.append(lqrw.Surface(np.array(s.A), np.array(s.b), np.array(s.vertices)))
                         self.potential_surfaces.append(list_surfaces)
 
                     self.selected_surfaces = lqrw.SurfaceVector()
@@ -283,8 +284,8 @@ class SurfacePlanner_Wrapper():
                         self.mip_success = True
                         self.mip_iteration += 1
 
-                        for surface in self.dataOut.selectedSurfaces:
-                            self.selected_surfaces.append(lqrw.Surface(surface.A, surface.b, surface.vertices))
+                        for s in self.dataOut.selectedSurfaces:
+                            self.selected_surfaces.append(lqrw.Surface(np.array(s.A), np.array(s.b), np.array(s.vertices)))
 
                         # self.all_feet_pos = self.dataOut.all_feet_pos.copy()
                         # for foot in self.all_feet_pos:

@@ -183,41 +183,37 @@ class PybVisualizationTraj():
                 footsteps = fsteps[i].reshape((3,4) , order ="F")
                 if i > 0:
                     if (1 - gait[i-1, j]) * gait[i, j] > 0:  # from flying phase to stance
-
-
-                        
-
                         # In any case plot target
                         pyb.resetBasePositionAndOrientation(int(self.ftps_Ids_target[c, j]),
                                                             posObj=footsteps[:, j],
                                                             ornObj=np.array([0.0, 0.0, 0.0, 1.0]))
-                        if c == 0:
-                            # Current flying phase, using coeff store in Bezier curve class
-                            t0 = self.footTrajectoryGenerator.t0s[j]
-                            t1 = self.footTrajectoryGenerator.t_swing[j]
-                            t_vector = np.linspace(t0, t1, self.n_points)
+                        # if c == 0:
+                        #     # Current flying phase, using coeff store in Bezier curve class
+                        #     t0 = self.footTrajectoryGenerator.t0s[j]
+                        #     t1 = self.footTrajectoryGenerator.t_swing[j]
+                        #     t_vector = np.linspace(t0, t1, self.n_points)
 
-                            for id_t, t in enumerate(t_vector):
-                                # Bezier trajectory
-                                pos = self.footTrajectoryGenerator.evaluateBezier(j, 0, t)
-                                # Polynomial Curve 5th order
-                                # pos = self.footTrajectoryGenerator.evaluatePoly(j, 0, t)
-                                pyb.resetBasePositionAndOrientation(int(self.trajectory_Ids[c, j, id_t]),
-                                                                    posObj=pos,
-                                                                    ornObj=np.array([0.0, 0.0, 0.0, 1.0]))
+                        #     for id_t, t in enumerate(t_vector):
+                        #         # Bezier trajectory
+                        #         pos = self.footTrajectoryGenerator.evaluateBezier(j, 0, t)
+                        #         # Polynomial Curve 5th order
+                        #         # pos = self.footTrajectoryGenerator.evaluatePoly(j, 0, t)
+                        #         pyb.resetBasePositionAndOrientation(int(self.trajectory_Ids[c, j, id_t]),
+                        #                                             posObj=pos,
+                        #                                             ornObj=np.array([0.0, 0.0, 0.0, 1.0]))
 
-                        else:
-                            # Next phase, using a simple polynomial curve to approximate the next trajectory
-                            t0 = 0.
-                            t1 = self.gait.getPhaseDuration(i, j, 1.0)
-                            t_vector = np.linspace(t0, t1, self.n_points)
+                        # else:
+                        #     # Next phase, using a simple polynomial curve to approximate the next trajectory
+                        #     t0 = 0.
+                        #     t1 = self.gait.getPhaseDuration(i, j, 1.0)
+                        #     t_vector = np.linspace(t0, t1, self.n_points)
 
-                            self.footTrajectoryGenerator.updatePolyCoeff_simple(j, init_pos, footsteps[:, j], t1)
-                            for id_t, t in enumerate(t_vector):
-                                pos = self.footTrajectoryGenerator.evaluatePoly_simple(j, 0, t)
-                                pyb.resetBasePositionAndOrientation(int(self.trajectory_Ids[c, j, id_t]),
-                                                                    posObj=pos,
-                                                                    ornObj=np.array([0.0, 0.0, 0.0, 1.0]))
+                        #     self.footTrajectoryGenerator.updatePolyCoeff_simple(j, init_pos, footsteps[:, j], t1)
+                        #     for id_t, t in enumerate(t_vector):
+                        #         pos = self.footTrajectoryGenerator.evaluatePoly_simple(j, 0, t)
+                        #         pyb.resetBasePositionAndOrientation(int(self.trajectory_Ids[c, j, id_t]),
+                        #                                             posObj=pos,
+                        #                                             ornObj=np.array([0.0, 0.0, 0.0, 1.0]))
 
                         c += 1
 

@@ -40,8 +40,8 @@ class pybullet_simulator:
             self.planeId = pyb.loadURDF("plane.urdf")  # Flat plane
             self.planeIdbis = pyb.loadURDF("plane.urdf")  # Flat plane
             pyb.resetBasePositionAndOrientation(self.planeIdbis, [20.0, 0, 0], [0, 0, 0, 1])
-            pyb.changeVisualShape(self.planeId, -1, rgbaColor=[1, 1, 1, 0.01])
-            pyb.changeVisualShape(self.planeIdbis, -1, rgbaColor=[1, 1, 1, 0.01])
+            pyb.changeVisualShape(self.planeId, -1, rgbaColor=[1, 1, 1, 0.1])
+            pyb.changeVisualShape(self.planeIdbis, -1, rgbaColor=[1, 1, 1, 0.1])
         else:
             import random
             random.seed(41)

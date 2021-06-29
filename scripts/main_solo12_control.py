@@ -317,15 +317,13 @@ def control_loop(name_interface, name_interface_clone=None):
         print(controller.error_value)
 
     # Print timing from cprofile
-    output_folder = "/home/frisbourg/Bureau/"
-    controller.footStepPlannerQP.print_profile(output_folder + "footStepPlanner.prof")
-    controller.footTrajectoryGenerator.print_profile(output_folder + "bezier.prof")
-    controller.surfacePlanner.surfacePlanner.print_profile(output_folder + "surfacePlanner.prof")
+    # output_folder = "/home/frisbourg/Bureau/"
+    # controller.footstepPlanner.print_profile(output_folder + "footStepPlanner.prof")
+    # controller.footTrajectoryGenerator.print_profile(output_folder + "bezier.prof")
+    # controller.surfacePlanner.surfacePlanner.print_profile(output_folder + "surfacePlanner.prof")
 
     # Plot figure relative to planner values
     controller.loggerPlanner.plot_log_planner()
-
-    
 
     print("End of script")
     quit()
