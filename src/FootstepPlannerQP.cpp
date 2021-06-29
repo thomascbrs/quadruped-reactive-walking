@@ -179,7 +179,6 @@ void FootstepPlannerQP::computeFootsteps(VectorN const& q,
             }
         }
 
-        int moving_foot_index = 0;
         // Feet that were in swing phase and are now in stance phase need to be updated
         for (int foot = 0; foot < 4; foot++)
         {
@@ -209,20 +208,17 @@ void FootstepPlannerQP::computeFootsteps(VectorN const& q,
                     }
                 }
 
-                if (flyingFoot && phase == 0)
+                if (flyingFoot && phase == 0) // feet currently in flying phase
                 {
-                    // feet currently in flying phase
-                    if (t0s[foot] < 10e-4 and k_ % k_mpc == 0)
+                    if (t0s[foot] < 10e-4 and k_ % k_mpc == 0) // Beginning of flying phase
                     {
-                        // Beginning of flying phase, selection of surface
                         if (surfaceStatus_)
                         {
-                            selectedSurfaces_[foot] = surfaces_[moving_foot_index];
+                            selectedSurfaces_[foot] = surfaces_[foot];
                         }
                         else
                         {
-                            // Select surface with heuristic
-                            selectedSurfaces_[foot] = selectSurfaceFromPoint(nextFootstep_, phase, moving_foot_index);
+                            selectedSurfaces_[foot] = selectSurfaceFromPoint(nextFootstep_, phase, foot);
                         }
                     }
                     optimData optim_data = {i, foot, selectedSurfaces_[foot], nextFootstepQP_};
@@ -233,17 +229,15 @@ void FootstepPlannerQP::computeFootsteps(VectorN const& q,
                     Surface sf_ = Surface();
                     if (surfaceStatus_)
                     {
-                        sf_ = surfaces_[moving_foot_index];
+                        sf_ = surfaces_[foot];
                     }
                     else
                     {
-                        // Select surface with heuristic
-                        sf_ = selectSurfaceFromPoint(nextFootstep_, phase, moving_foot_index);
+                        sf_ = selectSurfaceFromPoint(nextFootstep_, phase, foot);
                     }
                     optimData optim_data = {i, foot, sf_, nextFootstepQP_};
                     optimVector_.push_back(optim_data);
                 }
-                moving_foot_index += 1;
             }
         }
         if (!(gait.row(i - 1) - gait.row(i)).isZero())
@@ -322,6 +316,7 @@ void FootstepPlannerQP::computeFootsteps(VectorN const& q,
         }
         i++;
     }
+
 }
 
 void FootstepPlannerQP::update_remaining_time()
@@ -413,7 +408,7 @@ void FootstepPlannerQP::updateTargetFootsteps()
         {
             index++;
         }
-        targetFootstep_.col(i) << footsteps_[index](0, i), footsteps_[index](1, i), 0.0;
+        targetFootstep_.col(i) << footsteps_[index](0, i), footsteps_[index](1, i), footsteps_[index](2, i);
     }
 }
 
@@ -513,11 +508,12 @@ MatrixN FootstepPlannerQP::vectorToMatrix(std::vector<Matrix34> const& array)
 
 int FootstepPlannerQP::surfaceInequalities(int i_start, Surface const& surface, Vector3 const& next_ft, int foot)
 {
-    G_.block(i_start, 0, 6, 2) = k_feedback * surface.A_.block(0, 0, 6, 2);
-    G_.block(i_start, 2 + 3 * foot, 6, 3) = -surface.A_;
-    h_.segment(i_start, 6) = surface.b_ - surface.A_ * next_ft;
+    int n_rows = surface.getA().rows();
+    G_.block(i_start, 0, n_rows, 2) = k_feedback * surface.getA().block(0, 0, n_rows, 2);
+    G_.block(i_start, 2 + 3 * foot, n_rows, 3) = -surface.getA();
+    h_.segment(i_start, n_rows) = surface.getb() - surface.getA() * next_ft;
 
-    return i_start + 6;
+    return i_start + n_rows;
 }
 
 SurfaceVector FootstepPlannerQP::getSelectedSurfaces() const
