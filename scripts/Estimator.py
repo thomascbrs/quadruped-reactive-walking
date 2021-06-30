@@ -520,6 +520,10 @@ class Estimator:
             # Rotation matrix to go from base frame to world frame
             oRb = pin.Quaternion(np.array([self.IMU_ang_pos]).T).toRotationMatrix()
 
+            # Replace base velocity estimated by FK by base velocity estimated by mocap
+            if self.qc is not None:
+                self.FK_lin_vel[:] = (self.qc.getOrientationMat9().reshape((3,3)).transpose() @ self.qc.getVelocity().reshape((3, 1))).ravel()
+
             # Get FK estimated velocity at IMU location (base frame)
             cross_product = self.cross3(self._1Mi.translation.ravel(), self.IMU_ang_vel).ravel()
             i_FK_lin_vel = self.FK_lin_vel[:] + cross_product
@@ -530,14 +534,15 @@ class Estimator:
             # Integration of IMU acc at IMU location (world frame)
             # TODO diff finie de la mocap passe bas à la place de oi_FK_lin_vel
             #  integration IMU passe haut
-            if self.qc is None:
-                oi_filt_lin_vel = self.filter_xyz_vel.compute(oi_FK_lin_vel,
+            # if self.qc is None:
+            oi_filt_lin_vel = self.filter_xyz_vel.compute(oi_FK_lin_vel,
+                                                            (oRb @ np.array([self.IMU_lin_acc]).T).ravel(),
+                                                            alpha=self.alpha)
+            """ else:
+                oi_FK_lin_vel = oRb @ (self.qc.getOrientationMat9().reshape((3,3)).transpose() @ self.qc.getVelocity().reshape((3, 1)))            
+                oi_filt_lin_vel = self.filter_xyz_vel.compute(oi_FK_lin_vel.ravel(),
                                                               (oRb @ np.array([self.IMU_lin_acc]).T).ravel(),
-                                                              alpha=self.alpha)
-            else:
-                oi_filt_lin_vel = self.filter_xyz_vel.compute(self.qc.getVelocity(),
-                                                              (oRb @ np.array([self.IMU_lin_acc]).T).ravel(),
-                                                              alpha=self.alpha)
+                                                              alpha=self.alpha) """
 
             # Filtered estimated velocity at IMU location (base frame)
             i_filt_lin_vel = (oRb.T @ np.array([oi_filt_lin_vel]).T).ravel()
@@ -554,8 +559,9 @@ class Estimator:
                 self.filt_lin_pos[:] = self.filter_xyz_pos.compute(
                     self.FK_xyz[:] + self.xyz_mean_feet[:], ob_filt_lin_vel, alpha=np.array([0.995, 0.995, 0.9]))
             else:
+                # Use motion capture position (- radius of feet in Z)
                 self.filt_lin_pos[:] = self.filter_xyz_pos.compute(
-                    self.qc.getPosition(), ob_filt_lin_vel, alpha=np.array([0.995, 0.995, 0.9]))
+                    self.qc.getPosition() - np.array([0.0, 0.0, 0.0155]), ob_filt_lin_vel, alpha=np.array([0.995, 0.995, 0.9]))
 
             # Velocity of the center of the base (base frame)
             self.filt_lin_vel[:] = b_filt_lin_vel

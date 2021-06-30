@@ -8,7 +8,7 @@ class StatePlanner():
 
     def __init__(self, dt_mpc, T_mpc, h_ref, HEIGHTMAP, n_surface_configs, T_gait):
 
-        self.h_ref = h_ref + 0.035
+        self.h_ref = h_ref
         self.dt_mpc = dt_mpc
         self.T_mpc = T_mpc
         self.T_step = T_gait/2

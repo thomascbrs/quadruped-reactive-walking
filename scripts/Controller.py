@@ -11,7 +11,7 @@ import libquadruped_reactive_walking as lqrw
 
 from solo3D.FootTrajectoryGeneratorBezier import FootTrajectoryGeneratorBezier
 from solo3D.StatePlanner import StatePlanner
-from solo3D.LoggerPlanner import LoggerPlanner
+# from solo3D.LoggerPlanner import LoggerPlanner
 from solo3D.SurfacePlannerWrapper import SurfacePlanner_Wrapper
 
 from solo3D.tools.vizualization import PybVisualizationTraj
@@ -23,13 +23,14 @@ from solo3D.tools.geometry import inertiaTranslation
 # HEIGHTMAP = "/local/users/frisbourg/install/share/hpp_environments/heightmaps/Solo3D/stairs_rotation.pickle"
 # STL = None
 
-HEIGHTMAP = "/local/users/frisbourg/install/share/hpp_environments/heightmaps/Solo3D/floor_4_4.pickle"
+HEIGHTMAP = "/home/odri/git/fanny/quadruped-files/floor_4_4.pickle"
 
-URDF = "/local/users/frisbourg/install/share/hpp_environments/urdf/multicontact/ground.urdf"
+URDF = "/home/odri/git/fanny/quadruped-files/ground.urdf"
+STL = "/home/odri/git/fanny/quadruped-files/floor_angles.stl"
 
 # URDF = "/local/users/frisbourg/install/share/hpp_environments/urdf/Solo3D/floor_rectangle.urdf"
 # STL = "/local/users/frisbourg/install/share/hpp_environments/meshes/Solo3D/floor_rectangle.stl"
-STL = "/local/users/frisbourg/install/share/hpp_environments/meshes/Solo3D/floor_rectangle.stl"
+# STL = None # "/local/users/frisbourg/install/share/hpp_environments/meshes/Solo3D/floor_rectangle.stl"
 
 # URDF = "/local/users/frisbourg/install/share/hpp_environments/urdf/Solo3D/floor_angles.urdf"
 # STL = "/local/users/frisbourg/install/share/hpp_environments/meshes/Solo3D/floor_angles.stl"
@@ -214,9 +215,9 @@ class Controller:
         self.footstepPlanner = lqrw.FootstepPlannerQP()
         self.footstepPlanner.initialize(dt_mpc, T_mpc, self.h_ref, k_mpc, dt_wbc, shoulders.copy(), self.gait, N_gait, self.surfacePlanner.floor_surface)
         
-        self.footTrajectoryGenerator = lqrw.FootTrajectoryGenerator()
-        self.footTrajectoryGenerator.initialize(0.05, 0.07, self.fsteps_init.copy(), shoulders.copy(), dt_wbc, k_mpc, self.gait)
-        # self.footTrajectoryGenerator = FootTrajectoryGeneratorBezier(T_gait, dt_wbc, k_mpc,  self.fsteps_init, self.gait, self.footstepPlanner)
+        # self.footTrajectoryGenerator = lqrw.FootTrajectoryGenerator()
+        # self.footTrajectoryGenerator.initialize(0.05, 0.07, self.fsteps_init.copy(), shoulders.copy(), dt_wbc, k_mpc, self.gait)
+        self.footTrajectoryGenerator = FootTrajectoryGeneratorBezier(T_gait, dt_wbc, k_mpc,  self.fsteps_init, self.gait, self.footstepPlanner)
         
         # Pybullet Trajectory
         self.pybVisualizationTraj = PybVisualizationTraj(self.gait, self.footstepPlanner, self.statePlanner,  self.footTrajectoryGenerator, enable_pyb_GUI, STL)
@@ -228,7 +229,7 @@ class Controller:
         self.q_neutral = pin.neutral(self.model).reshape((19, 1))  # column vector
 
         # Log values for planner
-        self.loggerPlanner = LoggerPlanner(dt_mpc, N_SIMULATION, T_gait, k_mpc)
+        # self.loggerPlanner = LoggerPlanner(dt_mpc, N_SIMULATION, T_gait, k_mpc)
 
         self.compute(dDevice)
 
@@ -326,8 +327,8 @@ class Controller:
         t_state = time.time()
 
         # Compute foot trajectory
-        self.footTrajectoryGenerator.update(self.k, targetFootstep)
-        # self.footTrajectoryGenerator.update(self.k, targetFootstep, device, self.q, self.v)
+        # self.footTrajectoryGenerator.update(self.k, targetFootstep)
+        self.footTrajectoryGenerator.update(self.k, targetFootstep, device, self.q, self.v)
 
         t_foottraj = time.time()
 
@@ -391,11 +392,11 @@ class Controller:
                                       self.footTrajectoryGenerator.getFootAcceleration())
 
             # Quantities sent to the control board
-            self.result.P = 2.0 * np.ones(12)
-            self.result.D = 0.2 * np.ones(12)
+            self.result.P = 6.0 * np.ones(12)
+            self.result.D = 0.3 * np.ones(12)
             self.result.q_des[:] = self.myController.qdes[7:]
             self.result.v_des[:] = self.myController.vdes[6:, 0]
-            self.result.tau_ff[:] = 0.5 * self.myController.tau_ff
+            self.result.tau_ff[:] = 0.8 * self.myController.tau_ff
 
         t_wbc = time.time()
 
@@ -409,12 +410,12 @@ class Controller:
         self.log_misc(t_start, t_filter, t_gait, t_footstep, t_state, t_foottraj, t_planner, t_mpc, t_wbc)
 
         # Log Planner
-        self.loggerPlanner.log_mpc(self.k, self.x_f_mpc)
-        self.loggerPlanner.log_feet(self.k, device, self.footTrajectoryGenerator.getFootPosition(),
-                                    self.footTrajectoryGenerator.getFootVelocity(),
-                                    self.footTrajectoryGenerator.getFootAcceleration(), targetFootstep,
-                                    self.q, self.v)
-        self.loggerPlanner.log_state(self.k, self.q[:7], self.v[:6], o_v_ref, self.joystick.v_ref[0:6, 0:1], oMb.rotation,  xref)
+        # self.loggerPlanner.log_mpc(self.k, self.x_f_mpc)
+        # self.loggerPlanner.log_feet(self.k, device, self.footTrajectoryGenerator.getFootPosition(),
+        #                             self.footTrajectoryGenerator.getFootVelocity(),
+        #                             self.footTrajectoryGenerator.getFootAcceleration(), targetFootstep,
+        #                             self.q, self.v)
+        # self.loggerPlanner.log_state(self.k, self.q[:7], self.v[:6], o_v_ref, self.joystick.v_ref[0:6, 0:1], oMb.rotation,  xref)
 
         # Increment loop counter
         self.k += 1
@@ -435,19 +436,19 @@ class Controller:
 
     def security_check(self):
 
-        # if (self.error_flag == 0) and (not self.myController.error) and (not self.joystick.stop):
-        #     if np.any(np.abs(self.estimator.q_filt[7:, 0]) > self.q_security):
-        #         self.myController.error = True
-        #         self.error_flag = 1
-        #         self.error_value = self.estimator.q_filt[7:, 0] * 180 / 3.1415
-        #     if np.any(np.abs(self.estimator.v_secu) > 50):
-        #         self.myController.error = True
-        #         self.error_flag = 2
-        #         self.error_value = self.estimator.v_secu
-        #     if np.any(np.abs(self.myController.tau_ff) > 8):
-        #         self.myController.error = True
-        #         self.error_flag = 3
-        #         self.error_value = self.myController.tau_ff
+        if (self.error_flag == 0) and (not self.myController.error) and (not self.joystick.stop):
+            if np.any(np.abs(self.estimator.q_filt[7:, 0]) > self.q_security):
+                self.myController.error = True
+                self.error_flag = 1
+                self.error_value = self.estimator.q_filt[7:, 0] * 180 / 3.1415
+            if np.any(np.abs(self.estimator.v_secu) > 50):
+                self.myController.error = True
+                self.error_flag = 2
+                self.error_value = self.estimator.v_secu
+            if np.any(np.abs(self.myController.tau_ff) > 8):
+                self.myController.error = True
+                self.error_flag = 3
+                self.error_value = self.myController.tau_ff
 
         # If something wrong happened in TSID controller we stick to a security controller
         if self.myController.error or self.joystick.stop:

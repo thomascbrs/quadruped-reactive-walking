@@ -5,7 +5,6 @@ import numpy as np
 import pybullet as pyb
 import pinocchio as pin
 # import scipy.stats as scipystats
-from matplotlib import cm
 
 
 class Logger:
@@ -377,6 +376,7 @@ class Logger:
                 R[i, j] = r_value
         plt.suptitle("Correlation of state variables")
 
+        from matplotlib import cm
         cmap = cm.get_cmap('gist_heat', 256)
         fig = plt.figure()
         ax = fig.gca()

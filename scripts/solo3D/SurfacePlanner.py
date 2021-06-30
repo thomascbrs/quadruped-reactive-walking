@@ -5,8 +5,8 @@ from time import perf_counter as clock
 
 from sl1m.problem_definition import Problem
 from sl1m.generic_solver import solve_MIP
-import matplotlib.pyplot as plt
-import sl1m.tools.plot_tools as plot
+#import matplotlib.pyplot as plt
+#import sl1m.tools.plot_tools as plot
 
 from solo_rbprm.solo_abstract import Robot as SoloAbstract
 
@@ -206,18 +206,18 @@ class SurfacePlanner:
             return vertices, inequalities, indices, pb_data.all_feet_pos, True
 
         else:
-            ax = plot.draw_whole_scene(self.all_surfaces)
-            plot.plot_initial_contacts(initial_contacts, ax=ax)
-            ax.scatter([c[0] for c in configs], [c[1] for c in configs], [c[2] for c in configs], marker='o', linewidth=5)
-            ax.plot([c[0] for c in configs], [c[1] for c in configs], [c[2] for c in configs])    
+            #ax = plot.draw_whole_scene(self.all_surfaces)
+            #plot.plot_initial_contacts(initial_contacts, ax=ax)
+            #ax.scatter([c[0] for c in configs], [c[1] for c in configs], [c[2] for c in configs], marker='o', linewidth=5)
+            #ax.plot([c[0] for c in configs], [c[1] for c in configs], [c[2] for c in configs])    
 
-            axs = []
-            for phase in range(self.pb.n_phases): 
-                for foot in range(len(self.pb.phaseData[phase].moving)): 
-                    axs.append(plot.draw_whole_scene(self.all_surfaces, title = 'Phase : ' + str(phase) + ', foot : ' + str(self.pb.phaseData[phase].moving[foot])))
-                    plot.draw_potential_surfaces_gait(surfaces, phase, foot, ax=axs[-1])
+            #axs = []
+            #for phase in range(self.pb.n_phases): 
+            #    for foot in range(len(self.pb.phaseData[phase].moving)): 
+            #        axs.append(plot.draw_whole_scene(self.all_surfaces, title = 'Phase : ' + str(phase) + ', foot : ' + str(self.pb.phaseData[phase].moving[foot])))
+            #        plot.draw_potential_surfaces_gait(surfaces, phase, foot, ax=axs[-1])
 
-            plt.show()
+            #plt.show()
 
             print("The MIP problem did NOT converge")
             # TODO what if the problem did not converge ???

@@ -109,7 +109,7 @@ class SurfacePlanner_Wrapper():
         self.mip_iteration_syn = 0
         self.mip_success_syn = False
 
-        self.multiprocessing = True
+        self.multiprocessing = False
         if self.multiprocessing:  # Setup variables in the shared memory
             self.newData = Value('b', False)
             self.newResult = Value('b', True)

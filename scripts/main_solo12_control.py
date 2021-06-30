@@ -182,12 +182,12 @@ def control_loop(name_interface, name_interface_clone=None):
 
         # Check that the initial position of actuators is not too far from the
         # desired position of actuators to avoid breaking the robot
-        # if (t <= 10 * DT):
-        #     if np.max(np.abs(controller.result.q_des - device.q_mes)) > 0.15:
-        #         print("DIFFERENCE: ", controller.result.q_des - device.q_mes)
-        #         print("q_des: ", controller.result.q_des)
-        #         print("q_mes: ", device.q_mes)
-        #         break
+        if (t <= 10 * params.dt_wbc):
+            if np.max(np.abs(controller.result.q_des - device.q_mes)) > 0.15:
+                print("DIFFERENCE: ", controller.result.q_des - device.q_mes)
+                print("q_des: ", controller.result.q_des)
+                print("q_mes: ", device.q_mes)
+                break
 
         # Set desired quantities for the actuators
         device.SetDesiredJointPDgains(controller.result.P, controller.result.D)
