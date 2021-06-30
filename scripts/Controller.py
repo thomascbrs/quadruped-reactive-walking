@@ -23,6 +23,7 @@ from solo3D.tools.geometry import inertiaTranslation
 # HEIGHTMAP = "/local/users/frisbourg/install/share/hpp_environments/heightmaps/Solo3D/stairs_rotation.pickle"
 # STL = None
 
+# HEIGHTMAP = "/local/users/frisbourg/install/share/hpp_environments/heightmaps/Solo3D/floor_4_4.pickle"
 HEIGHTMAP = "/home/odri/git/fanny/quadruped-files/floor_4_4.pickle"
 
 URDF = "/home/odri/git/fanny/quadruped-files/ground.urdf"
@@ -30,7 +31,9 @@ STL = "/home/odri/git/fanny/quadruped-files/floor_angles.stl"
 
 # URDF = "/local/users/frisbourg/install/share/hpp_environments/urdf/Solo3D/floor_rectangle.urdf"
 # STL = "/local/users/frisbourg/install/share/hpp_environments/meshes/Solo3D/floor_rectangle.stl"
-# STL = None # "/local/users/frisbourg/install/share/hpp_environments/meshes/Solo3D/floor_rectangle.stl"
+
+# URDF = "/local/users/frisbourg/install/share/hpp_environments/urdf/multicontact/ground.urdf"
+# STL = None
 
 # URDF = "/local/users/frisbourg/install/share/hpp_environments/urdf/Solo3D/floor_angles.urdf"
 # STL = "/local/users/frisbourg/install/share/hpp_environments/meshes/Solo3D/floor_angles.stl"
@@ -215,9 +218,9 @@ class Controller:
         self.footstepPlanner = lqrw.FootstepPlannerQP()
         self.footstepPlanner.initialize(dt_mpc, T_mpc, self.h_ref, k_mpc, dt_wbc, shoulders.copy(), self.gait, N_gait, self.surfacePlanner.floor_surface)
         
-        # self.footTrajectoryGenerator = lqrw.FootTrajectoryGenerator()
-        # self.footTrajectoryGenerator.initialize(0.05, 0.07, self.fsteps_init.copy(), shoulders.copy(), dt_wbc, k_mpc, self.gait)
-        self.footTrajectoryGenerator = FootTrajectoryGeneratorBezier(T_gait, dt_wbc, k_mpc,  self.fsteps_init, self.gait, self.footstepPlanner)
+        self.footTrajectoryGenerator = lqrw.FootTrajectoryGenerator()
+        self.footTrajectoryGenerator.initialize(0.05, 0.07, self.fsteps_init.copy(), shoulders.copy(), dt_wbc, k_mpc, self.gait)
+        # self.footTrajectoryGenerator = FootTrajectoryGeneratorBezier(T_gait, dt_wbc, k_mpc,  self.fsteps_init, self.gait, self.footstepPlanner)
         
         # Pybullet Trajectory
         self.pybVisualizationTraj = PybVisualizationTraj(self.gait, self.footstepPlanner, self.statePlanner,  self.footTrajectoryGenerator, enable_pyb_GUI, STL)
@@ -327,8 +330,8 @@ class Controller:
         t_state = time.time()
 
         # Compute foot trajectory
-        # self.footTrajectoryGenerator.update(self.k, targetFootstep)
-        self.footTrajectoryGenerator.update(self.k, targetFootstep, device, self.q, self.v)
+        self.footTrajectoryGenerator.update(self.k, targetFootstep)
+        # self.footTrajectoryGenerator.update(self.k, targetFootstep, device, self.q, self.v)
 
         t_foottraj = time.time()
 

@@ -237,7 +237,10 @@ def control_loop(name_interface, name_interface_clone=None):
 
         t += params.dt_wbc  # Increment loop time
 
-    # ****************************************************************
+    # ***************************************************************
+    print(not device.hardware.IsTimeout())
+    print(t < t_max)
+    print(not controller.myController.error)
 
     # Stop clone interface running in parallel process
     if not params.SIMULATION and name_interface_clone is not None:
@@ -247,7 +250,7 @@ def control_loop(name_interface, name_interface_clone=None):
     if controller.enable_multiprocessing:
         print("Stopping parallel process")
         controller.mpc_wrapper.stop_parallel_loop()
-        controller.surfacePlanner.stop_parallel_loop()
+        # controller.surfacePlanner.stop_parallel_loop()
     # controller.view.stop()  # Stop viewer
 
     # DAMPING TO GET ON THE GROUND PROGRESSIVELY *********************

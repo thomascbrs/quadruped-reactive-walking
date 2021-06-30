@@ -109,7 +109,7 @@ class SurfacePlanner_Wrapper():
         self.mip_iteration_syn = 0
         self.mip_success_syn = False
 
-        self.multiprocessing = False
+        self.multiprocessing = True
         if self.multiprocessing:  # Setup variables in the shared memory
             self.newData = Value('b', False)
             self.newResult = Value('b', True)
@@ -124,7 +124,6 @@ class SurfacePlanner_Wrapper():
             self.surfacePlanner = SurfacePlanner(self.urdf, self.T_gait)
 
     def run(self, configs, gait_in, current_contacts, o_v_ref):
-
         if self.multiprocessing:
             self.run_asynchronous(configs, gait_in, current_contacts, o_v_ref)
         else:

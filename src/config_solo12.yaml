@@ -14,6 +14,6 @@ robot:
     N_SIMULATION: 40000  # Number of simulated wbc time steps
     type_MPC: true  # Which MPC solver you want to use: True to have PA's MPC, to False to have Thomas's MPC
     use_flat_plane: true  # If True the ground is flat, otherwise it has bumps
-    predefined_vel: false  # If we are using a predefined reference velocity (True) or a joystick (False)
+    predefined_vel: true  # If we are using a predefined reference velocity (True) or a joystick (False)
     kf_enabled: false  # Use complementary filter (False) or kalman filter (True) for the estimator 
     enable_pyb_GUI: true  # Enable/disable PyBullet GUI
