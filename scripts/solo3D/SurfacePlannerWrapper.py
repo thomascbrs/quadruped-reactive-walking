@@ -316,7 +316,7 @@ class SurfacePlanner_Wrapper():
                         vertices = np.frombuffer(self.dataOut.selectedSurfaces[index_phase][index_foot].vertices).reshape((nvertices, 3))
                         A[:, :] = surfaces_inequality[index_phase].S[index_foot][id_selected][0][:, :]
                         b[:] = surfaces_inequality[index_phase].S[index_foot][id_selected][1][:]
-                        vertices = surfaces_vertices[index_phase][index_foot][id_selected].T[:, :]
+                        vertices[:,:] = surfaces_vertices[index_phase][index_foot][id_selected].T[:, :]
                         self.dataOut.selectedSurfaces[index_phase][index_foot].on = True
 
                 # Compress feet : TODO

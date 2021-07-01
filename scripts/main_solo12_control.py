@@ -110,9 +110,9 @@ def control_loop(name_interface, name_interface_clone=None):
     t = 0.0
 
     # Default position after calibration
-    # q_init = np.array([0.0, 0.7, -1.4, -0.0, 0.7, -1.4, 0.0, -0.7, +1.4, -0.0, -0.7, +1.4])
+    q_init = np.array([0.0, 0.7, -1.4, -0.0, 0.7, -1.4, 0.0, -0.7, +1.4, -0.0, -0.7, +1.4])
 
-    q_init = np.array([0.0, 0.9, -1.6, -0.0, 0.9, -1.6, 0.0, 0.9, -1.6, -0.0, 0.9, -1.6])
+    # q_init = np.array([0.0, 0.9, -1.6, -0.0, 0.9, -1.6, 0.0, 0.9, -1.6, -0.0, 0.9, -1.6])
     # q_init = np.array([0.0, 0.7, -1.4, -0.0, 0.7, -1.4, 0.0, 0.7, -1.4, -0.0, 0.7, -1.4])
 
     # Run a scenario and retrieve data thanks to the logger
@@ -318,9 +318,10 @@ def control_loop(name_interface, name_interface_clone=None):
 
     # Print timing from cprofile
     output_folder = "/home/thomas_cbrs/Desktop/edin/quadruped-reactive-walking/scripts/solo3D/tools/profile_results/"
-    controller.footStepPlannerQP.print_profile(output_folder + "footStepPlanner.prof")
-    controller.footTrajectoryGenerator.print_profile(output_folder + "bezier.prof")
-    controller.surfacePlanner.surfacePlanner.print_profile(output_folder + "surfacePlanner.prof")
+    # controller.footStepPlannerQP.print_profile(output_folder + "footStepPlanner.prof")
+    # controller.footTrajectoryGenerator.print_profile(output_folder + "bezier.prof")
+    # controller.surfacePlanner.surfacePlanner.print_profile(output_folder + "surfacePlanner.prof")
+    controller.statePlanner.print_profile(output_folder + "statePlanner.prof")
 
     # Plot figure relative to planner values
     controller.loggerPlanner.plot_log_planner()

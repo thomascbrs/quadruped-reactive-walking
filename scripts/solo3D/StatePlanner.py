@@ -3,6 +3,12 @@ import pinocchio as pin
 from solo3D.tools.optimisation import genCost, quadprog_solve_qp, to_least_square
 from sl1m.solver import solve_least_square
 
+from solo3D.tools.ProfileWrapper import ProfileWrapper
+
+# Store the results from cprofile
+profileWrap = ProfileWrapper()
+
+
 
 class StatePlanner():
 
@@ -33,6 +39,7 @@ class StatePlanner():
         # TODO : 4 is actually the number of phases in a gait. We should use a phase length instead of T_gait/4
         self.dt_vector_config = np.linspace(T_gait/2, n_surface_configs*T_gait/2, num=n_surface_configs)
 
+    @profileWrap.profile
     def computeReferenceStates(self, q,  v, o_vref, z_average, new_step=False):
         '''
         - q (7x1) : [px , py , pz , x , y , z , w]  --> here x,y,z,w quaternion
@@ -86,39 +93,39 @@ class StatePlanner():
         
         Z_OFFSET = self.h_ref + 0.0
         
-        if self.INSIDE_MAP :
-            # Inside the boundaries of the heightmap
+        # if self.INSIDE_MAP :
+        #     # Inside the boundaries of the heightmap
 
-            # Law for speed and position of roll / pitch
-            rot_max = 0.3  # rad.s-1
-            r_des = - 1.*np.arctan2(self.surface_equation[1], 1.)
-            p_des = - 1.*np.arctan2(self.surface_equation[0], 1.)
-            k_sp = 100 
-            epsilon = 0.01
+        #     # Law for speed and position of roll / pitch
+        #     rot_max = 0.3  # rad.s-1
+        #     r_des = - 1.*np.arctan2(self.surface_equation[1], 1.)
+        #     p_des = - 1.*np.arctan2(self.surface_equation[0], 1.)
+        #     k_sp = 100 
+        #     epsilon = 0.01
 
-            if r_des != 0 and abs(r_des - RPY[0]) > epsilon:
-                self.referenceStates[3, 1:] = r_des
-                self.referenceStates[9, 1:] = np.sign(r_des - RPY[0])*min(rot_max, k_sp*abs(r_des - RPY[0]))
-            else:
-                self.referenceStates[3, 1:] = 0.
-                self.referenceStates[9, 1:] = 0.
+        #     if r_des != 0 and abs(r_des - RPY[0]) > epsilon:
+        #         self.referenceStates[3, 1:] = r_des
+        #         self.referenceStates[9, 1:] = np.sign(r_des - RPY[0])*min(rot_max, k_sp*abs(r_des - RPY[0]))
+        #     else:
+        #         self.referenceStates[3, 1:] = 0.
+        #         self.referenceStates[9, 1:] = 0.
 
-            if p_des != 0 and abs(p_des - RPY[1]) > epsilon:
-                self.referenceStates[4, 1:] = p_des
-                self.referenceStates[10, 1:] = np.sign(p_des - RPY[1])*min(rot_max, k_sp*abs(p_des - RPY[1]))
-            else:
-                self.referenceStates[4, 1:] = 0.
-                self.referenceStates[10, 1:] = 0.
+        #     if p_des != 0 and abs(p_des - RPY[1]) > epsilon:
+        #         self.referenceStates[4, 1:] = p_des
+        #         self.referenceStates[10, 1:] = np.sign(p_des - RPY[1])*min(rot_max, k_sp*abs(p_des - RPY[1]))
+        #     else:
+        #         self.referenceStates[4, 1:] = 0.
+        #         self.referenceStates[10, 1:] = 0.
 
-            # Get z
-            _, i, j = self.heightMap.find_nearest(q[0, 0:1], q[1, 0:1])
+        #     # Get z
+        #     _, i, j = self.heightMap.find_nearest(q[0, 0:1], q[1, 0:1])
 
-            for k in range(self.n_steps):
-                _, i, j = self.heightMap.find_nearest(self.referenceStates[0, k+1], self.referenceStates[1, k+1])
-                self.referenceStates[2, k + 1] = self.surface_equation[0]*self.heightMap.x[i] + self.surface_equation[1]*self.heightMap.y[j] + self.surface_equation[2] + self.h_ref
+        #     for k in range(self.n_steps):
+        #         _, i, j = self.heightMap.find_nearest(self.referenceStates[0, k+1], self.referenceStates[1, k+1])
+        #         self.referenceStates[2, k + 1] = self.surface_equation[0]*self.heightMap.x[i] + self.surface_equation[1]*self.heightMap.y[j] + self.surface_equation[2] + self.h_ref
 
-                if k == 0:
-                    self.surface_point = np.array([self.heightMap.x[i], self.heightMap.y[j], self.surface_equation[0]*self.heightMap.x[i] + self.surface_equation[1]*self.heightMap.y[j] + self.surface_equation[2]])
+        #         if k == 0:
+        #             self.surface_point = np.array([self.heightMap.x[i], self.heightMap.y[j], self.surface_equation[0]*self.heightMap.x[i] + self.surface_equation[1]*self.heightMap.y[j] + self.surface_equation[2]])
 
         if not new_step:
             return
@@ -136,31 +143,33 @@ class StatePlanner():
             if o_vref[5, 0] != 0: 
                 rpy[2] = RPY[2] + o_vref[5, 0] * self.dt_vector_config[k]
             
-            isInside_min, i_min, j_min = self.heightMap.find_nearest(config[0] - self.FIT_SIZE_X, config[1] - self.FIT_SIZE_Y)
-            isInside_max, i_max, j_max = self.heightMap.find_nearest(config[0] + self.FIT_SIZE_X, config[1] + self.FIT_SIZE_Y)
+            config[2] = self.h_ref
+            config[3:7] = [0., 0., 0., 1.]
+            # isInside_min, i_min, j_min = self.heightMap.find_nearest(config[0] - self.FIT_SIZE_X, config[1] - self.FIT_SIZE_Y)
+            # isInside_max, i_max, j_max = self.heightMap.find_nearest(config[0] + self.FIT_SIZE_X, config[1] + self.FIT_SIZE_Y)
 
-            if isInside_min and isInside_max:
-                n_points = (i_max - i_min) * (j_max - j_min)
-                A = np.zeros((n_points, 3))
-                b = np.zeros(n_points)
-                i_pb = 0
-                for i in range(i_min, i_max):
-                    for j in range(j_min, j_max):
-                        A[i_pb, :] = [self.heightMap.x[i], self.heightMap.y[j], 1.]
-                        b[i_pb] = self.heightMap.heightMap[i, j][0]
-                        i_pb += 1
-                result = solve_least_square(np.array(A), np.array(b))
+            # if isInside_min and isInside_max:
+            #     n_points = (i_max - i_min) * (j_max - j_min)
+            #     A = np.zeros((n_points, 3))
+            #     b = np.zeros(n_points)
+            #     i_pb = 0
+            #     for i in range(i_min, i_max):
+            #         for j in range(j_min, j_max):
+            #             A[i_pb, :] = [self.heightMap.x[i], self.heightMap.y[j], 1.]
+            #             b[i_pb] = self.heightMap.heightMap[i, j][0]
+            #             i_pb += 1
+            #     result = solve_least_square(np.array(A), np.array(b))
 
-                # Get z
-                _, i, j = self.heightMap.find_nearest(config[0], config[1])
-                config[2] = result.x[0]*self.heightMap.x[i] + result.x[1]*self.heightMap.y[j] + result.x[2] + self.h_ref
+            #     # Get z
+            #     _, i, j = self.heightMap.find_nearest(config[0], config[1])
+            #     config[2] = result.x[0]*self.heightMap.x[i] + result.x[1]*self.heightMap.y[j] + result.x[2] + self.h_ref
 
 
-                rpy[0] = -np.arctan2(result.x[1], 1.)
-                rpy[1] = -np.arctan2(result.x[0], 1.)
-                matrix = pin.rpy.rpyToMatrix(rpy)
-                quat = pin.Quaternion(matrix)
-                config[3:7] = [quat.x, quat.y, quat.z, quat.w]
+            #     rpy[0] = -np.arctan2(result.x[1], 1.)
+            #     rpy[1] = -np.arctan2(result.x[0], 1.)
+            #     matrix = pin.rpy.rpyToMatrix(rpy)
+            #     quat = pin.Quaternion(matrix)
+            #     config[3:7] = [quat.x, quat.y, quat.z, quat.w]
         # print("configs : " , self.configs)
 
         return 0
@@ -219,3 +228,12 @@ class StatePlanner():
     def getReferenceStates(self) :
 
         return self.referenceStates
+    
+    def print_profile(self , output_file):
+        ''' Print the profile computed with cProfile
+        Args : 
+        - output_file (str) :  file name
+        '''
+        profileWrap.print_stats(output_file)
+        
+        return  0

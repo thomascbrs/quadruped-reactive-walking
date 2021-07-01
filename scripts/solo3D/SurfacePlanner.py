@@ -143,13 +143,13 @@ class SurfacePlanner:
         gait = self.compute_gait(gait_in)
 
         step_length = self.compute_step_length(o_v_ref)
-        print(step_length)
+        # print(step_length)
 
         surfaces = self.get_potential_surfaces(configs, gait)
 
         initial_contacts = [current_contacts[:, i].tolist() for i in range(4)]
 
-        print(current_contacts)
+        # print(current_contacts)
 
         pb = Problem(limb_names=limbs, other_names=others, constraint_paths=paths)
         pb.generate_problem(R, surfaces, gait, initial_contacts, c0=None,  com=False)
@@ -174,7 +174,7 @@ class SurfacePlanner:
                 selected_surfaces.append(surfaces[0][foot][index])
 
             t1 = clock()
-            print("Run took ", 1000. * (t1-t0))
+            # print("Run took ", 1000. * (t1-t0))
 
             return surfaces, pb.phaseData, surface_indices, pb_data.all_feet_pos, True
 

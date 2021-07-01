@@ -88,7 +88,7 @@ class FootTrajectoryGeneratorBezier:
         # self.past_surface = np.array([-99, -99, -99, -99])
         self.ineq = [0]*4
         self.ineq_vect = [0]*4
-        self.x_margin_max = 0.02
+        self.x_margin_max = 0.04
         self.x_margin = [self.x_margin_max]*4
         self.t_stop = [0.]*4
         self.t_margin = 0.15  # 1 % of the curve after critical point
