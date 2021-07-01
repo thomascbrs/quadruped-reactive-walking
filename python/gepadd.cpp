@@ -1,5 +1,6 @@
 #include "qrw/gepadd.hpp"
 #include "qrw/FootTrajectoryGenerator.hpp"
+#include "qrw/FootTrajectoryGeneratorBezier.hpp"
 #include "qrw/FootstepPlanner.hpp"
 #include "qrw/FootstepPlannerQP.hpp"
 #include "qrw/Gait.hpp"
@@ -93,6 +94,13 @@ struct SurfacePythonVisitor : public bp::def_visitor<SurfacePythonVisitor<Surfac
 
             .def("get_height", &Surface::getHeight, bp::args("point"),
                  "get the height of a point of the surface.\n")
+
+            .add_property("A",
+                          bp::make_function(&Surface::getA, bp::return_value_policy<bp::return_by_value>()))
+            .add_property("b",
+                          bp::make_function(&Surface::getb, bp::return_value_policy<bp::return_by_value>()))
+            .add_property("vertices",
+                          bp::make_function(&Surface::getVertices, bp::return_value_policy<bp::return_by_value>()))
 
             .def("has_point", &Surface::hasPoint, bp::args("point"),
                  "return true if the point is in the surface.\n");
@@ -253,6 +261,38 @@ struct FootTrajectoryGeneratorPythonVisitor : public bp::def_visitor<FootTraject
 void exposeFootTrajectoryGenerator() { FootTrajectoryGeneratorPythonVisitor<FootTrajectoryGenerator>::expose(); }
 
 /////////////////////////////////
+/// Binding FootTrajectoryGeneratorBezier class
+/////////////////////////////////
+template <typename FootTrajectoryGeneratorBezier>
+struct FootTrajectoryGeneratorBezierPythonVisitor : public bp::def_visitor<FootTrajectoryGeneratorBezierPythonVisitor<FootTrajectoryGeneratorBezier>>
+{
+    template <class PyClassFootTrajectoryGeneratorBezier>
+    void visit(PyClassFootTrajectoryGeneratorBezier& cl) const
+    {
+        cl.def(bp::init<>(bp::arg(""), "Default constructor."))
+
+            .def("getFootPosition", &FootTrajectoryGeneratorBezier::getFootPosition, "Get position_ matrix.\n")
+            .def("getFootVelocity", &FootTrajectoryGeneratorBezier::getFootVelocity, "Get velocity_ matrix.\n")
+            .def("getFootAcceleration", &FootTrajectoryGeneratorBezier::getFootAcceleration, "Get acceleration_ matrix.\n")
+
+            .def("initialize", &FootTrajectoryGeneratorBezier::initialize, bp::args("maxHeightIn", "lockTimeIn", "targetFootstepIn", "initialFootPosition", "dt_tsid_in", "k_mpc_in", "gaitIn"),
+                 "Initialize FootTrajectoryGeneratorBezier from Python.\n")
+
+            // Compute target location of footsteps from Python
+            .def("update", &FootTrajectoryGeneratorBezier::update, bp::args("k", "targetFootstep"),
+                 "Compute target location of footsteps from Python.\n");
+    }
+
+    static void expose()
+    {
+        bp::class_<FootTrajectoryGeneratorBezier>("FootTrajectoryGeneratorBezier", bp::no_init).def(FootTrajectoryGeneratorBezierPythonVisitor<FootTrajectoryGeneratorBezier>());
+
+        ENABLE_SPECIFIC_MATRIX_TYPE(MatrixN);
+    }
+};
+void exposeFootTrajectoryGeneratorBezier() { FootTrajectoryGeneratorBezierPythonVisitor<FootTrajectoryGeneratorBezier>::expose(); }
+
+/////////////////////////////////
 /// Binding InvKin class
 /////////////////////////////////
 template <typename InvKin>
@@ -372,6 +412,7 @@ BOOST_PYTHON_MODULE(libquadruped_reactive_walking)
     exposeFootstepPlanner();
     exposeFootstepPlannerQP();
     exposeFootTrajectoryGenerator();
+    exposeFootTrajectoryGeneratorBezier();
     exposeInvKin();
     exposeQPWBC();
     exposeParams();
