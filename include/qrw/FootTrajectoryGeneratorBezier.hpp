@@ -55,7 +55,10 @@ public:
                     double const& dt_tsid_in,
                     int const& k_mpc_in,
                     Gait& gait,
-                    Surface initialSurface_in);
+                    Surface initialSurface_in,
+                    double x_margin_max_in,
+                    double t_margin_in,
+                    double z_margin_in );
 
     ////////////////////////////////////////////////////////////////////////////////////////////////
     ///
@@ -95,6 +98,8 @@ public:
     MatrixN getFootPosition() { return position_; }          ///< Get the next foot position
     MatrixN getFootVelocity() { return velocity_; }          ///< Get the next foot velocity
     MatrixN getFootAcceleration() { return acceleration_; }  ///< Get the next foot acceleration
+    Vector4 get_t0s() { return t0s;}
+    Vector4 get_t_swing() { return t_swing;}
 
 private:
     Gait* gait_;        ///< Target lock before the touchdown
@@ -160,9 +165,9 @@ private:
     std::vector<Vector3> ineq_;
     Vector4 ineq_vector_;
     Vector4 x_margin_;
-    double x_margin_max_ = 0.04;
-    double t_margin_ = 0.15;  // 1 % of the curve after critical point
-    double z_margin_ = 0.01;  // 1 % of the height of the obstacle around the critical point
+    double x_margin_max_; // margin around the obstacle
+    double t_margin_ ;  // % of the curve after critical point
+    double z_margin_;  // % of the height of the obstacle around the critical point
 
     // QP solver
     EiquadprogFast_status expected = EIQUADPROG_FAST_OPTIMAL;

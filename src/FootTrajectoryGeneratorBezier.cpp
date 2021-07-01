@@ -27,10 +27,10 @@ FootTrajectoryGeneratorBezier::FootTrajectoryGeneratorBezier()
     , intersectionPoint_(Vector2::Zero())
     , P_ {MatrixN::Zero(res_size, res_size)}
     , q_ {VectorN::Zero(res_size)}
-    , G_ {MatrixN::Zero(res_size, 0)}
-    , h_ {VectorN::Zero(0)}
-    , C_ {MatrixN::Zero(N_samples_ineq, res_size)}
-    , d_ {VectorN::Zero(N_samples_ineq)}
+    , G_ {MatrixN::Zero(N_samples_ineq, res_size)}
+    , h_ {VectorN::Zero(N_samples_ineq)}
+    , C_ {MatrixN::Zero(res_size, 0)}
+    , d_ {VectorN::Zero(0)}
     , x {VectorN::Zero(res_size)}
     , ineq_vector_ {Vector4::Zero()}
     , x_margin_ {Vector4::Zero()}
@@ -58,7 +58,10 @@ void FootTrajectoryGeneratorBezier::initialize(double const maxHeightIn,
                                          double const& dt_tsid_in,
                                          int const& k_mpc_in,
                                          Gait& gaitIn,
-                                         Surface initialSurface_in)
+                                         Surface initialSurface_in,
+                                         double x_margin_max_in,
+                                         double t_margin_in,
+                                         double z_margin_in)
 {
     dt_tsid = dt_tsid_in;
     k_mpc = k_mpc_in;
@@ -72,6 +75,9 @@ void FootTrajectoryGeneratorBezier::initialize(double const maxHeightIn,
         newSurface_.push_back(initialSurface_in);
         pastSurface_.push_back(initialSurface_in);
     }
+    x_margin_max_ = x_margin_max_in;
+    t_margin_ = t_margin_in;  // 1 % of the curve after critical point
+    z_margin_ = z_margin_in; 
 }
 
 void FootTrajectoryGeneratorBezier::updatePolyCoeff_XY(int const& i_foot, Vector3 const& x_init, Vector3 const& v_init, Vector3 const& a_init, Vector3 const& x_target,  double const& t0, double const& t1)
@@ -216,7 +222,8 @@ void FootTrajectoryGeneratorBezier::updateFootPosition(int const& k, int const i
             // New swing phase --> ineq surface
             t_stop[i_foot] = 0.;
             
-            if (abs( pastSurface_[i_foot].getHeight(targetFootstep.head(2)) - newSurface_[i_foot].getHeight(targetFootstep.head(2)) ) >= 10e-3 )
+            if ( (newSurface_[i_foot].getHeight(targetFootstep.head(2)) - pastSurface_[i_foot].getHeight(targetFootstep.head(2)) ) >= 10e-3 )
+            // Only uphill
             {
                 int nb_vert = newSurface_[i_foot].vertices_.rows();
                 MatrixN vert = newSurface_[i_foot].vertices_;
@@ -251,7 +258,7 @@ void FootTrajectoryGeneratorBezier::updateFootPosition(int const& k, int const i
                             ineq_[i_foot] << -1. , 0. , 0.;
                             ineq_vector_[i_foot] = -Q1[0] ;
                         }
-                        if (ineq_[i_foot].transpose() * targetFootstep > ineq_vector_[i_foot] ){
+                        if (ineq_[i_foot].transpose() * position_.col(i_foot) > ineq_vector_[i_foot] ){
                             // Wrong side, the targeted point is inside the surface
                             ineq_[i_foot] = - ineq_[i_foot];
                             ineq_vector_[i_foot] = -ineq_vector_[i_foot];
@@ -273,6 +280,11 @@ void FootTrajectoryGeneratorBezier::updateFootPosition(int const& k, int const i
             pDefs[i_foot].init_pos = position_.col(i_foot);
             pDefs[i_foot].init_vel = delta_t*velocity_.col(i_foot);
             pDefs[i_foot].init_acc = std::pow(delta_t,2) *acceleration_.col(i_foot);
+        }
+        // REset inequalities to zero
+        G_.setZero();
+        for (int l=0;l<h_.size() ; l++){
+            h_(l) = 0.;
         }
         // Update final conditions of the Problem Definition
         pDefs[i_foot].end_pos = targetFootstep;
@@ -325,7 +337,7 @@ void FootTrajectoryGeneratorBezier::updateFootPosition(int const& k, int const i
                         ineq_[i_foot] << -1. , 0. , 0.;
                         ineq_vector_[i_foot] = -Q1[0] ;
                     }
-                    if (ineq_[i_foot].transpose() * targetFootstep > ineq_vector_[i_foot] ){
+                    if (ineq_[i_foot].transpose() * position_.col(i_foot) > ineq_vector_[i_foot] ){
                         // Wrong side, the targeted point is inside the surface
                         ineq_[i_foot] = - ineq_[i_foot];
                         ineq_vector_[i_foot] = -ineq_vector_[i_foot];
@@ -339,7 +351,8 @@ void FootTrajectoryGeneratorBezier::updateFootPosition(int const& k, int const i
             double t_s;
             double zt ;
 
-            linear_variable_t linear_var_ ;
+
+            linear_variable_t linear_var_ ;    
 
             for (int its=0; its < N_samples_ineq; its++ ){
                 t_s = (its+1.0)/ N_samples_ineq ;
@@ -348,10 +361,9 @@ void FootTrajectoryGeneratorBezier::updateFootPosition(int const& k, int const i
                     if (zt < targetFootstep(2) + z_margin){
                         t_stop[i_foot] = t0 + (t1-t0)*t_s ;                        
                     }
-                    // std::cout << " t_s : " << t_s << std::endl;
-                    // linear_var_ = linear_bezier->operator()(t_s);
-                    // G_.row(its) =  -ineq_[i_foot].transpose() * linear_var_.B();
-                    // h_(its) = - ineq_[i_foot].transpose() * linear_var_.c() + ineq_vector_[i_foot] - (x_margin_[i_foot]);
+                    linear_var_ = linear_bezier->operator()(t_s);
+                    G_.row(its) =  -ineq_[i_foot].transpose() * linear_var_.B();
+                    h_(its) = - ineq_[i_foot].transpose() * linear_var_.c() + ineq_vector_[i_foot] - (x_margin_[i_foot]);
                 }
                 else{
                     G_.row(its).setZero();
@@ -371,14 +383,10 @@ void FootTrajectoryGeneratorBezier::updateFootPosition(int const& k, int const i
 
         P_.setZero();
         q_.setZero();
-        G_.setZero();
-        for (int l=0;l<h_.size() ; l++){
-            h_(l) = 0.;
-        }
         linear_variable_t linear_var ;
         double t_b_;
         for (int j=0; j<N_samples; j++ ){
-            t_b_ = (j+1.0)/ N_samples ;
+            t_b_ = (j+1.0)/ N_samples ;           
             
             linear_var = linear_bezier->operator()(t_b_);
 

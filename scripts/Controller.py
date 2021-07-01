@@ -218,9 +218,14 @@ class Controller:
             self.surfaces.append(floor_surface)
         self.potential_surfaces = lqrw.SurfaceVectorVector()
 
+        # Trajectory Generator Bezier
+        x_margin_max_ = 0.04  # 4cm margin
+        t_margin_ = 0.2  # 15 % of the curve around critical point
+        z_margin_ = 0.01  # 1% of the curve after the critical point 
+
         self.footTrajectoryGenerator = lqrw.FootTrajectoryGeneratorBezier()
         self.footTrajectoryGenerator.initialize(0.05, 0.07, self.fsteps_init.copy(), shoulders.copy(),
-                                                dt_wbc, k_mpc, self.gait , floor_surface)
+                                                dt_wbc, k_mpc, self.gait , floor_surface, x_margin_max_, t_margin_, z_margin_)
 
         self.footstepPlanner.initialize(dt_mpc, T_mpc, self.h_ref, k_mpc, dt_wbc, shoulders.copy(), self.gait, N_gait, floor_surface)
         # self.footTrajectoryGenerator = FootTrajectoryGeneratorBezier(T_gait, dt_wbc, k_mpc,  self.fsteps_init, self.gait, self.footstepPlanner, self.heightMap) #python
