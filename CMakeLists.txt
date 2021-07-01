@@ -60,6 +60,7 @@ set(${PROJECT_NAME}_HEADERS
   include/other/st_to_cc.hpp
   include/qrw/Surface.hpp
   include/qrw/FootstepPlannerQP.hpp
+  include/qrw/FootTrajectoryGeneratorBezier.hpp
   )
 
 set(${PROJECT_NAME}_SOURCES
@@ -75,6 +76,7 @@ set(${PROJECT_NAME}_SOURCES
   src/Params.cpp
   src/Surface.cpp
   src/FootstepPlannerQP.cpp
+  src/FootTrajectoryGeneratorBezier.cpp
   )
 
 add_library(${PROJECT_NAME} SHARED ${${PROJECT_NAME}_SOURCES} ${${PROJECT_NAME}_HEADERS})

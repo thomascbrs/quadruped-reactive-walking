@@ -62,7 +62,7 @@ public:
 
     MatrixN A_;
     VectorN b_;
-    Matrix3N vertices_;
+    MatrixN vertices_;
 };
 
 #endif  // SURFACE_H_INCLUDED

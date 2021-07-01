@@ -301,6 +301,8 @@ void FootstepPlannerQP::computeFootsteps(VectorN const& q,
         double s = std::sin(yaws(i - 1));
         Rz_tmp.topLeftCorner<2, 2>() << c, -s, s, c;
 
+
+
         nextFootstepQP_ = (Rz_tmp * nextFootstepQP_ + q_tmp + q_dxdy).transpose();
         nextFootstepQP_(0) += x(2 + 3 * id_l);
         nextFootstepQP_(1) += x(2 + 3 * id_l + 1);
@@ -413,7 +415,7 @@ void FootstepPlannerQP::updateTargetFootsteps()
         {
             index++;
         }
-        targetFootstep_.col(i) << footsteps_[index](0, i), footsteps_[index](1, i), 0.0;
+        targetFootstep_.col(i) << footsteps_[index](0, i), footsteps_[index](1, i), footsteps_[index](2, i);
     }
 }
 

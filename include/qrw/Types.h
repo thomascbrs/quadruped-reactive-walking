@@ -25,6 +25,7 @@ using Matrix3 = Eigen::Matrix<double, 3, 3>;
 using Matrix4 = Eigen::Matrix<double, 4, 4>;
 using Matrix34 = Eigen::Matrix<double, 3, 4>;
 using Matrix64 = Eigen::Matrix<double, 6, 4>;
+using Matrix74 = Eigen::Matrix<double, 7, 4>;
 using Matrix3N = Eigen::Matrix<double, 3, Eigen::Dynamic>;
 using Matrix6N = Eigen::Matrix<double, 6, Eigen::Dynamic>;
 using MatrixN = Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic>;
