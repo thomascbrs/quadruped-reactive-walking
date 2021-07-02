@@ -14,7 +14,7 @@ from solo3D.StatePlanner import StatePlanner
 # from solo3D.LoggerPlanner import LoggerPlanner
 from solo3D.SurfacePlannerWrapper import SurfacePlanner_Wrapper
 
-from solo3D.tools.vizualization import PybVisualizationTraj
+# from solo3D.tools.vizualization import PybVisualizationTraj
 from example_robot_data import load
 
 from solo3D.tools.geometry import inertiaTranslation
@@ -27,7 +27,7 @@ from solo3D.tools.geometry import inertiaTranslation
 HEIGHTMAP = "/home/odri/git/fanny/quadruped-files/floor_4_4.pickle"
 
 URDF = "/home/odri/git/fanny/quadruped-files/ground.urdf"
-STL = "/home/odri/git/fanny/quadruped-files/floor_angles.stl"
+STL = "/home/odri/git/fanny/quadruped-files/floor_5.stl"
 
 # URDF = "/local/users/frisbourg/install/share/hpp_environments/urdf/Solo3D/floor_rectangle.urdf"
 # STL = "/local/users/frisbourg/install/share/hpp_environments/meshes/Solo3D/floor_rectangle.stl"
@@ -124,7 +124,7 @@ class Controller:
         self.ID_deb_lines = []
 
         # Enable/Disable Gepetto viewer
-        self.enable_gepetto_viewer = True
+        self.enable_gepetto_viewer = False
 
         # Enable/Disable perfect estimator
         perfectEstimator = True
@@ -210,7 +210,8 @@ class Controller:
 
         # Solo3D python class
         n_surface_configs = 3
-        self.surfacePlanner = SurfacePlanner_Wrapper(URDF, T_gait, N_gait, n_surface_configs)
+        self.surfacePlanner = SurfacePlanner_Wrapper(URDF, T_gait, N_gait, n_surface_configs, shoulders)
+        print(shoulders)
 
         self.statePlanner = StatePlanner(dt_mpc, T_mpc, self.h_ref, HEIGHTMAP, n_surface_configs, T_gait)
 
@@ -223,7 +224,7 @@ class Controller:
         # self.footTrajectoryGenerator = FootTrajectoryGeneratorBezier(T_gait, dt_wbc, k_mpc,  self.fsteps_init, self.gait, self.footstepPlanner)
         
         # Pybullet Trajectory
-        self.pybVisualizationTraj = PybVisualizationTraj(self.gait, self.footstepPlanner, self.statePlanner,  self.footTrajectoryGenerator, enable_pyb_GUI, STL)
+        # self.pybVisualizationTraj = PybVisualizationTraj(self.gait, self.footstepPlanner, self.statePlanner,  self.footTrajectoryGenerator, enable_pyb_GUI, STL)
 
         # pinocchio model and data, CoM and Inertia estimation for MPC
         robot = load('solo12')
@@ -336,9 +337,10 @@ class Controller:
         t_foottraj = time.time()
 
         if new_step:
+            print(self.q[:2, 0])
             self.surfacePlanner.run(self.statePlanner.configs, cgait, targetFootstep, o_v_ref)
-            if not self.surfacePlanner.multiprocessing:
-                self.pybVisualizationTraj.updateSl1M_target(self.surfacePlanner.all_feet_pos)
+            # if not self.surfacePlanner.multiprocessing:
+            #     self.pybVisualizationTraj.updateSl1M_target(self.surfacePlanner.all_feet_pos)
 
         t_planner = time.time()
 
@@ -394,20 +396,29 @@ class Controller:
                                       self.footTrajectoryGenerator.getFootVelocity(),
                                       self.footTrajectoryGenerator.getFootAcceleration())
 
+            if self.enable_gepetto_viewer and (self.k % 20 == 0):
+                self.solo.display(self.q[:, 0])
+
             # Quantities sent to the control board
             self.result.P = 6.0 * np.ones(12)
             self.result.D = 0.3 * np.ones(12)
             self.result.q_des[:] = self.myController.qdes[7:]
             self.result.v_des[:] = self.myController.vdes[6:, 0]
-            self.result.tau_ff[:] = 0.8 * self.myController.tau_ff
+            self.result.tau_ff[:] = 0.0 * self.myController.tau_ff
 
         t_wbc = time.time()
+
+        if self.k > 10 and self.enable_pyb_GUI:
+            # pyb.resetDebugVisualizerCamera(cameraDistance=0.8, cameraYaw=45, cameraPitch=-30,
+            #                                cameraTargetPosition=[1.0, 0.3, 0.25])
+            pyb.resetDebugVisualizerCamera(cameraDistance=0.6, cameraYaw=0, cameraPitch=-25.9,
+                                           cameraTargetPosition=[self.q[0, 0]+0.19, self.q[1, 0], 0.0])
 
         # Security check
         self.security_check()
 
         # Update PyBullet camera
-        self.pybVisualizationTraj.update(self.k, device)
+        # self.pybVisualizationTraj.update(self.k, device)
 
         # Logs
         self.log_misc(t_start, t_filter, t_gait, t_footstep, t_state, t_foottraj, t_planner, t_mpc, t_wbc)
@@ -430,8 +441,8 @@ class Controller:
         if self.k > 10 and self.enable_pyb_GUI:
             # pyb.resetDebugVisualizerCamera(cameraDistance=0.8, cameraYaw=45, cameraPitch=-30,
             #                                cameraTargetPosition=[1.0, 0.3, 0.25])
-            # pyb.resetDebugVisualizerCamera(cameraDistance=1.5, cameraYaw=215, cameraPitch=-25.9,
-            #                                cameraTargetPosition=[device.dummyHeight[0], device.dummyHeight[1], 0.0])
+            pyb.resetDebugVisualizerCamera(cameraDistance=1.5, cameraYaw=90, cameraPitch=-25.9,
+                                           cameraTargetPosition=[self.q[0, 0]+0.19, self.q[1, 0], 0.0])
             pass
 
         # TODO : One class for pybullet visualization
@@ -444,11 +455,11 @@ class Controller:
                 self.myController.error = True
                 self.error_flag = 1
                 self.error_value = self.estimator.q_filt[7:, 0] * 180 / 3.1415
-            if np.any(np.abs(self.estimator.v_secu) > 50):
+            if np.any(np.abs(self.estimator.v_secu) > 100):
                 self.myController.error = True
                 self.error_flag = 2
                 self.error_value = self.estimator.v_secu
-            if np.any(np.abs(self.myController.tau_ff) > 8):
+            if np.any(np.abs(self.myController.tau_ff) > 15):
                 self.myController.error = True
                 self.error_flag = 3
                 self.error_value = self.myController.tau_ff

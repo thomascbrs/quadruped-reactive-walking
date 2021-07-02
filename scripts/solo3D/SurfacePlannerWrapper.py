@@ -70,9 +70,10 @@ class SurfacePlanner_Wrapper():
     ''' Wrapper for the class SurfacePlanner for the paralellisation
     '''
 
-    def __init__(self, urdf, T_gait, N_gait, n_surfaces_configs):
+    def __init__(self, urdf, T_gait, N_gait, n_surfaces_configs, shoulders):
         self.urdf = urdf
         self.T_gait = T_gait
+        self.shoulders = shoulders
 
         # TODO : Modify this
         # Usefull for 1st iteration of QP
@@ -121,7 +122,7 @@ class SurfacePlanner_Wrapper():
             self.dataIn = Value(DataInCtype)
 
         else:
-            self.surfacePlanner = SurfacePlanner(self.urdf, self.T_gait)
+            self.surfacePlanner = SurfacePlanner(self.urdf, self.T_gait, self.shoulders)
 
     def run(self, configs, gait_in, current_contacts, o_v_ref):
         if self.multiprocessing:
@@ -175,7 +176,7 @@ class SurfacePlanner_Wrapper():
 
                 with self.dataIn.get_lock():
                     if self.dataIn.iteration == 0:
-                        loop_planner = SurfacePlanner(self.urdf, self.T_gait)
+                        loop_planner = SurfacePlanner(self.urdf, self.T_gait, self.shoulders)
 
                 surfaces, surface_inequalities, surfaces_indices, all_feet_pos, success = loop_planner.run(configs, gait_in, current_contacts, o_v_ref)
 

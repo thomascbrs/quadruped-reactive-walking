@@ -365,6 +365,9 @@ class Estimator:
             self.offset_yaw_IMU = self.RPY[2, 0]  # .copy()
         self.RPY[2] -= self.offset_yaw_IMU  # Remove initial offset of IMU
 
+        if self.qc is not None:
+            self.RPY[2] = self.quaternionToRPY(self.qc.getOrientationQuat())[2] 
+
         self.IMU_ang_pos[:] = self.EulerToQuaternion([self.RPY[0],
                                                       self.RPY[1],
                                                       self.RPY[2]])
@@ -607,6 +610,7 @@ class Estimator:
         # Output filtered position vector (19 x 1)
         self.q_filt[0:3, 0] = self.filt_lin_pos
         if self.perfectEstimator:  # Base height directly from PyBullet
+            self.q_filt[0:2, 0] = device.dummyPos[0:2]
             self.q_filt[2, 0] = device.dummyPos[2] - 0.0155  # Minus feet radius
         self.q_filt[3:7, 0] = self.filt_ang_pos
         self.q_filt[7:, 0] = self.actuators_pos  # Actuators pos are already directly from PyBullet

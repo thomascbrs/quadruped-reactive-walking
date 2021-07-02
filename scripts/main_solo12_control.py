@@ -285,7 +285,7 @@ def control_loop(name_interface, name_interface_clone=None):
     device.hardware.Stop()  # Shut down the interface between the computer and the master board
 
     # Plot estimated computation time for each step for the control architecture
-    from matplotlib import pyplot as plt
+    """from matplotlib import pyplot as plt
     plt.figure()
     plt.plot(controller.t_list_filter[1:], 'r+')
     plt.plot(controller.t_list_gait[1:], 'y+')
@@ -299,7 +299,7 @@ def control_loop(name_interface, name_interface_clone=None):
     plt.plot(controller.t_list_QPWBC[1:], 'o', color="royalblue")
     plt.legend(["Estimator", "gait", "footstep planner", "state planner", "trajectory planner", "MPC", "WBC", "Whole loop", "InvKin", "QP WBC"])
     plt.title("Loop time [s]")
-    plt.show(block=True)
+    plt.show(block=True)"""
 
     # Plot recorded data
     if params.PLOTTING:

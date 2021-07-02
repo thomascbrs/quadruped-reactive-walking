@@ -104,14 +104,14 @@ def init_robot(q_init, enable_viewer):
     q[7:, 0] = q_init
 
     
-    """if enable_viewer:
+    if enable_viewer:
         solo.initViewer(loadModel=True)
         if ('viewer' in solo.viz.__dict__):
-            solo.viewer.gui.addFloor('world/floor')
-            solo.viewer.gui.setRefreshIsSynchronous(False)"""
+            solo.viewer.gui.addUrdfObjects('world/floor', "/home/odri/git/fanny/quadruped-files/ground.urdf", True)
+            solo.viewer.gui.setRefreshIsSynchronous(False)
     if enable_viewer:
         solo.display(q)
-    print("PASS")
+    #print("PASS")
 
     # Initialisation of model quantities
     pin.centerOfMass(solo.model, solo.data, q, np.zeros((18, 1)))

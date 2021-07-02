@@ -35,11 +35,13 @@ class SurfacePlanner:
     Choose the next surface to use by solving a MIP problem
     """
 
-    def __init__(self, environment_URDF, T_gait):
+    def __init__(self, environment_URDF, T_gait, shoulders):
         """
         Initialize the affordance tool and save the solo abstract rbprm builder, and surface dictionary
         """
         self.T_gait = T_gait
+        self.shoulders = shoulders
+
         self.solo_abstract = SoloAbstract()
         self.solo_abstract.setJointBounds("root_joint", [-5., 5., -5., 5., 0.241, 1.5])
         self.solo_abstract.boundSO3([-3.14, 3.14, -0.01, 0.01, -0.01, 0.01])
@@ -51,7 +53,7 @@ class SurfacePlanner:
         self.afftool = AffordanceTool()
         self.afftool.setAffordanceConfig('Support', [0.5, 0.03, 0.00005])
 
-        self.afftool.loadObstacleModel(environment_URDF, "environment", self.vf, reduceSizes=[0.01, 0.01, 0.])
+        self.afftool.loadObstacleModel(environment_URDF, "environment", self.vf, reduceSizes=[0.0, 0.0, 0.])
         self.ps.selectPathValidation("RbprmPathValidation", 0.05)
 
         self.all_surfaces = getAllSurfacesDict(self.afftool)
@@ -88,6 +90,23 @@ class SurfacePlanner:
         step_length = o_v_ref * self.T_gait/2
 
         return np.array([step_length[i][0] for i in range(2)])
+
+    def compute_effector_positions(self, configs):
+        """
+        Compute the step_length used for the cost
+        :param o_v_ref: desired velocity
+        :return: desired step_length
+        """
+        effector_positions = np.zeros((4, self.pb.n_phases, 2))
+        for phase in self.pb.phaseData:
+            for foot in phase.moving:
+                rpy = pin.rpy.matrixToRpy(pin.Quaternion(configs[phase.id][3:7]).toRotationMatrix())
+                shoulders = np.zeros(2)
+                shoulders[0] = self.shoulders[0, foot] * np.cos(rpy[2]) - self.shoulders[1, foot] * np.sin(rpy[2])
+                shoulders[1] = self.shoulders[0, foot] * np.sin(rpy[2]) + self.shoulders[1, foot] * np.cos(rpy[2])
+                effector_positions[foot][phase.id] = np.array(configs[phase.id][:2] + shoulders)
+
+        return effector_positions
 
     def get_potential_surfaces(self, configs, gait):
         """
@@ -185,7 +204,8 @@ class SurfacePlanner:
             vertices, inequalities, indices = self.retrieve_surfaces(surfaces)
             return vertices, inequalities, indices, None, False
 
-        costs = {"step_size": [10.0, step_length]}
+        effector_positions = self.compute_effector_positions(configs)
+        costs = {"step_size": [1.0, step_length], "effector_positions": [10.0, effector_positions]}
         pb_data = solve_MIP(self.pb, costs=costs, com=False)
 
         if pb_data.success:
@@ -196,7 +216,11 @@ class SurfacePlanner:
                 selected_surfaces.append(surfaces[0][foot][index])
 
             t1 = clock()
-            print("Run took ", 1000. * (t1-t0))
+            if 1000. * (t1-t0) > 150.:
+                print("Run took ", 1000. * (t1-t0))
+
+            # import matplotlib.pyplot as plt
+            # import sl1m.tools.plot_tools as plot
 
             # ax = plot.draw_whole_scene(self.all_surfaces)
             # plot.plot_planner_result(pb_data.all_feet_pos, step_size=step_length, ax=ax, show=True)
