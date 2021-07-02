@@ -111,16 +111,11 @@ def control_loop(name_interface, name_interface_clone=None):
 
     # Default position after calibration
     q_init = np.array([0.0, 0.7, -1.4, -0.0, 0.7, -1.4, 0.0, -0.7, +1.4, -0.0, -0.7, +1.4])
-
     # q_init = np.array([0.0, 0.9, -1.6, -0.0, 0.9, -1.6, 0.0, 0.9, -1.6, -0.0, 0.9, -1.6])
+
     # q_init = np.array([0.0, 0.7, -1.4, -0.0, 0.7, -1.4, 0.0, 0.7, -1.4, -0.0, 0.7, -1.4])
 
     # Run a scenario and retrieve data thanks to the logger
-    controller = Controller(q_init, params.envID, params.velID, params.dt_wbc, params.dt_mpc,
-                            int(params.dt_mpc / params.dt_wbc), t, params.T_gait,
-                            params.T_mpc, params.N_SIMULATION, params.type_MPC, params.use_flat_plane,
-                            params.predefined_vel, enable_pyb_GUI, params.kf_enabled, params.N_gait,
-                            params.SIMULATION)
 
     ####
 
@@ -130,6 +125,12 @@ def control_loop(name_interface, name_interface_clone=None):
     else:
         device = Solo12(name_interface, dt=params.dt_wbc)
         qc = QualisysClient(ip="140.93.16.160", body_id=0)
+
+    controller = Controller(q_init, params.envID, params.velID, params.dt_wbc, params.dt_mpc,
+                            int(params.dt_mpc / params.dt_wbc), t, params.T_gait,
+                            params.T_mpc, params.N_SIMULATION, params.type_MPC, params.use_flat_plane,
+                            params.predefined_vel, enable_pyb_GUI, params.kf_enabled, params.N_gait,
+                            params.SIMULATION, qc=qc)
 
     if name_interface_clone is not None:
         print("PASS")
@@ -181,12 +182,12 @@ def control_loop(name_interface, name_interface_clone=None):
 
         # Check that the initial position of actuators is not too far from the
         # desired position of actuators to avoid breaking the robot
-        # if (t <= 10 * DT):
-        #     if np.max(np.abs(controller.result.q_des - device.q_mes)) > 0.15:
-        #         print("DIFFERENCE: ", controller.result.q_des - device.q_mes)
-        #         print("q_des: ", controller.result.q_des)
-        #         print("q_mes: ", device.q_mes)
-        #         break
+        if (t <= 10 * params.dt_wbc):
+            if np.max(np.abs(controller.result.q_des - device.q_mes)) > 0.15:
+                print("DIFFERENCE: ", controller.result.q_des - device.q_mes)
+                print("q_des: ", controller.result.q_des)
+                print("q_mes: ", device.q_mes)
+                break
 
         # Set desired quantities for the actuators
         device.SetDesiredJointPDgains(controller.result.P, controller.result.D)
@@ -236,7 +237,10 @@ def control_loop(name_interface, name_interface_clone=None):
 
         t += params.dt_wbc  # Increment loop time
 
-    # ****************************************************************
+    # ***************************************************************
+    print(not device.hardware.IsTimeout())
+    print(t < t_max)
+    print(not controller.myController.error)
 
     # Stop clone interface running in parallel process
     if not params.SIMULATION and name_interface_clone is not None:
@@ -246,7 +250,7 @@ def control_loop(name_interface, name_interface_clone=None):
     if controller.enable_multiprocessing:
         print("Stopping parallel process")
         controller.mpc_wrapper.stop_parallel_loop()
-        controller.surfacePlanner.stop_parallel_loop()
+        # controller.surfacePlanner.stop_parallel_loop()
     # controller.view.stop()  # Stop viewer
 
     # DAMPING TO GET ON THE GROUND PROGRESSIVELY *********************
@@ -281,18 +285,21 @@ def control_loop(name_interface, name_interface_clone=None):
     device.hardware.Stop()  # Shut down the interface between the computer and the master board
 
     # Plot estimated computation time for each step for the control architecture
-    from matplotlib import pyplot as plt
+    """from matplotlib import pyplot as plt
     plt.figure()
     plt.plot(controller.t_list_filter[1:], 'r+')
-    plt.plot(controller.t_list_planner[1:], 'g+')
+    plt.plot(controller.t_list_gait[1:], 'y+')
+    plt.plot(controller.t_list_footstep[1:], 'r+')
+    plt.plot(controller.t_list_state[1:], 'g+')
+    plt.plot(controller.t_list_foottraj[1:], 'b+')
     plt.plot(controller.t_list_mpc[1:], 'b+')
     plt.plot(controller.t_list_wbc[1:], '+', color="violet")
     plt.plot(controller.t_list_loop[1:], 'k+')
     plt.plot(controller.t_list_InvKin[1:], 'o', color="darkgreen")
     plt.plot(controller.t_list_QPWBC[1:], 'o', color="royalblue")
-    plt.legend(["Estimator", "Planner", "MPC", "WBC", "Whole loop", "InvKin", "QP WBC"])
+    plt.legend(["Estimator", "gait", "footstep planner", "state planner", "trajectory planner", "MPC", "WBC", "Whole loop", "InvKin", "QP WBC"])
     plt.title("Loop time [s]")
-    plt.show(block=True)
+    plt.show(block=True)"""
 
     # Plot recorded data
     if params.PLOTTING:
@@ -317,16 +324,13 @@ def control_loop(name_interface, name_interface_clone=None):
         print(controller.error_value)
 
     # Print timing from cprofile
-    output_folder = "/home/thomas_cbrs/Desktop/edin/quadruped-reactive-walking/scripts/solo3D/tools/profile_results/"
-    # controller.footStepPlannerQP.print_profile(output_folder + "footStepPlanner.prof")
+    # output_folder = "/home/frisbourg/Bureau/"
+    # controller.footstepPlanner.print_profile(output_folder + "footStepPlanner.prof")
     # controller.footTrajectoryGenerator.print_profile(output_folder + "bezier.prof")
     # controller.surfacePlanner.surfacePlanner.print_profile(output_folder + "surfacePlanner.prof")
-    controller.statePlanner.print_profile(output_folder + "statePlanner.prof")
 
     # Plot figure relative to planner values
     controller.loggerPlanner.plot_log_planner()
-
-    
 
     print("End of script")
     quit()

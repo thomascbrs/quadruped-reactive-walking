@@ -1,5 +1,5 @@
 import numpy as np
-import pybullet as pyb 
+# import pybullet as pyb 
 import pinocchio as pin
 from example_robot_data import load
 

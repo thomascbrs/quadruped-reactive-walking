@@ -104,14 +104,14 @@ def init_robot(q_init, enable_viewer):
     q[7:, 0] = q_init
 
     
-    """if enable_viewer:
+    if enable_viewer:
         solo.initViewer(loadModel=True)
         if ('viewer' in solo.viz.__dict__):
-            solo.viewer.gui.addFloor('world/floor')
-            solo.viewer.gui.setRefreshIsSynchronous(False)"""
+            solo.viewer.gui.addUrdfObjects('world/floor', "/home/odri/git/fanny/quadruped-files/ground.urdf", True)
+            solo.viewer.gui.setRefreshIsSynchronous(False)
     if enable_viewer:
         solo.display(q)
-    print("PASS")
+    #print("PASS")
 
     # Initialisation of model quantities
     pin.centerOfMass(solo.model, solo.data, q, np.zeros((18, 1)))
@@ -129,7 +129,7 @@ def init_robot(q_init, enable_viewer):
     return solo, fsteps_init, h_init
 
 
-def init_objects(dt_tsid, dt_mpc, k_max_loop, k_mpc, T_mpc, type_MPC, predefined, h_init, kf_enabled, perfectEstimator):
+def init_objects(dt_tsid, dt_mpc, k_max_loop, k_mpc, T_mpc, type_MPC, predefined, h_init, kf_enabled, perfectEstimator, qc=None):
     """Create several objects that are used in the control loop
 
     Args:
@@ -152,7 +152,7 @@ def init_objects(dt_tsid, dt_mpc, k_max_loop, k_mpc, T_mpc, type_MPC, predefined
     logger = Logger.Logger(k_max_loop, dt_tsid, dt_mpc, k_mpc, T_mpc, type_MPC)
 
     # Create Estimator object
-    estimator = Estimator.Estimator(dt_tsid, k_max_loop, h_init, kf_enabled, perfectEstimator)
+    estimator = Estimator.Estimator(dt_tsid, k_max_loop, h_init, kf_enabled, perfectEstimator, qc=qc)
 
     return joystick, logger, estimator
 

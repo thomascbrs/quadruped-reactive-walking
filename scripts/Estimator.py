@@ -242,10 +242,12 @@ class Estimator:
         perfectEstimator (bool): If we are using a perfect estimator (direct simulator data)
     """
 
-    def __init__(self, dt, N_simulation, h_init=0.22294615, kf_enabled=False, perfectEstimator=False):
+    def __init__(self, dt, N_simulation, h_init=0.22294615, kf_enabled=False, perfectEstimator=False, qc=None):
 
         # Sample frequency
         self.dt = dt
+
+        self.qc = qc
 
         # If the IMU is perfect
         self.perfectEstimator = perfectEstimator
@@ -360,8 +362,11 @@ class Estimator:
         self.RPY = self.quaternionToRPY(device.baseOrientation)
 
         if (self.k_log <= 1):
-            self.offset_yaw_IMU = self.RPY[2, 0] #.copy()
+            self.offset_yaw_IMU = self.RPY[2, 0]  # .copy()
         self.RPY[2] -= self.offset_yaw_IMU  # Remove initial offset of IMU
+
+        if self.qc is not None:
+            self.RPY[2] = self.quaternionToRPY(self.qc.getOrientationQuat())[2] 
 
         self.IMU_ang_pos[:] = self.EulerToQuaternion([self.RPY[0],
                                                       self.RPY[1],
@@ -518,8 +523,9 @@ class Estimator:
             # Rotation matrix to go from base frame to world frame
             oRb = pin.Quaternion(np.array([self.IMU_ang_pos]).T).toRotationMatrix()
 
-            """self.debug_o_lin_vel += 0.002 * (oRb @ np.array([self.IMU_lin_acc]).T)  # TOREMOVE
-            self.filt_lin_vel[:] = (oRb.T @ self.debug_o_lin_vel).ravel()"""
+            # Replace base velocity estimated by FK by base velocity estimated by mocap
+            if self.qc is not None:
+                self.FK_lin_vel[:] = (self.qc.getOrientationMat9().reshape((3,3)).transpose() @ self.qc.getVelocity().reshape((3, 1))).ravel()
 
             # Get FK estimated velocity at IMU location (base frame)
             cross_product = self.cross3(self._1Mi.translation.ravel(), self.IMU_ang_vel).ravel()
@@ -529,9 +535,17 @@ class Estimator:
             oi_FK_lin_vel = (oRb @ np.array([i_FK_lin_vel]).T).ravel()
 
             # Integration of IMU acc at IMU location (world frame)
+            # TODO diff finie de la mocap passe bas à la place de oi_FK_lin_vel
+            #  integration IMU passe haut
+            # if self.qc is None:
             oi_filt_lin_vel = self.filter_xyz_vel.compute(oi_FK_lin_vel,
-                                                          (oRb @ np.array([self.IMU_lin_acc]).T).ravel(),
-                                                          alpha=self.alpha)
+                                                            (oRb @ np.array([self.IMU_lin_acc]).T).ravel(),
+                                                            alpha=self.alpha)
+            """ else:
+                oi_FK_lin_vel = oRb @ (self.qc.getOrientationMat9().reshape((3,3)).transpose() @ self.qc.getVelocity().reshape((3, 1)))            
+                oi_filt_lin_vel = self.filter_xyz_vel.compute(oi_FK_lin_vel.ravel(),
+                                                              (oRb @ np.array([self.IMU_lin_acc]).T).ravel(),
+                                                              alpha=self.alpha) """
 
             # Filtered estimated velocity at IMU location (base frame)
             i_filt_lin_vel = (oRb.T @ np.array([oi_filt_lin_vel]).T).ravel()
@@ -543,11 +557,17 @@ class Estimator:
             ob_filt_lin_vel = (oRb @ np.array([b_filt_lin_vel]).T).ravel()
 
             # Position of the center of the base from FGeometry and filtered velocity (world frame)
-            self.filt_lin_pos[:] = self.filter_xyz_pos.compute(
-                self.FK_xyz[:] + self.xyz_mean_feet[:], ob_filt_lin_vel, alpha=np.array([0.995, 0.995, 0.9]))
+            # TODO mettre position mocap à la place de self.FK_xyz[:] + self.xyz_mean_feet[:]
+            if self.qc is None:
+                self.filt_lin_pos[:] = self.filter_xyz_pos.compute(
+                    self.FK_xyz[:] + self.xyz_mean_feet[:], ob_filt_lin_vel, alpha=np.array([0.995, 0.995, 0.9]))
+            else:
+                # Use motion capture position (- radius of feet in Z)
+                self.filt_lin_pos[:] = self.filter_xyz_pos.compute(
+                    self.qc.getPosition() - np.array([0.0, 0.0, 0.0155]), ob_filt_lin_vel, alpha=np.array([0.995, 0.995, 0.9]))
 
             # Velocity of the center of the base (base frame)
-            self.filt_lin_vel[:] = b_filt_lin_vel 
+            self.filt_lin_vel[:] = b_filt_lin_vel
 
         else:  # Use Kalman filter
 
@@ -564,7 +584,7 @@ class Estimator:
             for i in range(4):
                 framePlacement = - pin.updateFramePlacement(self.model, self.data, self.indexes[i]).translation
                 self.Z[(3*i):(3*(i+1)), 0:1] = oRb @ (framePlacement + self._1Mi.translation.ravel()).reshape((3, 1))
-                self.Z[12+i, 0] = 0.0 # (oRb @ framePlacement.reshape((3, 1)))[2, 0] + self.filt_lin_pos[2]
+                self.Z[12+i, 0] = 0.0  # (oRb @ framePlacement.reshape((3, 1)))[2, 0] + self.filt_lin_pos[2]
 
             # Correction step of the Kalman filter with position and velocity estimations by FK
             # self.Z[0:3, 0] = self.FK_xyz[:] + self.xyz_mean_feet[:]
@@ -590,6 +610,7 @@ class Estimator:
         # Output filtered position vector (19 x 1)
         self.q_filt[0:3, 0] = self.filt_lin_pos
         if self.perfectEstimator:  # Base height directly from PyBullet
+            self.q_filt[0:2, 0] = device.dummyPos[0:2]
             self.q_filt[2, 0] = device.dummyPos[2] - 0.0155  # Minus feet radius
         self.q_filt[3:7, 0] = self.filt_ang_pos
         self.q_filt[7:, 0] = self.actuators_pos  # Actuators pos are already directly from PyBullet

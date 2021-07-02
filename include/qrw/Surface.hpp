@@ -32,13 +32,13 @@ public:
     ~Surface() {}
 
     // Usefull for python binding
-    MatrixN getA();
+    MatrixN getA() const;
     void setA(MatrixN const& A_in);
 
-    VectorN getb();
+    VectorN getb() const;
     void setb(VectorN const& b_in);
 
-    MatrixN getVertices();
+    MatrixN getVertices() const;
     void setVertices(MatrixN const& vertices_in);
 
     //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -49,7 +49,7 @@ public:
     /// \param[in] point Vecto3 [x, y, z]
     ///
     //////////////////////////////////////////////////////////////////////////////////////////////////
-    double getHeight(Vector2 const& point);
+    double getHeight(Vector2 const& point) const;
 
     //////////////////////////////////////////////////////////////////////////////////////////////////
     ///
@@ -58,8 +58,9 @@ public:
     /// \param[in] point Vecto3 [x, y]
     ///
     //////////////////////////////////////////////////////////////////////////////////////////////////
-    bool hasPoint(Vector2 const& point);
+    bool hasPoint(Vector2 const& point) const;
 
+private:
     MatrixN A_;
     VectorN b_;
     MatrixN vertices_;
