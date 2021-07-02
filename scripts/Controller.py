@@ -27,6 +27,7 @@ from solo3D.tools.geometry import inertiaTranslation
 
 # HEIGHTMAP = "/local/users/frisbourg/install/share/hpp_environments/heightmaps/Solo3D/floor_4_4.pickle"
 HEIGHTMAP = "/home/thomas_cbrs/Desktop/edin/quadruped-files/one_step_large/one_step_large.pickle"
+HEIGHTMAP_SLOPE = "/home/thomas_cbrs/Desktop/edin/quadruped-files/one_step_large/one_step_large_slope.pickle"
 
 URDF = "/home/thomas_cbrs/Desktop/edin/quadruped-files/one_step_large/one_step_large.urdf"
 STL = "/home/thomas_cbrs/Desktop/edin/quadruped-files/one_step_large/meshes/"   # STL folder with the separated meshes
@@ -216,7 +217,7 @@ class Controller:
         self.surfacePlanner = SurfacePlanner_Wrapper(URDF, T_gait, N_gait, n_surface_configs, shoulders)
         # print(shoulders)
 
-        self.statePlanner = StatePlanner(dt_mpc, T_mpc, self.h_ref, HEIGHTMAP, n_surface_configs, T_gait)
+        self.statePlanner = StatePlanner(dt_mpc, T_mpc, self.h_ref, HEIGHTMAP, HEIGHTMAP_SLOPE, n_surface_configs, T_gait)
 
         # List of floor surface initialisation
         self.footstepPlanner = lqrw.FootstepPlannerQP()
@@ -363,19 +364,19 @@ class Controller:
         if (self.k % self.k_mpc) == 0:
             try:
                 # Take into account only the leg configuration :
-                self.q_neutral[7:, :] = self.q[7:, :]
-                # Inertia matrix is computed in c = (0,0,0) with ccrba (frame of the body_0)
-                pin.ccrba(self.model, self.data, self.q_neutral, self.v)
-                # Position of CoM in frame body_0
-                CoM_offset = pin.centerOfMass(self.model, self.data, self.q_neutral).reshape((3, 1))
-                # Compute the inertia matrix in CoM frame (body_0 expressed in CoM frame --> -CoM_offset )
-                inertia_CoM = inertiaTranslation(self.data.Ig.inertia, -CoM_offset, 2.5)
-                # xref is given for the position of body_0, apply offset for CoM
-                xref_CoM = xref.copy()
-                xref_CoM[:3, :] += CoM_offset
+                # self.q_neutral[7:, :] = self.q[7:, :]
+                # # Inertia matrix is computed in c = (0,0,0) with ccrba (frame of the body_0)
+                # pin.ccrba(self.model, self.data, self.q_neutral, self.v)
+                # # Position of CoM in frame body_0
+                # CoM_offset = pin.centerOfMass(self.model, self.data, self.q_neutral).reshape((3, 1))
+                # # Compute the inertia matrix in CoM frame (body_0 expressed in CoM frame --> -CoM_offset )
+                # inertia_CoM = inertiaTranslation(self.data.Ig.inertia, -CoM_offset, 2.5)
+                # # xref is given for the position of body_0, apply offset for CoM
+                # xref_CoM = xref.copy()
+                # xref_CoM[:3, :] += CoM_offset
                 # Update inertia matrix of MPC
                 # self.mpc_wrapper.mpc.I = inertia_CoM
-                self.mpc_wrapper.solve(self.k, xref_CoM, fsteps, cgait)
+                self.mpc_wrapper.solve(self.k, xref, fsteps, cgait)
 
             except ValueError:
                 print("MPC Problem")
@@ -419,7 +420,7 @@ class Controller:
             self.result.D = 0.3 * np.ones(12)
             self.result.q_des[:] = self.myController.qdes[7:]
             self.result.v_des[:] = self.myController.vdes[6:, 0]
-            self.result.tau_ff[:] = 0.0 * self.myController.tau_ff
+            self.result.tau_ff[:] = 0.2 * self.myController.tau_ff
 
         t_wbc = time.time()
 
@@ -465,19 +466,19 @@ class Controller:
 
     def security_check(self):
 
-        if (self.error_flag == 0) and (not self.myController.error) and (not self.joystick.stop):
-            if np.any(np.abs(self.estimator.q_filt[7:, 0]) > self.q_security):
-                self.myController.error = True
-                self.error_flag = 1
-                self.error_value = self.estimator.q_filt[7:, 0] * 180 / 3.1415
-            if np.any(np.abs(self.estimator.v_secu) > 100):
-                self.myController.error = True
-                self.error_flag = 2
-                self.error_value = self.estimator.v_secu
-            if np.any(np.abs(self.myController.tau_ff) > 15):
-                self.myController.error = True
-                self.error_flag = 3
-                self.error_value = self.myController.tau_ff
+        # if (self.error_flag == 0) and (not self.myController.error) and (not self.joystick.stop):
+        #     if np.any(np.abs(self.estimator.q_filt[7:, 0]) > self.q_security):
+        #         self.myController.error = True
+        #         self.error_flag = 1
+        #         self.error_value = self.estimator.q_filt[7:, 0] * 180 / 3.1415
+        #     if np.any(np.abs(self.estimator.v_secu) > 100):
+        #         self.myController.error = True
+        #         self.error_flag = 2
+        #         self.error_value = self.estimator.v_secu
+        #     if np.any(np.abs(self.myController.tau_ff) > 15):
+        #         self.myController.error = True
+        #         self.error_flag = 3
+        #         self.error_value = self.myController.tau_ff
 
         # If something wrong happened in TSID controller we stick to a security controller
         if self.myController.error or self.joystick.stop:

@@ -12,7 +12,7 @@ profileWrap = ProfileWrapper()
 
 class StatePlanner():
 
-    def __init__(self, dt_mpc, T_mpc, h_ref, HEIGHTMAP, n_surface_configs, T_gait):
+    def __init__(self, dt_mpc, T_mpc, h_ref, HEIGHTMAP, HEIGHTMAP_SLOPE , n_surface_configs, T_gait):
 
         self.h_ref = h_ref
         self.dt_mpc = dt_mpc
@@ -31,6 +31,9 @@ class StatePlanner():
         self.configs = [np.zeros(7) for _ in range(n_surface_configs)]
 
         self.result = [0., 0., 0.]
+        
+        filehandler = open(HEIGHTMAP_SLOPE, 'rb')
+        self.rpy_map = pickle.load(filehandler)        
 
     def computeReferenceStates(self, q,  v, v_ref, new_step=False):
         '''
@@ -40,7 +43,9 @@ class StatePlanner():
         '''
         rpy = pin.rpy.matrixToRpy(pin.Quaternion(q[3:7]).toRotationMatrix())
         if new_step:
-            self.result = self.compute_mean_surface(q[:3])
+            id_x, id_y = self.rpy_map.map_index(q[0], q[1])
+            self.result = self.rpy_map.result[id_x , id_y]
+        #     self.result = self.compute_mean_surface(q[:3])
 
         # Update the current state
         self.referenceStates[:3, 0] = q[:3] + pin.rpy.rpyToMatrix(rpy).dot(np.array([-0.04, 0., 0.]))
@@ -73,7 +78,7 @@ class StatePlanner():
 
         rpy_map = np.zeros(3)
         rpy_map[0] = -np.arctan2(self.result[1], 1.)
-        rpy_map[1] = -np.arctan2(self.result[0], 1.)
+        rpy_map[1] = -np.arctan2(self.result[0], 1.)        
 
         self.referenceStates[3, 1:] = rpy_map[0] * np.cos(rpy[2]) - rpy_map[1] * np.sin(rpy[2])
         self.referenceStates[4, 1:] = rpy_map[0] * np.sin(rpy[2]) + rpy_map[1] * np.cos(rpy[2])
@@ -95,7 +100,7 @@ class StatePlanner():
         self.referenceStates[8, 1] = max(min((self.referenceStates[2, 1] - q[2]) / self.dt_mpc, v_max), -v_max)
         self.referenceStates[8, 2:] = (self.referenceStates[2, 2] -self.referenceStates[2, 1]) / self.dt_mpc
 
-        if new_step:
+        if new_step:            
             self.compute_configurations(q, v_ref, self.result)
 
     def compute_mean_surface(self, q):
@@ -118,6 +123,7 @@ class StatePlanner():
                 i_pb += 1
 
         return solve_least_square(np.array(A), np.array(b)).x
+    
 
     def compute_configurations(self, q, v_ref, result):
         """  
@@ -143,9 +149,13 @@ class StatePlanner():
             i, j = self.map.map_index(config[0], config[1])
             config[2] = result[0]*self.map.x[i] + result[1]*self.map.y[j] + result[2] + self.h_ref
 
-            rpy_map = np.zeros(3)
-            rpy_map[0] = -np.arctan2(result[1], 1.)
-            rpy_map[1] = -np.arctan2(result[0], 1.)
+            # rpy_map = np.zeros(3)
+            # rpy_map[0] = -np.arctan2(result[1], 1.)
+            # rpy_map[1] = -np.arctan2(result[0], 1.)
+
+            # Compute rpy using slope_map (same i,j)
+            rpy_map = np.array([self.rpy_map.roll[i,j] , self.rpy_map.pitch[i,j] , 0. ])
+
             rpy_config[0] = rpy_map[0] * np.cos(rpy_config[2]) - rpy_map[1] * np.sin(rpy_config[2])
             rpy_config[1] = rpy_map[0] * np.sin(rpy_config[2]) + rpy_map[1] * np.cos(rpy_config[2])
             quat = pin.Quaternion(pin.rpy.rpyToMatrix(rpy_config))
