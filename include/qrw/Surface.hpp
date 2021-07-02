@@ -60,10 +60,12 @@ public:
     //////////////////////////////////////////////////////////////////////////////////////////////////
     bool hasPoint(Vector2 const& point) const;
 
+    MatrixN vertices_;
+
 private:
     MatrixN A_;
     VectorN b_;
-    MatrixN vertices_;
+    
 };
 
 #endif  // SURFACE_H_INCLUDED

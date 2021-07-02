@@ -471,7 +471,7 @@ void FootTrajectoryGeneratorBezier::update(int k, MatrixN const& targetFootstep,
         }
     }
     // Update new surface and past if t0 == 0 (new swing phase)
-    if ((k % k_mpc) == 0)
+    if (  ((k % k_mpc) == 0 ) and (surfacesSelected.size() != 0 ))
     {
         for (int i_foot = 0; i_foot < (int)feet.size(); i_foot++)
         {

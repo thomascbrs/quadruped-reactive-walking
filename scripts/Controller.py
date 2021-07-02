@@ -14,7 +14,7 @@ from solo3D.StatePlanner import StatePlanner
 # from solo3D.LoggerPlanner import LoggerPlanner
 from solo3D.SurfacePlannerWrapper import SurfacePlanner_Wrapper
 
-# from solo3D.tools.vizualization import PybVisualizationTraj
+from solo3D.tools.vizualization import PybVisualizationTraj
 from example_robot_data import load
 
 from solo3D.tools.geometry import inertiaTranslation
@@ -26,10 +26,10 @@ from solo3D.tools.geometry import inertiaTranslation
 # ENV_URDF = "/home/thomas_cbrs/install/share/hpp_environments/urdf/Solo3D/object1.urdf"
 
 # HEIGHTMAP = "/local/users/frisbourg/install/share/hpp_environments/heightmaps/Solo3D/floor_4_4.pickle"
-HEIGHTMAP = "/home/odri/git/fanny/quadruped-files/floor_4_4.pickle"
+HEIGHTMAP = "/home/thomas_cbrs/Desktop/edin/quadruped-files/one_step_large/one_step_large.pickle"
 
-URDF = "/home/odri/git/fanny/quadruped-files/ground.urdf"
-STL = "/home/odri/git/fanny/quadruped-files/floor_5.stl"
+URDF = "/home/thomas_cbrs/Desktop/edin/quadruped-files/one_step_large/one_step_large.urdf"
+STL = "/home/thomas_cbrs/Desktop/edin/quadruped-files/one_step_large/meshes/"   # STL folder with the separated meshes
 
 # URDF = "/local/users/frisbourg/install/share/hpp_environments/urdf/Solo3D/floor_rectangle.urdf"
 # STL = "/local/users/frisbourg/install/share/hpp_environments/meshes/Solo3D/floor_rectangle.stl"
@@ -214,19 +214,12 @@ class Controller:
         # Solo3D python class
         n_surface_configs = 3
         self.surfacePlanner = SurfacePlanner_Wrapper(URDF, T_gait, N_gait, n_surface_configs, shoulders)
-        print(shoulders)
+        # print(shoulders)
 
         self.statePlanner = StatePlanner(dt_mpc, T_mpc, self.h_ref, HEIGHTMAP, n_surface_configs, T_gait)
 
         # List of floor surface initialisation
         self.footstepPlanner = lqrw.FootstepPlannerQP()
-<<<<<<< HEAD
-        floor_surface = lqrw.Surface(self.surfacePlanner.floor_surface.A, self.surfacePlanner.floor_surface.b, self.surfacePlanner.floor_surface.vertices)
-        self.surfaces = lqrw.SurfaceVector()
-        for k in range(4):
-            self.surfaces.append(floor_surface)
-        self.potential_surfaces = lqrw.SurfaceVectorVector()
-
         # Trajectory Generator Bezier
         x_margin_max_ = 0.04  # 4cm margin
         t_margin_ = 0.2  # 15 % of the curve around critical point
@@ -234,22 +227,16 @@ class Controller:
 
         self.footTrajectoryGenerator = lqrw.FootTrajectoryGeneratorBezier()
         self.footTrajectoryGenerator.initialize(0.05, 0.07, self.fsteps_init.copy(), shoulders.copy(),
-                                                dt_wbc, k_mpc, self.gait , floor_surface, x_margin_max_, t_margin_, z_margin_)
-
-        self.footstepPlanner.initialize(dt_mpc, T_mpc, self.h_ref, k_mpc, dt_wbc, shoulders.copy(), self.gait, N_gait, floor_surface)
-        # self.footTrajectoryGenerator = FootTrajectoryGeneratorBezier(T_gait, dt_wbc, k_mpc,  self.fsteps_init, self.gait, self.footstepPlanner, self.heightMap) #python
-        # Pybullet Trajectory
-        self.pybVisualizationTraj = PybVisualizationTraj(self.gait, self.footstepPlanner, self.statePlanner,  self.footTrajectoryGenerator, enable_pyb_GUI, ENV_URDF)
-=======
+                                                dt_wbc, k_mpc, self.gait ,  self.surfacePlanner.floor_surface, x_margin_max_, t_margin_, z_margin_)
+        
         self.footstepPlanner.initialize(dt_mpc, T_mpc, self.h_ref, k_mpc, dt_wbc, shoulders.copy(), self.gait, N_gait, self.surfacePlanner.floor_surface)
         
-        self.footTrajectoryGenerator = lqrw.FootTrajectoryGenerator()
-        self.footTrajectoryGenerator.initialize(0.05, 0.07, self.fsteps_init.copy(), shoulders.copy(), dt_wbc, k_mpc, self.gait)
+        # self.footTrajectoryGenerator = lqrw.FootTrajectoryGenerator()
+        # self.footTrajectoryGenerator.initialize(0.05, 0.07, self.fsteps_init.copy(), shoulders.copy(), dt_wbc, k_mpc, self.gait)
         # self.footTrajectoryGenerator = FootTrajectoryGeneratorBezier(T_gait, dt_wbc, k_mpc,  self.fsteps_init, self.gait, self.footstepPlanner)
         
         # Pybullet Trajectory
-        # self.pybVisualizationTraj = PybVisualizationTraj(self.gait, self.footstepPlanner, self.statePlanner,  self.footTrajectoryGenerator, enable_pyb_GUI, STL)
->>>>>>> upstreamf/test_01_06_2021
+        self.pybVisualizationTraj = PybVisualizationTraj(self.gait, self.footstepPlanner, self.statePlanner,  self.footTrajectoryGenerator, enable_pyb_GUI, STL)
 
         # pinocchio model and data, CoM and Inertia estimation for MPC
         robot = load('solo12')
@@ -343,21 +330,6 @@ class Controller:
             else:
                 self.surfacePlanner.update_latest_results()
 
-<<<<<<< HEAD
-                # update results for cpp
-                self.surfaces = lqrw.SurfaceVector()
-                for surface in self.surfacePlanner.selected_surfaces[0]:
-                    self.surfaces.append(lqrw.Surface(surface.A, surface.b, surface.vertices))                    
-
-                self.potential_surfaces = lqrw.SurfaceVectorVector()
-                for foot_surfaces in self.surfacePlanner.potential_surfaces[0]:
-                    list_surfaces = lqrw.SurfaceVector()
-                    for surface in foot_surfaces:
-                        list_surfaces.append(lqrw.Surface(np.array(surface.A), np.array(surface.b), np.array(surface.vertices)))
-                    self.potential_surfaces.append(list_surfaces)
-
-=======
->>>>>>> upstreamf/test_01_06_2021
         targetFootstep = self.footstepPlanner.computeTargetFootstep(self.k, self.q[0:7, 0:1], self.v[0:6, 0:1].copy(
         ), o_v_ref, self.surfacePlanner.potential_surfaces, self.surfacePlanner.selected_surfaces, self.surfacePlanner.mip_success, self.surfacePlanner.mip_iteration)
         fsteps = self.footstepPlanner.getFootsteps()
@@ -371,21 +343,16 @@ class Controller:
         t_state = time.time()
 
         # Compute foot trajectory
-<<<<<<< HEAD
-        # self.footTrajectoryGenerator.update(self.k, targetFootstep, device, self.q, self.v) # python
-        # self.footTrajectoryGenerator.update(self.k, targetFootstep)   # 2D 
-
         currentPosition = self.computeFootPositionFeedback(self.k , device, self.q, self.v)
-        self.footTrajectoryGenerator.update(self.k , targetFootstep , self.surfaces , currentPosition)
-=======
-        self.footTrajectoryGenerator.update(self.k, targetFootstep)
+        self.footTrajectoryGenerator.update(self.k , targetFootstep , self.surfacePlanner.selected_surfaces , currentPosition)
+        
+        # self.footTrajectoryGenerator.update(self.k, targetFootstep)
         # self.footTrajectoryGenerator.update(self.k, targetFootstep, device, self.q, self.v)
 
         t_foottraj = time.time()
->>>>>>> upstreamf/test_01_06_2021
 
         if new_step:
-            print(self.q[:2, 0])
+            # print(self.q[:2, 0])
             self.surfacePlanner.run(self.statePlanner.configs, cgait, targetFootstep, o_v_ref)
             # if not self.surfacePlanner.multiprocessing:
             #     self.pybVisualizationTraj.updateSl1M_target(self.surfacePlanner.all_feet_pos)
@@ -456,17 +423,17 @@ class Controller:
 
         t_wbc = time.time()
 
-        if self.k > 10 and self.enable_pyb_GUI:
-            # pyb.resetDebugVisualizerCamera(cameraDistance=0.8, cameraYaw=45, cameraPitch=-30,
-            #                                cameraTargetPosition=[1.0, 0.3, 0.25])
-            pyb.resetDebugVisualizerCamera(cameraDistance=0.6, cameraYaw=0, cameraPitch=-25.9,
-                                           cameraTargetPosition=[self.q[0, 0]+0.19, self.q[1, 0], 0.0])
+        # if self.k > 10 and self.enable_pyb_GUI:
+        #     # pyb.resetDebugVisualizerCamera(cameraDistance=0.8, cameraYaw=45, cameraPitch=-30,
+        #     #                                cameraTargetPosition=[1.0, 0.3, 0.25])
+        #     pyb.resetDebugVisualizerCamera(cameraDistance=0.6, cameraYaw=0, cameraPitch=-25.9,
+        #                                    cameraTargetPosition=[self.q[0, 0]+0.19, self.q[1, 0], 0.0])
 
         # Security check
         self.security_check()
 
         # Update PyBullet camera
-        # self.pybVisualizationTraj.update(self.k, device)
+        self.pybVisualizationTraj.update(self.k, device)
 
         # Logs
         self.log_misc(t_start, t_filter, t_gait, t_footstep, t_state, t_foottraj, t_planner, t_mpc, t_wbc)
@@ -489,8 +456,8 @@ class Controller:
         if self.k > 10 and self.enable_pyb_GUI:
             # pyb.resetDebugVisualizerCamera(cameraDistance=0.8, cameraYaw=45, cameraPitch=-30,
             #                                cameraTargetPosition=[1.0, 0.3, 0.25])
-            pyb.resetDebugVisualizerCamera(cameraDistance=1.5, cameraYaw=90, cameraPitch=-25.9,
-                                           cameraTargetPosition=[self.q[0, 0]+0.19, self.q[1, 0], 0.0])
+            # pyb.resetDebugVisualizerCamera(cameraDistance=1.5, cameraYaw=90, cameraPitch=-25.9,
+            #                                cameraTargetPosition=[self.q[0, 0]+0.19, self.q[1, 0], 0.0])
             pass
 
         # TODO : One class for pybullet visualization
