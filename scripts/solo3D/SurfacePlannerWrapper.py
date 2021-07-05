@@ -186,7 +186,7 @@ class SurfacePlanner_Wrapper():
                 t1 = clock()
                 self.compress_dataOut(surfaces, surface_inequalities, surfaces_indices, all_feet_pos, success)
                 t2 = clock()
-                print("TIME COMPRESS DATA [ms] :  ", 1000 * (t2 - t1))
+                # print("TIME COMPRESS DATA [ms] :  ", 1000 * (t2 - t1))
 
                 # Set shared variable to true to signal that a new result is available
                 newResult.value = True

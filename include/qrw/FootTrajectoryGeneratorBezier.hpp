@@ -58,7 +58,10 @@ public:
                     Surface initialSurface_in,
                     double x_margin_max_in,
                     double t_margin_in,
-                    double z_margin_in );
+                    double z_margin_in,
+                    int N_samples_in,
+                    int N_samples_ineq_in, 
+                    int degree_in);
 
     ////////////////////////////////////////////////////////////////////////////////////////////////
     ///
@@ -135,14 +138,15 @@ private:
 
     
     // Number of points in the least square problem
-    int N_samples = 15;
-    int N_samples_ineq = 15;
+    int N_samples;
+    int N_samples_ineq;
     //  dimension of our problem (here 3 as our curve is 3D)
     int dim = 3;
     // Degree of the Bezier curve to match the polys
-    int degree = 7;
+    int degree;
     // Size of the optimised vector in the least square (6 = nb of initial/final conditions)
-    const int res_size = dim*(degree + 1 - 6);
+    // = dim*(degree + 1 - 6)
+    int res_size;
 
     // Vector of Problem Definition, containing Initial/Final conditions and flag for conditions.
     std::vector<problem_definition_t> pDefs ;

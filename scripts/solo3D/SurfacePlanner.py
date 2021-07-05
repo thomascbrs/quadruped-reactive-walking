@@ -53,7 +53,7 @@ class SurfacePlanner:
         self.afftool = AffordanceTool()
         self.afftool.setAffordanceConfig('Support', [0.5, 0.03, 0.00005])
 
-        self.afftool.loadObstacleModel(environment_URDF, "environment", self.vf, reduceSizes=[0.0, 0.0, 0.])
+        self.afftool.loadObstacleModel(environment_URDF, "environment", self.vf, reduceSizes=[0.05, 0.0, 0.])
         self.ps.selectPathValidation("RbprmPathValidation", 0.05)
 
         self.all_surfaces = getAllSurfacesDict(self.afftool)
@@ -203,8 +203,9 @@ class SurfacePlanner:
             vertices, inequalities, indices = self.retrieve_surfaces(surfaces)
             return vertices, inequalities, indices, None, False
 
-        effector_positions = self.compute_effector_positions(configs)
-        costs = {"step_size": [1.0, step_length], "effector_positions": [10.0, effector_positions]}
+        # effector_positions = self.compute_effector_positions(configs)
+        # costs = {"step_size": [1.0, step_length], "effector_positions": [10.0, effector_positions]}
+        costs = {"step_size": [1.0, step_length] }
         pb_data = solve_MIP(self.pb, costs=costs, com=False)
 
         if pb_data.success:

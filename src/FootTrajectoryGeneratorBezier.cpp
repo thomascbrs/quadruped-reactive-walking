@@ -25,13 +25,6 @@ FootTrajectoryGeneratorBezier::FootTrajectoryGeneratorBezier()
     , velocity_(Matrix34::Zero())
     , acceleration_(Matrix34::Zero())
     , intersectionPoint_(Vector2::Zero())
-    , P_ {MatrixN::Zero(res_size, res_size)}
-    , q_ {VectorN::Zero(res_size)}
-    , G_ {MatrixN::Zero(N_samples_ineq, res_size)}
-    , h_ {VectorN::Zero(N_samples_ineq)}
-    , C_ {MatrixN::Zero(res_size, 0)}
-    , d_ {VectorN::Zero(0)}
-    , x {VectorN::Zero(res_size)}
     , ineq_vector_ {Vector4::Zero()}
     , x_margin_ {Vector4::Zero()}
 {   
@@ -61,8 +54,24 @@ void FootTrajectoryGeneratorBezier::initialize(double const maxHeightIn,
                                          Surface initialSurface_in,
                                          double x_margin_max_in,
                                          double t_margin_in,
-                                         double z_margin_in)
-{
+                                         double z_margin_in,
+                                         int N_samples_in,
+                                         int N_samples_ineq_in, 
+                                         int degree_in )
+{   
+
+    N_samples = N_samples_in;
+    N_samples_ineq = N_samples_ineq_in;
+    degree = degree_in;
+    res_size = dim*(degree + 1 - 6);
+
+    P_ = MatrixN::Zero(res_size, res_size);
+    q_ = VectorN::Zero(res_size);
+    C_ = MatrixN::Zero(res_size, 0);
+    d_ = VectorN::Zero(0);
+    x = VectorN::Zero(res_size);
+    G_ = MatrixN::Zero(N_samples_ineq, res_size);
+    h_ = VectorN::Zero(N_samples_ineq);
     dt_tsid = dt_tsid_in;
     k_mpc = k_mpc_in;
     maxHeight_ = maxHeightIn;

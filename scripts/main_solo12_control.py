@@ -285,21 +285,21 @@ def control_loop(name_interface, name_interface_clone=None):
     device.hardware.Stop()  # Shut down the interface between the computer and the master board
 
     # Plot estimated computation time for each step for the control architecture
-    """from matplotlib import pyplot as plt
+    from matplotlib import pyplot as plt
     plt.figure()
     plt.plot(controller.t_list_filter[1:], 'r+')
     plt.plot(controller.t_list_gait[1:], 'y+')
     plt.plot(controller.t_list_footstep[1:], 'r+')
-    plt.plot(controller.t_list_state[1:], 'g+')
+    plt.plot(controller.t_list_state[1:], 'go')
     plt.plot(controller.t_list_foottraj[1:], 'b+')
-    plt.plot(controller.t_list_mpc[1:], 'b+')
+    plt.plot(controller.t_list_mpc[1:], 'g+')
     plt.plot(controller.t_list_wbc[1:], '+', color="violet")
     plt.plot(controller.t_list_loop[1:], 'k+')
     plt.plot(controller.t_list_InvKin[1:], 'o', color="darkgreen")
     plt.plot(controller.t_list_QPWBC[1:], 'o', color="royalblue")
     plt.legend(["Estimator", "gait", "footstep planner", "state planner", "trajectory planner", "MPC", "WBC", "Whole loop", "InvKin", "QP WBC"])
     plt.title("Loop time [s]")
-    plt.show(block=True)"""
+    plt.show(block=True)
 
     # Plot recorded data
     if params.PLOTTING:
@@ -330,7 +330,7 @@ def control_loop(name_interface, name_interface_clone=None):
     # controller.surfacePlanner.surfacePlanner.print_profile(output_folder + "surfacePlanner.prof")
 
     # Plot figure relative to planner values
-    controller.loggerPlanner.plot_log_planner()
+    # controller.loggerPlanner.plot_log_planner()
 
     print("End of script")
     quit()
