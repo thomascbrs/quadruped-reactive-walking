@@ -152,7 +152,7 @@ class LoggerControl():
         self.planner_h_ref[self.i] = loop.h_ref
 
         # Logging from model predictive control
-        self.mpc_x_f[self.i] = loop.x_f_mpc
+        self.mpc_x_f[self.i] = loop.x_f_mpc[:24,:]
 
         # Logging from whole body control
         self.wbc_x_f[self.i] = loop.x_f_wbc

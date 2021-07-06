@@ -26,6 +26,7 @@ class pybullet_simulator:
         # Start the client for PyBullet
         if enable_pyb_GUI:
             pyb.connect(pyb.GUI)
+            pyb.configureDebugVisualizer(pyb.COV_ENABLE_GUI, 0)
         else:
             pyb.connect(pyb.DIRECT)
         # p.GUI for graphical version

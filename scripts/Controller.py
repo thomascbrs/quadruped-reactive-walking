@@ -13,6 +13,7 @@ from solopython.utils.viewerClient import viewerClient, NonBlockingViewerFromRob
 import libquadruped_reactive_walking as lqrw
 from example_robot_data.robots_loader import Solo12Loader
 
+
 class Result:
     """Object to store the result of the control loop
     It contains what is sent to the robot (gains, desired positions and velocities,
@@ -95,8 +96,6 @@ class Controller:
 
         # Enable/Disable Gepetto viewer
         self.enable_gepetto_viewer = False
-        '''if self.enable_gepetto_viewer:
-            self.view = viewerClient()'''
 
         # Disable perfect estimator if we are not in simulation
         if not params.SIMULATION:
@@ -133,10 +132,6 @@ class Controller:
 
         # Wrapper that makes the link with the solver that you want to use for the MPC
         self.mpc_wrapper = MPC_Wrapper.MPC_Wrapper(params, self.q)
-
-        # ForceMonitor to display contact forces in PyBullet with red lines
-        # import ForceMonitor
-        # myForceMonitor = ForceMonitor.ForceMonitor(pyb_sim.robotId, pyb_sim.planeId)
 
         # Define the default controller
         self.myController = wbc_controller(params)
@@ -244,14 +239,6 @@ class Controller:
 
         # Retrieve reference contact forces in horizontal frame
         self.x_f_mpc = self.mpc_wrapper.get_latest_result()
-        """if self.k == 0:
-            self.x_save = self.x_f_mpc[12:, :].copy()
-        else:
-            self.x_f_mpc[12:, :] = self.x_save.copy()"""
-
-        """from IPython import embed
-        embed()"""
-
         t_mpc = time.time()
 
         # If the MPC optimizes footsteps positions then we use them
@@ -319,10 +306,6 @@ class Controller:
             self.result.q_des[:] = self.myController.qdes[7:]
             self.result.v_des[:] = self.myController.vdes[6:, 0]
             self.result.tau_ff[:] = 0.8 * self.myController.tau_ff
-
-            # Display robot in Gepetto corba viewer
-            """if self.k % 5 == 0:
-                self.solo.display(self.q)"""
 
         t_wbc = time.time()
 
