@@ -30,5 +30,16 @@ Test to evaluate the MPC with the optimisation of the foosteps. Comparison of : 
     -> Run the simulation with boolean LOGGING on true and type_MPC == 3.
     -> Modify the path in *Recover Logged data* section.
     -> Select the MPC control cycle to be analysed and tune the gains if necessary.
-    -> Run python3 crocoddyl_eval/test_1/analyse_control_cycle.py
+    -> Run python3 crocoddyl_eval/test_3/analyse_control_cycle.py
+
+### EVALUATION 5 : 
+
+Test to evaluate the MPC with the optimisation of the foosteps and timings. Comparison of : ddp + fstep optimization+ timings & osqp. The data collected during the simulation is used to restart and analyze each control cycle. The parameters can be modified in *DDP MPC* section.
+
+    -> Run the simulation with boolean LOGGING on true and type_MPC == 4.
+    -> Modify the path in *Recover Logged data* section.
+    -> Select the MPC control cycle to be analysed and tune the gains if necessary.
+    -> Run python3 crocoddyl_eval/test_5/analyse_control_cycle.py
+
+
 
