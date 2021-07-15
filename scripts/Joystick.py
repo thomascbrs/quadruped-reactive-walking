@@ -75,25 +75,21 @@ class Joystick:
 
 
     def update_v_ref_keyboard(self, k_loop):
-        """Update the reference velocity of the robot along X, Y and Yaw in local frame by
+        """
+        Update the reference velocity of the robot along X, Y and Yaw in local frame by
         listening to a gamepad handled by an independent thread
 
         Args:
             k_loop (int): numero of the current iteration
         """
-        # Create the gamepad client
         if k_loop == 0:
             self.kb = kC.KeyboardClient()
 
-        # Get the velocity command based on the position of joysticks
-        self.vX = self.kb.vx.value
-        self.vY = self.kb.vy.value
-
-        self.v_kb = np.array([[-self.vY, -self.vX, 0.0, 0.0, 0.0, 0.0]]).T
+        self.v_kb = np.array([self.kb.vx.value, self.kb.vy.value, 0.0, 0.0, 0.0, 0.0]).T
 
         # Low pass filter to slow down the changes of velocity when moving the joysticks
         self.v_ref = self.alpha * self.v_kb + (1 - self.alpha) * self.v_ref
-        self.v_ref[(self.v_ref < 0.005) & (self.v_ref > -0.005)] = 0.0
+        self.v_ref[(self.v_ref < 0.005) & (self.v_ref > -0.005)] = 0.
 
     def update_v_ref_gamepad(self, k_loop):
         """Update the reference velocity of the robot along X, Y and Yaw in local frame by

@@ -18,18 +18,18 @@ class KeyboardClient():
         self.running = Value(c_bool, lock=True)
         self.vx = Value(c_double, lock=True)
         self.vy = Value(c_double, lock=True)
+        self.vx.value = 0.0 ; self.vy.value = 0.0
 
-        self.vx.value = 0.0
-        self.vy.value = 0.0
-        args = (self.running, self.vx, self.vy)
-        self.process = Process(target=self.run, args=args)
+        self.process = Process(target=self.run, args=(self.running, self.vx, self.vy))
         self.process.start()
         time.sleep(0.2)
 
     def run(self, running, vx, vy):
         running.value = True
+        print("--------------")
         while(running.value):
             events = inputs.get_key()
+            print(events)
             for event in events:
                 print(event.ev_type, event.code, event.state)
                 if (event.ev_type == 'Key'):
@@ -41,6 +41,8 @@ class KeyboardClient():
                         vy.value -= 0.005
                     elif event.code == 'KEY_LEFT':
                         vy.value += 0.005
+        print("running is false")
+
 
     def stop(self):
         self.running.value = False
