@@ -142,6 +142,7 @@ class Controller:
 
         # Wrapper that makes the link with the solver that you want to use for the MPC
         self.mpc_wrapper = MPC_Wrapper.MPC_Wrapper(params, self.q)
+        self.o_targetFootstep = self.fsteps_init
 
         # ForceMonitor to display contact forces in PyBullet with red lines
         # import ForceMonitor
@@ -245,6 +246,10 @@ class Controller:
                     # Compute the target foostep in local frame, to stop the optimisation around it when t_lock overpass
                     l_targetFootstep = self.footstepPlanner.getRz().transpose() @ self.footTrajectoryGenerator.getFootPosition() - self.q[0:3,0:1]
                     self.mpc_wrapper.solve(self.k, xref, fsteps, cgait, l_targetFootstep)
+                if self.type_MPC == 4 :
+                    # Compute the target foostep in local frame, to stop the optimisation around it when t_lock overpass
+                    l_targetFootstep = self.footstepPlanner.getRz().transpose() @ self.footTrajectoryGenerator.getFootPosition() - self.q[0:3,0:1]
+                    self.mpc_wrapper.solve(self.k, xref, fsteps, cgait, l_targetFootstep, self.footTrajectoryGenerator.getFootVelocity(), self.footTrajectoryGenerator.getFootAcceleration())
                 else :
                     self.mpc_wrapper.solve(self.k, xref, fsteps, cgait, np.zeros((3,4)))
 
@@ -264,13 +269,14 @@ class Controller:
         t_mpc = time.time()
 
         # If the MPC optimizes footsteps positions then we use them
-        if self.k > 100 and self.type_MPC == 3 :
+        if self.k > 100 and (self.type_MPC == 3 or self.type_MPC == 4) :
             for foot in range(4):
                 id = 0
                 while cgait[id,foot] == 0 :
                     id += 1
                 o_targetFootstep[:2,foot] = np.array(self.footstepPlanner.getRz()[:2, :2]) @ self.x_f_mpc[24 +  2*foot:24+2*foot+2, id] + np.array([self.q[0, 0] , self.q[1,0] ])
 
+        # o_targetFootstep = self.o_targetFootstep
         # Update pos, vel and acc references for feet
         self.footTrajectoryGenerator.update(self.k, o_targetFootstep)
 
@@ -327,7 +333,7 @@ class Controller:
             self.result.D = 0.2 * np.ones(12)
             self.result.q_des[:] = self.myController.qdes[7:]
             self.result.v_des[:] = self.myController.vdes[6:, 0]
-            self.result.tau_ff[:] = 0.8 * self.myController.tau_ff
+            self.result.tau_ff[:] = 0.6 * self.myController.tau_ff
 
             # Display robot in Gepetto corba viewer
             """if self.k % 5 == 0:
@@ -355,8 +361,9 @@ class Controller:
         if self.k > 10 and self.enable_pyb_GUI:
             # pyb.resetDebugVisualizerCamera(cameraDistance=0.8, cameraYaw=45, cameraPitch=-30,
             #                                cameraTargetPosition=[1.0, 0.3, 0.25])
-            pyb.resetDebugVisualizerCamera(cameraDistance=0.6, cameraYaw=45, cameraPitch=-39.9,
-                                           cameraTargetPosition=[device.dummyHeight[0], device.dummyHeight[1], 0.0])
+            # pyb.resetDebugVisualizerCamera(cameraDistance=0.6, cameraYaw=45, cameraPitch=-39.9,
+            #                                cameraTargetPosition=[device.dummyHeight[0], device.dummyHeight[1], 0.0])
+            pass
 
     def security_check(self):
 

@@ -6,6 +6,7 @@ from multiprocessing import Process, Value, Array
 from utils_mpc import quaternionToRPY
 import crocoddyl_class.MPC_crocoddyl as MPC_crocoddyl
 import crocoddyl_class.MPC_crocoddyl_planner as MPC_crocoddyl_planner
+import crocoddyl_class.MPC_crocoddyl_planner_time as MPC_crocoddyl_planner_time
 
 
 class Dummy:
@@ -71,8 +72,10 @@ class MPC_Wrapper:
                 self.mpc = MPC_crocoddyl.MPC_crocoddyl(params, mu=0.9, inner=False, linearModel=True)
             elif self.mpc_type == 2:  # Crocoddyl MPC Non-Linear
                 self.mpc = MPC_crocoddyl.MPC_crocoddyl(params, mu=0.9, inner=False, linearModel=False)
-            else:  # Crocoddyl MPC Non-Linear with footsteps optimization
+            elif self.mpc_type == 3:  # Crocoddyl MPC Non-Linear with footsteps optimization
                 self.mpc = MPC_crocoddyl_planner.MPC_crocoddyl_planner(params, mu=0.9, inner=False)
+            else : # Crocoddyl MPC Time optimization
+                self.mpc = MPC_crocoddyl_planner_time.MPC_crocoddyl_planner_time(params, mu=0.9)
 
         # Setup initial result for the first iteration of the main control loop
         x_init = np.zeros(12)
@@ -84,7 +87,7 @@ class MPC_Wrapper:
             self.last_available_result = np.zeros((24, (np.int(self.n_steps))))
         self.last_available_result[:24, 0] = np.hstack((x_init, np.array([0.0, 0.0, 8.0] * 4)))
 
-    def solve(self, k, xref, fsteps, gait, l_targetFootstep):
+    def solve(self, k, xref, fsteps, gait, l_targetFootstep, velocity, acceleration):
         """Call either the asynchronous MPC or the synchronous MPC depending on the value of multiprocessing during
         the creation of the wrapper
 
@@ -94,12 +97,14 @@ class MPC_Wrapper:
             fsteps (12xN array): the [x, y, z]^T desired position of each foot for each time step of the horizon
             gait (4xN array): Contact state of feet (gait matrix)
             l_targetFootstep (3x4 array) : 4*[x, y, z]^T target position in local frame, to stop the optimisation of the feet location around it
+            velocity (3x4 array) : Velocity of the foot  (usefull for type_mpc = 4)
+            acceleration (3x4 array) : Acceleration of the foot (usefull for type_mpc = 4)
         """
 
         if self.multiprocessing:  # Run in parallel process
             self.run_MPC_asynchronous(k, xref, fsteps, l_targetFootstep)
         else:  # Run in the same process than main loop
-            self.run_MPC_synchronous(k, xref, fsteps, l_targetFootstep)
+            self.run_MPC_synchronous(k, xref, fsteps, l_targetFootstep, velocity, acceleration)
 
         if k > 2:
             self.last_available_result[12:(12+self.n_steps), :] = np.roll(self.last_available_result[12:(12+self.n_steps), :], -1, axis=1)
@@ -141,7 +146,7 @@ class MPC_Wrapper:
             self.not_first_iter = True
             return self.last_available_result
 
-    def run_MPC_synchronous(self, k, xref, fsteps, l_targetFootstep):
+    def run_MPC_synchronous(self, k, xref, fsteps, l_targetFootstep, velocity, acceleration):
         """Run the MPC (synchronous version) to get the desired contact forces for the feet currently in stance phase
 
         Args:
@@ -160,6 +165,9 @@ class MPC_Wrapper:
         elif self.mpc_type == 3: # Add goal position to stop the optimisation
             # Crocoddyl MPC
             self.mpc.solve(k, xref.copy(), fsteps.copy(), l_targetFootstep)
+        elif self.mpc_type == 4: # Add goal position to stop the optimisation
+            # Crocoddyl MPC
+            self.mpc.solve(k, xref.copy(), fsteps.copy(), l_targetFootstep, velocity, acceleration)
         else:
             # Crocoddyl MPC
             self.mpc.solve(k, xref.copy(), fsteps.copy())
