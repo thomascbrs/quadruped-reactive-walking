@@ -8,14 +8,14 @@ sys.path.insert(0, os.getcwd()) # adds current directory to python path
 import numpy as np
 import matplotlib.pylab as plt
 import libquadruped_reactive_walking as lqrw
-import crocoddyl_class.MPC_crocoddyl_planner as MPC_crocoddyl_planner
+import crocoddyl_class.MPC_crocoddyl_planner_time as MPC_crocoddyl_planner_time
 import time 
 import pinocchio as pin
 
 ##############
 #  Parameters
 ##############
-iteration_mpc = 550 # Control cycle
+iteration_mpc = 20 # Control cycle
 Relaunch_DDP = False # Compare a third MPC with != parameters
 linear_mpc = True
 params = lqrw.Params()  # Object that holds all controller parameters
@@ -32,6 +32,9 @@ planner_goals = logs.get("planner_goals")
 mpc_x_f = logs.get("mpc_x_f")
 baseOrientation = logs.get("baseOrientation")
 loop_o_q_int = logs.get("loop_o_q_int")
+planner_goals = logs.get("planner_goals")
+planner_vgoals = logs.get("planner_vgoals")
+planner_agoals = logs.get("planner_agoals")
 
 k = int( iteration_mpc * (params.dt_mpc / params.dt_wbc) ) # simulation iteration corresponding
 k_previous = int( (iteration_mpc - 1) * (params.dt_mpc / params.dt_wbc) ) 
@@ -52,13 +55,13 @@ osqp_us = mpc_osqp.get_latest_result()[12:,:] # Forces computed over the whole p
 ###########
 # DDP MPC 
 ##########
-mpc_ddp = MPC_crocoddyl_planner.MPC_crocoddyl_planner(params, mu=0.9, inner=False)
+mpc_ddp = MPC_crocoddyl_planner_time.MPC_crocoddyl_planner_time(params, mu=0.9)
 
 # Tune the weights 
 # mpc_ddp.heuristicWeights = np.array(4*[0.3, 0.4])
 # mpc_ddp.stepWeights = np.full(8, 0.5)
-# mpc_ddp.stateWeights = np.sqrt([2.0, 2.0, 20.0, 0.25, 0.25, 10.0, 0.2, 0.2, 0.2, 0.0, 0.0, 0.3]) # fit osqp gains
-mpc_ddp.forceWeights = np.array(4*[0.02,0.02,0.02])
+mpc_ddp.stateWeights = np.sqrt([2.0, 2.0, 20.0, 0.25, 0.25, 10.0, 0.2, 0.2, 0.2, 0.0, 0.0, 0.3]) # fit osqp gains
+mpc_ddp.forceWeights = np.array(4*[0.01,0.01,0.01])
 mpc_ddp.stopWeights = np.zeros(8)
 mpc_ddp.initializeModels(params) # re-initialize the model list with the new gains
 
@@ -72,18 +75,38 @@ l_stop = Rz.transpose() @ planner_goals[k]
 for foot in range(4):
     l_stop[:,foot] += - loop_o_q_int[k,:3]
 
-mpc_ddp.updateProblem(k , planner_xref[k] , planner_fsteps[k], l_stop)
+
+
+mpc_ddp.updateProblem(k , planner_xref[k] , planner_fsteps[k], l_stop, l_stop, planner_vgoals[k], planner_agoals[k])
+
 
 mpc_ddp.ddp.solve(mpc_ddp.x_init,  mpc_ddp.u_init, mpc_ddp.max_iteration)
 
 ddp_xs = mpc_ddp.get_latest_result()[:12,:] # States computed over the whole predicted horizon 
-ddp_xs = np.vstack([planner_xref[k,:,0] , ddp_xs.transpose()]).transpose() # Add current state 
+ddp_xs = np.vstack([ddp_xs.transpose()  , mpc_ddp.ddp.xs[-1][:12] ]).transpose() # Add terminal node value, init state already here
 ddp_us = mpc_ddp.get_latest_result()[12:,:] # Forces computed over the whole predicted horizon
-ddp_fsteps = mpc_ddp.get_latest_result()[24:,:]
+ddp_fsteps = mpc_ddp.get_latest_result()[24:32,:]
 ddp_fsteps = np.vstack([planner_fsteps[k,0,:][[0,1,3,4,6,7,9,10]] , ddp_fsteps.transpose()]).transpose() # Add current state 
+ddp_timings = mpc_ddp.get_latest_result()[32:33,:][0]
+ddp_timings = np.concatenate([ddp_timings , np.array( [mpc_ddp.ddp.xs[-1][-1] ]) ])
 
 
+# Print usefull parameters
 print("Gait : " , mpc_ddp.gait)
+print("\n\n Running models : ")
+for model in mpc_ddp.problem.runningModels:
+    if model.__class__.__name__ == "ActionModelQuadrupedStepTime" :
+        print(model.__class__.__name__ + " ; first_step : " + str(model.first_step ))
+    else :
+        print(model.__class__.__name__)
+print("\n Terminal model : ")
+print(mpc_ddp.terminal_model.__class__.__name__)
+print("\n\n")
+print("dt_min : " , mpc_ddp.dt_min)
+print("dt_min : " , mpc_ddp.dt_max)
+print("\n")
+print("Optimised dt : \n" , ddp_timings)
+
 
 #############
 #  Plot     #
@@ -91,6 +114,9 @@ print("Gait : " , mpc_ddp.gait)
 
 # Predicted evolution of state variables
 l_t = np.linspace(0., params.T_gait, np.int(params.T_gait/params.dt_mpc)+1)
+# Variable horizon :
+l_t_variable = np.cumsum(ddp_timings)
+
 l_str = ["X_osqp", "Y_osqp", "Z_osqp", "Roll_osqp", "Pitch_osqp", "Yaw_osqp", "Vx_osqp", "Vy_osqp", "Vz_osqp", "VRoll_osqp", "VPitch_osqp", "VYaw_osqp"]
 l_str2 = ["X_ddp", "Y_ddp", "Z_ddp", "Roll_ddp", "Pitch_ddp", "Yaw_ddp", "Vx_ddp", "Vy_ddp", "Vz_ddp", "VRoll_ddp", "VPitch_ddp", "VYaw_ddp"]
 
@@ -99,7 +125,7 @@ plt.figure()
 for i in range(12):
     plt.subplot(3, 4, index[i])
     
-    pl1, = plt.plot(l_t, ddp_xs[i,:], linewidth=2, marker='x')
+    pl1, = plt.plot(l_t_variable, ddp_xs[i,:], linewidth=2, marker='x')
     pl2, = plt.plot(l_t, osqp_xs[i,:], linewidth=2, marker='x')
 
     if Relaunch_DDP : 
@@ -111,13 +137,14 @@ for i in range(12):
 
 # Desired evolution of contact forces
 l_t = np.linspace(params.dt_mpc, params.T_gait, np.int(params.T_gait/params.dt_mpc))
+timing_forces = l_t_variable = np.cumsum(ddp_timings[1:]) # one less point since there is no initial forces
 l_str = ["FL_X_osqp", "FL_Y_osqp", "FL_Z_osqp", "FR_X_osqp", "FR_Y_osqp", "FR_Z_osqp", "HL_X_osqp", "HL_Y_osqp", "HL_Z_osqp", "HR_X_osqp", "HR_Y_osqp", "HR_Z_osqp"]
 l_str2 = ["FL_X_ddp", "FL_Y_ddp", "FL_Z_ddp", "FR_X_ddp", "FR_Y_ddp", "FR_Z_ddp", "HL_X_ddp", "HL_Y_ddp", "HL_Z_ddp", "HR_X_ddp", "HR_Y_ddp", "HR_Z_ddp"]
 index = [1, 5, 9, 2, 6, 10, 3, 7, 11, 4, 8, 12]
 plt.figure()
 for i in range(12):
     plt.subplot(3, 4, index[i])
-    pl1, = plt.plot(l_t, ddp_us[i,:], linewidth=2, marker='x')
+    pl1, = plt.plot(timing_forces, ddp_us[i,:], linewidth=2, marker='x')
     pl2, = plt.plot(l_t, osqp_us[i,:], linewidth=2, marker='x')
    
     if Relaunch_DDP : 
