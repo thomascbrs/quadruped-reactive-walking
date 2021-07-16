@@ -26,6 +26,7 @@ class pybullet_simulator:
         # Start the client for PyBullet
         if enable_pyb_GUI:
             pyb.connect(pyb.GUI)
+            pyb.configureDebugVisualizer(pyb.COV_ENABLE_GUI, 0)
         else:
             pyb.connect(pyb.DIRECT)
         # p.GUI for graphical version
@@ -260,7 +261,7 @@ class pybullet_simulator:
 
         # Progressively raise the base to achieve proper contact (take into account radius of the foot)
         while (pyb.getClosestPoints(self.robotId, self.planeId, distance=0.005,
-                                    linkIndexA=feetLinksID[i_min]))[0][8] < 0.001:
+                                    linkIndexA=feetLinksID[i_min]))[0][8] < -0.001:
             z_min -= 0.001
             pyb.resetBasePositionAndOrientation(self.robotId, [0.0, 0.0, -z_min], [0, 0, 0, 1])
 

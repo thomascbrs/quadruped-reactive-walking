@@ -13,6 +13,7 @@ from solopython.utils.viewerClient import viewerClient, NonBlockingViewerFromRob
 import libquadruped_reactive_walking as lqrw
 from example_robot_data.robots_loader import Solo12Loader
 
+
 class Result:
     """Object to store the result of the control loop
     It contains what is sent to the robot (gains, desired positions and velocities,
@@ -95,23 +96,13 @@ class Controller:
 
         # Enable/Disable Gepetto viewer
         self.enable_gepetto_viewer = False
-        '''if self.enable_gepetto_viewer:
-            self.view = viewerClient()'''
 
         # Disable perfect estimator if we are not in simulation
         if not params.SIMULATION:
             params.perfectEstimator = False  # Cannot use perfect estimator if we are running on real robot
 
         # Initialisation of the solo model/data and of the Gepetto viewer
-        self.solo, self.fsteps_init, self.h_init = utils_mpc.init_robot(q_init, self.enable_gepetto_viewer)
-        params.h_ref = self.h_init
-        params.mass = self.solo.data.mass[0]  # Mass of the whole urdf model (also = to Ycrb[1].mass)
-        params.I_mat = self.solo.data.Ycrb[1].inertia.ravel()  # Composite rigid body inertia in q_init position
-
-        # Assumption: footsteps are initially at the vertical of the shoulders
-        for i in range(4):
-            for j in range(3):
-                params.shoulders[3*i+j] = self.fsteps_init[j, i]
+        self.solo = utils_mpc.init_robot(q_init, params, self.enable_gepetto_viewer)
 
         # Create Joystick, FootstepPlanner, Logger and Interface objects
         self.joystick, self.estimator = utils_mpc.init_objects(params)
@@ -119,8 +110,7 @@ class Controller:
         # Enable/Disable hybrid control
         self.enable_hybrid_control = True
 
-        params.h_ref = self.h_init
-        self.h_ref = self.h_init
+        self.h_ref = params.h_ref
         self.q = np.zeros((19, 1))
         self.q[0:7, 0] = np.array([0.0, 0.0, self.h_ref, 0.0, 0.0, 0.0, 1.0])
         self.q[7:, 0] = q_init
@@ -142,14 +132,10 @@ class Controller:
 
         # Wrapper that makes the link with the solver that you want to use for the MPC
         self.mpc_wrapper = MPC_Wrapper.MPC_Wrapper(params, self.q)
-        self.o_targetFootstep = self.fsteps_init
-
-        # ForceMonitor to display contact forces in PyBullet with red lines
-        # import ForceMonitor
-        # myForceMonitor = ForceMonitor.ForceMonitor(pyb_sim.robotId, pyb_sim.planeId)
+        self.o_targetFootstep = params.footsteps_init
 
         # Define the default controller
-        self.myController = wbc_controller(params.dt_wbc, params.N_SIMULATION)
+        self.myController = wbc_controller(params)
         self.myController.qdes[7:] = q_init.ravel()
 
         self.envID = params.envID
@@ -258,14 +244,6 @@ class Controller:
 
         # Retrieve reference contact forces in horizontal frame
         self.x_f_mpc = self.mpc_wrapper.get_latest_result()
-        """if self.k == 0:
-            self.x_save = self.x_f_mpc[12:, :].copy()
-        else:
-            self.x_f_mpc[12:, :] = self.x_save.copy()"""
-
-        """from IPython import embed
-        embed()"""
-
         t_mpc = time.time()
 
         # If the MPC optimizes footsteps positions then we use them
@@ -310,12 +288,12 @@ class Controller:
 
             # Feet command acceleration in base frame
             self.feet_a_cmd = oRh.transpose() @ self.footTrajectoryGenerator.getFootAcceleration() \
-                - np.cross(np.tile(self.v_ref[3:6, 0:1], (1, 4)), np.cross(np.tile(self.v_ref[3:6, 0:1], (1, 4)), self.feet_p_cmd, axis=0), axis=0) \
-                - 2 * np.cross(np.tile(self.v_ref[3:6, 0:1], (1, 4)), self.feet_v_cmd, axis=0)
+                - self.cross12(self.v_ref[3:6, 0:1], self.cross12(self.v_ref[3:6, 0:1], self.feet_p_cmd)) \
+                - 2 * self.cross12(self.v_ref[3:6, 0:1], self.feet_v_cmd)
 
             # Feet command velocity in base frame
             self.feet_v_cmd = oRh.transpose() @ self.footTrajectoryGenerator.getFootVelocity()
-            self.feet_v_cmd = self.feet_v_cmd - self.v_ref[0:3, 0:1] - np.cross(np.tile(self.v_ref[3:6, 0:1], (1, 4)), self.feet_p_cmd, axis=0)
+            self.feet_v_cmd = self.feet_v_cmd - self.v_ref[0:3, 0:1] - self.cross12(self.v_ref[3:6, 0:1], self.feet_p_cmd)
 
             # Feet command position in base frame
             self.feet_p_cmd = oRh.transpose() @ (self.footTrajectoryGenerator.getFootPosition()
@@ -329,15 +307,11 @@ class Controller:
                                       self.feet_a_cmd)
 
             # Quantities sent to the control board
-            self.result.P = 3.0 * np.ones(12)
-            self.result.D = 0.2 * np.ones(12)
+            self.result.P = 6.0 * np.ones(12)
+            self.result.D = 0.3 * np.ones(12)
             self.result.q_des[:] = self.myController.qdes[7:]
             self.result.v_des[:] = self.myController.vdes[6:, 0]
             self.result.tau_ff[:] = 0.6 * self.myController.tau_ff
-
-            # Display robot in Gepetto corba viewer
-            """if self.k % 5 == 0:
-                self.solo.display(self.q)"""
 
         t_wbc = time.time()
 
@@ -456,3 +430,17 @@ class Controller:
         oTh = np.array([[self.q[0, 0]], [self.q[1, 0]], [0.0]])
 
         return oRh, oTh
+
+    def cross12(self, left, right):
+        """Numpy is inefficient for this
+
+        Args:
+            left (3x1 array): left term of the cross product
+            right (3x4 array): right term of the cross product
+        """
+        res = np.zeros((3, 4))
+        for i in range(4):
+            res[:, i] = np.array([left[1, 0] * right[2, i] - left[2, 0] * right[1, i],
+                                  left[2, 0] * right[0, i] - left[0, 0] * right[2, i],
+                                  left[0, 0] * right[1, i] - left[1, 0] * right[0, i]])
+        return res

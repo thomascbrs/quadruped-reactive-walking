@@ -2,6 +2,7 @@
 
 import numpy as np
 import gamepadClient as gC
+import keyboardClient as kC
 
 
 class Joystick:
@@ -19,14 +20,9 @@ class Joystick:
         self.reduced = False
         self.stop = False
 
-        dT = 0.0020  # velocity reference is updated every ms
-        fc = 100  #  cutoff frequency
-        y = 1 - np.cos(2*np.pi*fc*dT)
-        self.alpha = -y+np.sqrt(y*y+2*y)
-
-        tc = 0.02  #  cutoff frequency at 50 Hz
-        dT = 0.0020  # velocity reference is updated every ms
-        self.alpha = dT / tc
+        dt = 0.002  # velocity reference is updated every ms
+        tc = 0.02   # cutoff frequency at 50 Hz
+        self.alpha = dt / tc
 
         # Bool to modify the update of v_ref
         # Used to launch multiple simulations
@@ -75,8 +71,25 @@ class Joystick:
                 self.update_v_ref_predefined(k_loop, velID)
         else:
             self.update_v_ref_gamepad(k_loop)
+            # self.update_v_ref_keyboard(k_loop)
 
-        return 0
+
+    def update_v_ref_keyboard(self, k_loop):
+        """
+        Update the reference velocity of the robot along X, Y and Yaw in local frame by
+        listening to a gamepad handled by an independent thread
+
+        Args:
+            k_loop (int): numero of the current iteration
+        """
+        if k_loop == 0:
+            self.kb = kC.KeyboardClient()
+
+        self.v_kb = np.array([self.kb.vx.value, self.kb.vy.value, 0.0, 0.0, 0.0, 0.0]).T
+
+        # Low pass filter to slow down the changes of velocity when moving the joysticks
+        self.v_ref = self.alpha * self.v_kb + (1 - self.alpha) * self.v_ref
+        self.v_ref[(self.v_ref < 0.005) & (self.v_ref > -0.005)] = 0.
 
     def update_v_ref_gamepad(self, k_loop):
         """Update the reference velocity of the robot along X, Y and Yaw in local frame by
@@ -139,8 +152,6 @@ class Joystick:
         # Update joystick code depending on which buttons are pressed
         self.computeCode()
 
-        return 0
-
     def computeCode(self):
         # Check joystick buttons to trigger a change of gait type
         self.joystick_code = 0
@@ -187,8 +198,6 @@ class Joystick:
         A2 = (-3/2) * t1 * A3
         self.v_ref = self.v_switch[:, (i-1):i] + A2*ev**2 + A3*ev**3
 
-        return 0
-
     def update_v_ref_predefined(self, k_loop, velID):
         """Update the reference velocity of the robot along X, Y and Yaw in local frame
         according to a predefined sequence
@@ -230,13 +239,13 @@ class Joystick:
                                                 0.0, 0.0, 0.0, 0.0, R_max, R_max, 0.0, 0.0,
                                                 -R_max, 0.0])
         elif velID == 2:
-            self.k_switch = np.array([0, 7000, 14000, 20000, 30000])
-            self.v_switch = np.array([[0.0, 0.7, 1.3, 1.3, 1.3],
+            self.k_switch = np.array([0, 2000, 4000, 6000, 8000])
+            self.v_switch = np.array([[0.0, 0.1, 0.5, 1.0, 1.3],
+                                      [0.0, 0.0, 0.0, 0.0, 0.],
                                       [0.0, 0.0, 0.0, 0.0, 0.0],
                                       [0.0, 0.0, 0.0, 0.0, 0.0],
                                       [0.0, 0.0, 0.0, 0.0, 0.0],
-                                      [0.0, 0.0, 0.0, 0.0, 0.0],
-                                      [0.0, 0.0, 0.0, 0.0, 0.0]])
+                                      [0.0, 0.0, 0., 0., 0.0]])
         elif velID == 3:
             if (k_loop == 0):
                 self.k_switch = np.array([0, 1000, 2000, 7000, 26000, 30000])
@@ -257,13 +266,6 @@ class Joystick:
                                           [0.0, 0.0,  0.0, 0.0, 0.4, 0.4]])
         elif velID == 5:
             if (k_loop == 0):
-                """self.k_switch = np.array([0, 500, 1500, 2600, 5000, 6500, 8000])
-                self.v_switch = np.array([[0.0, 0.0,  0.7, 0.6, 0.3, 0.3, 0.0],
-                                          [0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0],
-                                          [0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0],
-                                          [0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0],
-                                          [0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0],
-                                          [0.0, 0.0,  0.0, 0.4, 0.6, 0.0, 0.0]])"""
                 self.k_switch = np.array([0, 500, 1500, 2600, 5000, 6500, 7000, 8000, 9000])
                 self.v_switch = np.array([[0.0, 0.0,  0.5, 0.6, 0.3, 0.6, -0.5, 0.7, 0.0],
                                           [0.0, 0.0,  0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
@@ -284,7 +286,6 @@ class Joystick:
                                           [0.0, 0.0,  0.0, 0.55, 0.3, 0.0, 0.0]])
 
         self.handle_v_switch(k_loop)
-        return 0
 
     def update_v_ref_multi_simu(self, k_loop):
         """Update the reference velocity of the robot along X, Y and Yaw in local frame
@@ -296,9 +297,6 @@ class Joystick:
         """
 
         # Moving forwards
-        """if k_loop == self.k_mpc*16*3:
-            self.v_ref = np.array([[1.0, 0.0, 0.0, 0.0, 0.0, 0.0]]).T"""
-
         beta_x = int(max(abs(self.Vx_ref)*10000, 100.0))
         alpha_x = np.max([np.min([(k_loop-self.k_mpc*16*3)/beta_x, 1.0]), 0.0])
 
@@ -308,11 +306,8 @@ class Joystick:
         beta_w = int(max(abs(self.Vw_ref)*2500, 100.0))
         alpha_w = np.max([np.min([(k_loop-self.k_mpc*16*3)/beta_w, 1.0]), 0.0])
 
-        # self.v_ref = np.array([[0.3*alpha, 0.0, 0.0, 0.0, 0.0, 0.0]]).T
         self.v_ref = np.array(
             [[self.Vx_ref*alpha_x, self.Vy_ref*alpha_y, 0.0, 0.0, 0.0, self.Vw_ref*alpha_w]]).T
-
-        return 0
 
     def update_for_analysis(self, des_vel_analysis, N_analysis, N_steady):
 
@@ -322,5 +317,3 @@ class Joystick:
         self.v_switch = np.zeros((6, 4))
         self.v_switch[:, 2] = des_vel_analysis
         self.v_switch[:, 3] = des_vel_analysis
-
-        return 0

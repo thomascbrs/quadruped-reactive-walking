@@ -85,8 +85,6 @@ def clone_movements(name_interface_clone, q_init, cloneP, cloneD, cloneQdes, clo
 
             cloneResult.value = False
 
-    return 0
-
 
 def control_loop(name_interface, name_interface_clone=None, des_vel_analysis=None):
     """Main function that calibrates the robot, get it into a default waiting position then launch
@@ -100,9 +98,8 @@ def control_loop(name_interface, name_interface_clone=None, des_vel_analysis=Non
     # Check .yaml file for parameters of the controller
 
     # Enable or disable PyBullet GUI
-    enable_pyb_GUI = params.enable_pyb_GUI
     if not params.SIMULATION:
-        enable_pyb_GUI = False
+        params.enable_pyb_GUI = False
 
     # Time variable to keep track of time
     t = 0.0
@@ -162,7 +159,7 @@ def control_loop(name_interface, name_interface_clone=None, des_vel_analysis=Non
     # Initiate communication with the device and calibrate encoders
     if params.SIMULATION:
         device.Init(calibrateEncoders=True, q_init=q_init, envID=params.envID,
-                    use_flat_plane=params.use_flat_plane, enable_pyb_GUI=enable_pyb_GUI, dt=params.dt_wbc)
+                    use_flat_plane=params.use_flat_plane, enable_pyb_GUI=params.enable_pyb_GUI, dt=params.dt_wbc)
     else:
         device.Init(calibrateEncoders=True, q_init=q_init)
 
@@ -207,34 +204,6 @@ def control_loop(name_interface, name_interface_clone=None, des_vel_analysis=Non
         # Send command to the robot
         for i in range(1):
             device.SendCommand(WaitEndOfCycle=True)
-        """if ((device.cpt % 100) == 0):
-            device.Print()"""
-
-        """import os
-        from matplotlib import pyplot as plt
-        import pybullet as pyb
-        if (t == 0.0):
-            cpt_frames = 0
-            step = 10
-        if (cpt_frames % step) == 0:
-            if (cpt_frames % 1000):
-                print(cpt_frames)
-            img = pyb.getCameraImage(width=1920, height=1080, renderer=pyb.ER_BULLET_HARDWARE_OPENGL)
-            if cpt_frames == 0:
-                newpath = r'/tmp/recording'
-                if not os.path.exists(newpath):
-                    os.makedirs(newpath)
-            if (int(cpt_frames/step) < 10):
-                plt.imsave('/tmp/recording/frame_000'+str(int(cpt_frames/step))+'.png', img[2])
-            elif int(cpt_frames/step) < 100:
-                plt.imsave('/tmp/recording/frame_00'+str(int(cpt_frames/step))+'.png', img[2])
-            elif int(cpt_frames/step) < 1000:
-                plt.imsave('/tmp/recording/frame_0'+str(int(cpt_frames/step))+'.png', img[2])
-            else:
-                plt.imsave('/tmp/recording/frame_'+str(int(cpt_frames/step))+'.png', img[2])
-
-        cpt_frames += 1"""
-
         t += params.dt_wbc  # Increment loop time
 
     # ****************************************************************
@@ -287,7 +256,7 @@ def control_loop(name_interface, name_interface_clone=None, des_vel_analysis=Non
 
     # Plot estimated computation time for each step for the control architecture
     from matplotlib import pyplot as plt
-    """plt.figure()
+    plt.figure()
     plt.plot(controller.t_list_filter[1:], 'r+')
     plt.plot(controller.t_list_planner[1:], 'g+')
     plt.plot(controller.t_list_mpc[1:], 'b+')
@@ -297,7 +266,7 @@ def control_loop(name_interface, name_interface_clone=None, des_vel_analysis=Non
     plt.plot(controller.t_list_QPWBC[1:], 'o', color="royalblue")
     plt.legend(["Estimator", "Planner", "MPC", "WBC", "Whole loop", "InvKin", "QP WBC"])
     plt.title("Loop time [s]")
-    plt.show(block=True)"""
+    plt.show(block=True)
     """plt.figure()
     for i in range(3):
         plt.subplot(3, 1, i+1)
@@ -313,7 +282,7 @@ def control_loop(name_interface, name_interface_clone=None, des_vel_analysis=Non
         loggerControl.saveAll(loggerSensors)
         print("Log saved")
 
-    if params.SIMULATION and enable_pyb_GUI:
+    if params.SIMULATION and params.enable_pyb_GUI:
         # Disconnect the PyBullet server (also close the GUI)
         device.Stop()
 
@@ -330,6 +299,7 @@ def control_loop(name_interface, name_interface_clone=None, des_vel_analysis=Non
 
     return finished, des_vel_analysis
 
+
 def main():
     """Main function
     """
@@ -345,7 +315,7 @@ def main():
                         help='Name of the clone interface that will reproduce the movement of the first one \
                               (use ifconfig in a terminal), for instance "enp1s0"')
 
-    f, v = control_loop(parser.parse_args().interface, parser.parse_args().clone, np.array([1.5, 0.0, 0.0, 0.0, 0.0, 0.0]))
+    f, v = control_loop(parser.parse_args().interface, parser.parse_args().clone)
     print(f, v)
     quit()
 
