@@ -126,7 +126,7 @@ struct FootstepPlannerPythonVisitor : public bp::def_visitor<FootstepPlannerPyth
                  "Initialize FootstepPlanner from Python.\n")
 
             // Compute target location of footsteps from Python
-            .def("updateFootsteps", &FootstepPlanner::updateFootsteps, bp::args("refresh", "k", "q", "b_v", "b_vref"),
+            .def("updateFootsteps", &FootstepPlanner::updateFootsteps, bp::args("refresh", "k", "q", "b_v", "b_vref", "current_position"),
                  "Update and compute location of footsteps from Python.\n");
 
     }

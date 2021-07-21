@@ -61,7 +61,7 @@ public:
     ///  \param[in] b_vref  desired velocity vector of the flying base in horizontal frame (linear and angular stacked)
     ///
     ////////////////////////////////////////////////////////////////////////////////////////////////
-    MatrixN updateFootsteps(bool refresh, int k, VectorN const& q, Vector6 const& b_v, Vector6 const& b_vref);
+    MatrixN updateFootsteps(bool refresh, int k, VectorN const& q, Vector6 const& b_v, Vector6 const& b_vref, MatrixN const& currentPosition);
 
     MatrixN getFootsteps();
     MatrixN getTargetFootsteps();
@@ -85,7 +85,7 @@ private:
     /// \brief Refresh feet position when entering a new contact phase
     ///
     ////////////////////////////////////////////////////////////////////////////////////////////////
-    void updateNewContact();
+    void updateNewContact(VectorN const& q, Matrix34 const& currentPosition);
 
     ////////////////////////////////////////////////////////////////////////////////////////////////
     ///

@@ -42,12 +42,12 @@ void FootstepPlanner::initialize(Params& params, Gait& gaitIn)
     Rz(2, 2) = 1.0;
 }
 
-MatrixN FootstepPlanner::updateFootsteps(bool refresh, int k, VectorN const& q, Vector6 const& b_v, Vector6 const& b_vref)
+MatrixN FootstepPlanner::updateFootsteps(bool refresh, int k, VectorN const& q, Vector6 const& b_v, Vector6 const& b_vref, MatrixN const&currentPosition)
 {
     // Update location of feet in stance phase (for those which just entered stance phase)
     if (refresh && gait_->isNewPhase())
     {
-        updateNewContact();
+        updateNewContact(q, currentPosition);
     }
 
     // Feet in contact with the ground are moving in base frame (they don't move in world frame)
@@ -214,13 +214,21 @@ MatrixN FootstepPlanner::computeTargetFootstep(int k, VectorN const& q, Vector6 
     return o_targetFootstep_;
 }
 
-void FootstepPlanner::updateNewContact()
+void FootstepPlanner::updateNewContact(VectorN const& q, Matrix34 const& currentPosition)
 {
+    // Get o_targetFootstep_ in local frame from o_currentPosition in world frame
+    quat_ = {q(6), q(3), q(4), q(5)};  // w, x, y, z
+    RPY_ << pinocchio::rpy::matrixToRpy(quat_.toRotationMatrix());
+    double c = std::cos(RPY_(2));
+    double s = std::sin(RPY_(2));
+    Rz.topLeftCorner<2, 2>() << c, -s, s, c;
+
     for (int i = 0; i < 4; i++)
     {
         if (gait_->getCurrentGaitCoeff(0, i) == 1.0)
         {
-            currentFootstep_.col(i) = (footsteps_[1]).col(i);
+            currentFootstep_.col(i) = Rz.transpose() * (currentPosition.col(i) - q.head(3));
+            // std::cout << " NEW CONTACT index : " << i << std::endl;
         }
     }
 }
