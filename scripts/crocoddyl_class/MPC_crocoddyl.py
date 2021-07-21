@@ -20,7 +20,7 @@ class MPC_crocoddyl:
         self.n_nodes = int(self.T_mpc/self.dt)    # Number of nodes
         self.mass = 2.50000279                    # Mass of the robot
         self.mu = mu                              # Friction coefficient
-        self.max_iteration = 10                   # Max iteration ddp solver
+        self.max_iteration = 25                   # Max iteration ddp solver
                 
         self.warm_start = True                    # Warm Start for the solver
         self.x_init = []                          # Inital x
@@ -37,18 +37,32 @@ class MPC_crocoddyl:
                             [1.865287e-5, 1.245813e-4, 6.939757e-2]])
 
         # Gains
-        self.stateWeights = np.zeros(12)
-        self.stateWeights[:6] = [0.5, 0.5, 2., 0.11, 0.11, 0.11]
-        self.stateWeights[6:] = [2., 2., 2., 0.05, 0.05, 0.05] * np.sqrt(self.stateWeights[:6])
+        # self.stateWeights = np.zeros(12)
+        # self.stateWeights[:6] = [0.5, 0.5, 2., 0.11, 0.11, 0.11]
+        # self.stateWeights[6:] = [2., 2., 2., 0.05, 0.05, 0.05] * np.sqrt(self.stateWeights[:6])
+        self.w_x = 0.3
+        self.w_y = 0.3
+        self.w_z = 2 * 10
+        self.w_roll = 0.9
+        self.w_pitch = 1.
+        self.w_yaw = 0.4
+        self.w_vx = 1.5*np.sqrt(self.w_x)
+        self.w_vy = 2*np.sqrt(self.w_y)
+        self.w_vz = 1*np.sqrt(self.w_z)
+        self.w_vroll = 0.05*np.sqrt(self.w_roll)
+        self.w_vpitch = 0.07*np.sqrt(self.w_pitch)
+        self.w_vyaw = 0.05*np.sqrt(self.w_yaw)
+        self.stateWeights = np.array([self.w_x, self.w_y, self.w_z, self.w_roll, self.w_pitch, self.w_yaw,
+                                      self.w_vx, self.w_vy, self.w_vz, self.w_vroll, self.w_vpitch, self.w_vyaw])
 
-        self.forceWeights = 0.01 * np.ones(12)  # Weight Vector : Force Norm
+        self.forceWeights = 0.02 * np.ones(12)  # Weight Vector : Force Norm
         self.frictionWeights = 1.0  # Weight Vector : Friction cone cost
 
         self.min_fz = 0.2  # Minimum normal force (N)
         self.max_fz = 25  # Maximum normal force (N)
 
-        self.shoulderWeights = 10.  # Weight on the shoulder term
-        self.shoulder_hlim = 0.27  # shoulder maximum height
+        self.shoulderWeights = 1.  # Weight on the shoulder term
+        self.shoulder_hlim = 0.23  # shoulder maximum height
 
         self.fsteps = np.full((params.N_gait, 12), np.nan)  # Position of the feet
 
@@ -156,9 +170,10 @@ class MPC_crocoddyl:
         model.gI = self.gI
         model.mu = self.mu
         model.min_fz = self.min_fz
+        model.max_fz = self.max_fz
 
         # Weights vectors
-        model.stateWeightss = self.stateWeights
+        model.stateWeights = self.stateWeights
         if terminal:
             model.forceWeights = np.zeros(12)
             model.frictionWeights = 0.

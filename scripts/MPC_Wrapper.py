@@ -100,7 +100,7 @@ class MPC_Wrapper:
         self.last_available_result[:24, 0] = np.hstack((x_init, np.array([0.0, 0.0, 8.0] * 4)))
         self.mpc_latest_result = np.zeros((12,))
 
-    def solve(self, k, xref, footsteps, gait, l_target_footstep, velocity, acceleration):
+    def solve(self, k, xref, footsteps, gait, l_target_footstep, oRh = np.eye(3), oTh = np.zeros((3,1)) , velocity=np.zeros((3,4)), acceleration=np.zeros((3,4))):
         """
         Call either the asynchronous MPC or the synchronous MPC depending on the value of multiprocessing during
         the creation of the wrapper
@@ -115,7 +115,7 @@ class MPC_Wrapper:
         if self.multiprocessing:
             self.run_MPC_asynchronous(k, xref, footsteps, l_target_footstep)
         else:
-            self.run_MPC_synchronous(k, xref, footsteps, l_target_footstep, velocity, acceleration)
+            self.run_MPC_synchronous(k, xref, footsteps, l_target_footstep, velocity, acceleration, oRh, oTh)
 
         if k > 2:
             self.last_available_result[12:12 + self.n_nodes, :] = np.roll(self.last_available_result[12:12 + self.n_nodes, :], -1, axis=1)
@@ -149,7 +149,7 @@ class MPC_Wrapper:
             self.initialized = True
             return self.last_available_result
 
-    def run_MPC_synchronous(self, k, xref, footsteps, l_target_footstep, velocity, acceleration):
+    def run_MPC_synchronous(self, k, xref, footsteps, l_target_footstep, velocity, acceleration, oRh ,oTh):
         """
         Run the MPC (synchronous version) to get the desired contact forces for the feet currently in stance phase
 
@@ -166,7 +166,10 @@ class MPC_Wrapper:
         else:
             self.mpc.solve(k, xref.copy(), footsteps.copy())
 
-        self.mpc_latest_result = self.mpc.get_latest_result()
+        if self.type == MPC_type.CROCODDYL_PLANNER:
+            self.mpc_latest_result = self.mpc.get_latest_result(oRh,oTh )
+        else:
+            self.mpc_latest_result = self.mpc.get_latest_result()
 
     def run_MPC_asynchronous(self, k, xref, footsteps, l_target_footstep):
         """

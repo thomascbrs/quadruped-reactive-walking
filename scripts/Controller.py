@@ -13,7 +13,6 @@ from solopython.utils.viewerClient import viewerClient, NonBlockingViewerFromRob
 import libquadruped_reactive_walking as lqrw
 from example_robot_data.robots_loader import Solo12Loader
 
-
 class Result:
     """Object to store the result of the control loop
     It contains what is sent to the robot (gains, desired positions and velocities,
@@ -132,7 +131,7 @@ class Controller:
 
         # Wrapper that makes the link with the solver that you want to use for the MPC
         self.mpc_wrapper = MPC_Wrapper.MPC_Wrapper(params, self.q)
-        self.o_targetFootstep = params.footsteps_init
+        self.o_targetFootstep = np.zeros((3,4))
 
         # Define the default controller
         self.myController = wbc_controller(params)
@@ -212,7 +211,8 @@ class Controller:
                                                                 int(self.k_mpc - self.k % self.k_mpc),
                                                                 self.q[0:7, 0:1],
                                                                 self.h_v[0:6, 0:1].copy(),
-                                                                self.v_ref[0:6, 0])
+                                                                self.v_ref[0:6, 0],
+                                                                self.footTrajectoryGenerator.getFootPosition().copy())
 
         # Run state planner (outputs the reference trajectory of the base)
         self.statePlanner.computeReferenceStates(self.q[0:7, 0:1], self.h_v[0:6, 0:1].copy(),
@@ -227,32 +227,50 @@ class Controller:
 
         # Solve MPC problem once every k_mpc iterations of the main loop
         if (self.k % self.k_mpc) == 0:
-            try:
-                if self.type_MPC == 3 :
-                    # Compute the target foostep in local frame, to stop the optimisation around it when t_lock overpass
-                    l_targetFootstep = self.footstepPlanner.getRz().transpose() @ self.footTrajectoryGenerator.getFootPosition() - self.q[0:3,0:1]
-                    self.mpc_wrapper.solve(self.k, xref, fsteps, cgait, l_targetFootstep)
-                if self.type_MPC == 4 :
-                    # Compute the target foostep in local frame, to stop the optimisation around it when t_lock overpass
-                    l_targetFootstep = self.footstepPlanner.getRz().transpose() @ self.footTrajectoryGenerator.getFootPosition() - self.q[0:3,0:1]
-                    self.mpc_wrapper.solve(self.k, xref, fsteps, cgait, l_targetFootstep, self.footTrajectoryGenerator.getFootVelocity(), self.footTrajectoryGenerator.getFootAcceleration())
-                else :
-                    self.mpc_wrapper.solve(self.k, xref, fsteps, cgait, np.zeros((3,4)))
+        # try:
+            if self.type_MPC == 3 :
+                print("--------------------------------------------------MPC OPTIM ------------------------------------------")
+                # Compute the target foostep in local frame, to stop the optimisation around it when t_lock overpass
+                l_targetFootstep = oRh.transpose() @ (self.o_targetFootstep - oTh)
+                print("currentPOsition given MPC : ", self.o_targetFootstep)
+                self.mpc_wrapper.solve(self.k, xref, fsteps, cgait, l_targetFootstep, oRh, oTh)
+            elif self.type_MPC == 4 :
+                # Compute the target foostep in local frame, to stop the optimisation around it when t_lock overpass
+                l_targetFootstep = self.footstepPlanner.getRz().transpose() @ self.footTrajectoryGenerator.getFootPosition() - self.q[0:3,0:1]
+                self.mpc_wrapper.solve(self.k, xref, fsteps, cgait, l_targetFootstep, self.q[:7], self.footTrajectoryGenerator.getFootVelocity(), self.footTrajectoryGenerator.getFootAcceleration())
+            else :
 
-            except ValueError:
-                print("MPC Problem")
+                self.mpc_wrapper.solve(self.k, xref, fsteps, cgait, np.zeros((3,4)))
+
+            # except ValueError:
+            #     print("MPC Problem")
 
         # Retrieve reference contact forces in horizontal frame
         self.x_f_mpc = self.mpc_wrapper.get_latest_result()
         t_mpc = time.time()
 
+        self.o_targetFootstep = o_targetFootstep.copy()
+
         # If the MPC optimizes footsteps positions then we use them
         if self.k > 100 and (self.type_MPC == 3 or self.type_MPC == 4) :
-            for foot in range(4):
-                id = 0
-                while cgait[id,foot] == 0 :
-                    id += 1
-                o_targetFootstep[:2,foot] = np.array(self.footstepPlanner.getRz()[:2, :2]) @ self.x_f_mpc[24 +  2*foot:24+2*foot+2, id] + np.array([self.q[0, 0] , self.q[1,0] ])
+            for foot in range(4):                  
+                if cgait[0,foot] == 0 :
+                    id = 0
+                    while cgait[id,foot] == 0 :
+                        id += 1
+                    self.o_targetFootstep[:2,foot] = self.x_f_mpc[24 +  2*foot:24+2*foot+2, id]
+
+        print("k : " , self.k)
+        self.pyb_vizu.update(self.k, device, self.o_targetFootstep, o_targetFootstep)
+
+        if self.k > 100 and (self.type_MPC == 3 or self.type_MPC == 4) :
+            for foot in range(4):                  
+                if cgait[0,foot] == 0 :
+                    id = 0
+                    while cgait[id,foot] == 0 :
+                        id += 1
+                    o_targetFootstep[:2,foot] = self.x_f_mpc[24 +  2*foot:24+2*foot+2, id]
+
 
         # o_targetFootstep = self.o_targetFootstep
         # Update pos, vel and acc references for feet
@@ -260,24 +278,24 @@ class Controller:
 
         # Target state for the whole body control
         self.x_f_wbc = (self.x_f_mpc[:24, 0]).copy()
-        if not self.gait.getIsStatic():
-            self.x_f_wbc[0] = self.myController.dt * xref[6, 1]
-            self.x_f_wbc[1] = self.myController.dt * xref[7, 1]
-            self.x_f_wbc[2] = self.h_ref
-            self.x_f_wbc[3] = 0.0
-            self.x_f_wbc[4] = 0.0
-            self.x_f_wbc[5] = self.myController.dt * xref[11, 1]
-        else:  # Sort of position control to avoid slow drift
+        # if not self.gait.getIsStatic():
+        #     self.x_f_wbc[0] = self.myController.dt * xref[6, 1]
+        #     self.x_f_wbc[1] = self.myController.dt * xref[7, 1]
+        #     self.x_f_wbc[2] = self.h_ref
+        #     self.x_f_wbc[3] = 0.0
+        #     self.x_f_wbc[4] = 0.0
+        #     self.x_f_wbc[5] = self.myController.dt * xref[11, 1]
+        if self.gait.getIsStatic():  # Sort of position control to avoid slow drift
             self.x_f_wbc[0:3] = self.planner.q_static[0:3, 0]  # TODO: Adapt to new code
             self.x_f_wbc[3:6] = self.planner.RPY_static[:, 0]
-        self.x_f_wbc[6:12] = xref[6:, 1]
+            self.x_f_wbc[6:12] = xref[6:, 1]
 
         # Whole Body Control
         # If nothing wrong happened yet in the WBC controller
         if (not self.myController.error) and (not self.joystick.stop):
 
             self.q_wbc = np.zeros((19, 1))
-            self.q_wbc[2, 0] = self.h_ref  # at position (0.0, 0.0, h_ref)
+            self.q_wbc[2, 0] = self.x_f_mpc[2,0]  # at position (0.0, 0.0, h_ref)
             self.q_wbc[6, 0] = 1.0  # with orientation (0.0, 0.0, 0.0)
             self.q_wbc[7:, 0] = self.myController.qdes[7:]  # with reference angular positions of previous loop
 
@@ -297,7 +315,7 @@ class Controller:
 
             # Feet command position in base frame
             self.feet_p_cmd = oRh.transpose() @ (self.footTrajectoryGenerator.getFootPosition()
-                                                 - np.array([[0.0], [0.0], [self.h_ref]]) - oTh)
+                                                 - np.array([[0.0], [0.0], [ self.x_f_mpc[2,0] ]]) - oTh)
 
             # Run InvKin + WBC QP
             self.myController.compute(self.q_wbc, self.b_v,
@@ -335,8 +353,8 @@ class Controller:
         if self.k > 10 and self.enable_pyb_GUI:
             # pyb.resetDebugVisualizerCamera(cameraDistance=0.8, cameraYaw=45, cameraPitch=-30,
             #                                cameraTargetPosition=[1.0, 0.3, 0.25])
-            # pyb.resetDebugVisualizerCamera(cameraDistance=0.6, cameraYaw=45, cameraPitch=-39.9,
-            #                                cameraTargetPosition=[device.dummyHeight[0], device.dummyHeight[1], 0.0])
+            pyb.resetDebugVisualizerCamera(cameraDistance=0.6, cameraYaw=45, cameraPitch=-39.9,
+                                           cameraTargetPosition=[device.dummyHeight[0], device.dummyHeight[1], 0.0])
             pass
 
     def security_check(self):

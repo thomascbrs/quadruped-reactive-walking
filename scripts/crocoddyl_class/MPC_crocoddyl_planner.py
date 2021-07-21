@@ -21,7 +21,7 @@ class MPC_crocoddyl_planner():
         self.dt = params.dt_mpc    # Time step of the solver
         self.mass = 2.50000279     # Mass of the robot
         self.mu = mu               # Friction coefficient
-        self.max_iteration = 10    # Max iteration ddp solver
+        self.max_iteration = 30    # Max iteration ddp solver
 
         # Inertia matrix of the robot in body frame
         self.gI = np.array([[3.09249e-2, -8.00101e-7, 1.865287e-5],
@@ -29,37 +29,37 @@ class MPC_crocoddyl_planner():
                             [1.865287e-5, 1.245813e-4, 6.939757e-2]])
 
         # Weights
-        # self.w_x = 0.3
-        # self.w_y = 0.3
-        # self.w_z = 2
-        # self.w_roll = 0.9
-        # self.w_pitch = 1.
-        # self.w_yaw = 0.4
-        # self.w_vx = 1.5*np.sqrt(self.w_x)
-        # self.w_vy = 2*np.sqrt(self.w_y)
-        # self.w_vz = 1*np.sqrt(self.w_z)
-        # self.w_vroll = 0.05*np.sqrt(self.w_roll)
-        # self.w_vpitch = 0.07*np.sqrt(self.w_pitch)
-        # self.w_vyaw = 0.05*np.sqrt(self.w_yaw)
-        # self.stateWeights = np.array([self.w_x, self.w_y, self.w_z, self.w_roll, self.w_pitch, self.w_yaw,
-        #                               self.w_vx, self.w_vy, self.w_vz, self.w_vroll, self.w_vpitch, self.w_vyaw])
-        self.stateWeights = np.zeros(12)
-        self.stateWeights[:6] = [0.3, 0.3, 2, 0.9, 1., 0.4]
-        self.stateWeights[6:] = [1.5, 2, 1, 0.05, 0.07, 0.05] * np.sqrt(self.stateWeights[:6])
+        self.w_x = 0.3
+        self.w_y = 0.3
+        self.w_z = 2 * 10
+        self.w_roll = 0.9
+        self.w_pitch = 1.
+        self.w_yaw = 0.4
+        self.w_vx = 1.5*np.sqrt(self.w_x)
+        self.w_vy = 2*np.sqrt(self.w_y)
+        self.w_vz = 1*np.sqrt(self.w_z)
+        self.w_vroll = 0.05*np.sqrt(self.w_roll)
+        self.w_vpitch = 0.07*np.sqrt(self.w_pitch)
+        self.w_vyaw = 0.05*np.sqrt(self.w_yaw)
+        self.stateWeights = np.array([self.w_x, self.w_y, self.w_z, self.w_roll, self.w_pitch, self.w_yaw,
+                                      self.w_vx, self.w_vy, self.w_vz, self.w_vroll, self.w_vpitch, self.w_vyaw])
+        # self.stateWeights = np.zeros(12)
+        # self.stateWeights[:6] = [0.3, 0.3, 2, 0.9, 1., 0.4]
+        # self.stateWeights[6:] = [1.5, 2, 1, 0.05, 0.07, 0.05] * np.sqrt(self.stateWeights[:6])
 
-        self.forceWeights = np.array(4*[0.01, 0.01, 0.01])  # Weight Vector : Force Norm
-        self.frictionWeights = 0.5                          # Weight Vector : Friction cone cost
+        self.forceWeights = 2*np.array(4*[0.01, 0.01, 0.01])  # Weight Vector : Force Norm
+        self.frictionWeights = 1.                          # Weight Vector : Friction cone cost
         self.heuristicWeights = np.array(4*[0.3, 0.4])      # Weights on the heuristic term
-        self.stepWeights = np.full(8, 0.05)                 # Weight on the step command (distance between steps)
-        self.stopWeights = np.ones(8)                       # Weights to stop the optimisation at the end of the flying phase
-        self.shoulderContactWeight = 5                      # Weight for shoulder-to-contact penalty
-        self.shoulder_hlim = 0.225
+        self.stepWeights = np.full(8, 0.005)                 # Weight on the step command (distance between steps)
+        self.stopWeights = 2.*np.ones(8)                       # Weights to stop the optimisation at the end of the flying phase
+        self.shoulderContactWeight = 1.                      # Weight for shoulder-to-contact penalty
+        self.shoulder_hlim = 0.235
 
         # TODO : create a proper warm-start with the previous optimisation
         self.warm_start = warm_start
 
         # Minimum normal force(N) and reference force vector bool
-        self.min_fz = min_fz
+        self.min_fz = 1.
         self.relative_forces = True 
 
         # Gait matrix
@@ -85,6 +85,12 @@ class MPC_crocoddyl_planner():
         self.index_lock_time = int(params.lock_time / params.dt_mpc)  # Row index in the gait matrix when the optimisation of the feet should be stopped
         self.index_stop_optimisation = []  # List of index to reset the stopWeights to 0 after optimisation
 
+        # USefull to optimise around the previous optimisation
+        self.flying_foot = 4*[False] # Bool corresponding to the current flying foot (gait[0,foot_id] == 0)
+        self.flying_foot_nodes = np.zeros(4) # The number of nodes in the next phase of flight
+        self.flying_max_nodes = int(params.T_mpc / (2 * params.dt_mpc)) # TODO : get the maximum number of nodes from the gait_planner
+
+        # Initialize the lists of models
         self.initialize_models(params)
 
     def initialize_models(self, params):
@@ -146,82 +152,84 @@ class MPC_crocoddyl_planner():
 
         index_step = 0
         index_augmented = 0
-        j = 0
+        j = 1
+        
+        stopping_needed = 4*[False]
+        if k > 110 :
+            for index_foot, is_flying in enumerate(self.flying_foot):
+                if is_flying:
+                    stopping_needed[index_foot] = self.flying_foot_nodes[index_foot] != self.flying_max_nodes # Position optimized at the previous control cycle
 
-        while np.any(self.gait[j, :]):
-            if j == 0:
-                if np.any(self.gait[0, :] - self.gait_old):
-                    # Step model
-                    self.models_step[index_step].updateModel(np.reshape(footsteps[j, :], (3, 4), order='F'),
-                                                             xref[:, j+1], self.gait[0, :] - self.gait_old)
-                    self.action_models.append(self.models_step[index_step])
+        # Augmented model, first node, j = 0
+        self.models_augmented[index_augmented].updateModel(np.reshape(footsteps[0, :], (3, 4), order='F'),
+                                                            l_stop, xref[:, 1], self.gait[0, :])
+        self.action_models.append(self.models_augmented[index_augmented])
 
-                    # Augmented model
-                    self.models_augmented[index_augmented].updateModel(np.reshape(footsteps[j, :], (3, 4), order='F'),
-                                                                       l_stop, xref[:, j+1], self.gait[j, :])
+        index_augmented += 1
+        # Warm-start
+        self.x_init.append(np.concatenate([xref[:, 1], p0]))
+        self.u_init.append(np.repeat(self.gait[0, :], 3) * np.array(4*[0., 0., 2.5*9.81/np.sum(self.gait[0, :])]))
 
-                    # Activation of the cost to stop the optimisation around l_stop (position locked by the footstepGenerator)
-                    if j < self.index_lock_time:
-                        self.models_augmented[index_augmented].stopWeights = self.stopWeights
-                        self.index_stop_optimisation.append(index_augmented)
+        while np.any(self.gait[j, :]):            
+            if np.any(self.gait[j, :] - self.gait[j-1, :]):
+                # Step model
+                self.models_step[index_step].updateModel(np.reshape(footsteps[j, :], (3, 4), order='F'),
+                                                            xref[:, j+1], self.gait[j, :] - self.gait[j-1, :])
+                self.action_models.append(self.models_step[index_step])
 
-                    self.action_models.append(self.models_augmented[index_augmented])
+                # Augmented model
+                self.models_augmented[index_augmented].updateModel(np.reshape(footsteps[j, :], (3, 4), order='F'),
+                                                                    l_stop, xref[:, j+1], self.gait[j, :])
 
-                    index_step += 1
-                    index_augmented += 1
-                    
-                    # Warm-start
-                    self.x_init.append(np.concatenate([xref[:, j+1], p0]))
-                    self.u_init.append(np.zeros(8))
-                    self.x_init.append(np.concatenate([xref[:, j+1], p0]))
-                    self.u_init.append(np.repeat(self.gait[j, :], 3) * np.array(4*[0., 0., 2.5*9.81/np.sum(self.gait[j, :])]))
+                # Activation of the cost to stop the optimisation around l_stop (position locked by the footstepGenerator)
+                # if j < self.index_lock_time:
+                #     self.models_augmented[index_augmented].stopWeights = self.stopWeights
+                #     self.index_stop_optimisation.append(index_augmented)
 
-                else:
-                    # Augmented model
-                    self.models_augmented[index_augmented].updateModel(np.reshape(footsteps[j, :], (3, 4), order='F'),
-                                                                       l_stop, xref[:, j+1], self.gait[j, :])
-                    self.action_models.append(self.models_augmented[index_augmented])
+                feet_ground = np.where(self.gait[j,:] == 1)[0]
+                activation_cost = False
+                for foot in range(4): 
+                    if (stopping_needed[foot]) and (self.flying_foot[foot]) and (foot in feet_ground) and (j < int(self.flying_foot_nodes[foot] + self.flying_max_nodes) ) :
+                        coeff_activated = np.zeros(8)
+                        coeff_activated[2*foot: 2*foot + 2] = np.array([1,1])
+                        self.models_augmented[index_augmented].stopWeights = self.models_augmented[index_augmented].stopWeights + coeff_activated*self.stopWeights
+                        activation_cost = True
+                
+                if activation_cost :
+                    self.index_stop_optimisation.append(index_augmented)
 
-                    index_augmented += 1
-                    # Warm-start
-                    self.x_init.append(np.concatenate([xref[:, j+1], p0]))
-                    self.u_init.append(np.repeat(self.gait[j, :], 3) * np.array(4*[0., 0., 2.5*9.81/np.sum(self.gait[j, :])]))
+
+                self.action_models.append(self.models_augmented[index_augmented])
+
+                index_step += 1
+                index_augmented += 1
+                # Warm-start
+                self.x_init.append(np.concatenate([xref[:, j+1], p0]))
+                self.u_init.append(np.zeros(8))
+                self.x_init.append(np.concatenate([xref[:, j+1], p0]))
+                self.u_init.append(np.repeat(self.gait[j, :], 3) * np.array(4*[0., 0., 2.5*9.81/np.sum(self.gait[j, :])]))
 
             else:
-                if np.any(self.gait[j, :] - self.gait[j-1, :]):
-                    # Step model
-                    self.models_step[index_step].updateModel(np.reshape(footsteps[j, :], (3, 4), order='F'),
-                                                             xref[:, j+1], self.gait[j, :] - self.gait[j-1, :])
-                    self.action_models.append(self.models_step[index_step])
+                self.models_augmented[index_augmented].updateModel(np.reshape(footsteps[j, :], (3, 4), order='F'),
+                                                                    l_stop, xref[:, j+1], self.gait[j, :])
+                self.action_models.append(self.models_augmented[index_augmented])
 
-                    # Augmented model
-                    self.models_augmented[index_augmented].updateModel(np.reshape(footsteps[j, :], (3, 4), order='F'),
-                                                                       l_stop, xref[:, j+1], self.gait[j, :])
+                feet_ground = np.where(self.gait[j,:] == 1)[0]
+                activation_cost = False
+                for foot in range(4): 
+                    if (stopping_needed[foot]) and (self.flying_foot[foot]) and (foot in feet_ground) and (j < int(self.flying_foot_nodes[foot] + self.flying_max_nodes) ) :
+                        coeff_activated = np.zeros(8)
+                        coeff_activated[2*foot: 2*foot + 2] = np.array([1,1])
+                        self.models_augmented[index_augmented].stopWeights = self.models_augmented[index_augmented].stopWeights + coeff_activated*self.stopWeights
+                        activation_cost = True
+                
+                if activation_cost :
+                    self.index_stop_optimisation.append(index_augmented)
 
-                    # Activation of the cost to stop the optimisation around l_stop (position locked by the footstepGenerator)
-                    if j < self.index_lock_time:
-                        self.models_augmented[index_augmented].stopWeights = self.stopWeights
-                        self.index_stop_optimisation.append(index_augmented)
-
-                    self.action_models.append(self.models_augmented[index_augmented])
-
-                    index_step += 1
-                    index_augmented += 1
-                    # Warm-start
-                    self.x_init.append(np.concatenate([xref[:, j+1], p0]))
-                    self.u_init.append(np.zeros(8))
-                    self.x_init.append(np.concatenate([xref[:, j+1], p0]))
-                    self.u_init.append(np.repeat(self.gait[j, :], 3) * np.array(4*[0., 0., 2.5*9.81/np.sum(self.gait[j, :])]))
-
-                else:
-                    self.models_augmented[index_augmented].updateModel(np.reshape(footsteps[j, :], (3, 4), order='F'),
-                                                                       l_stop, xref[:, j+1], self.gait[j, :])
-                    self.action_models.append(self.models_augmented[index_augmented])
-
-                    index_augmented += 1
-                    # Warm-start
-                    self.x_init.append(np.concatenate([xref[:, j+1], p0]))
-                    self.u_init.append(np.repeat(self.gait[j, :], 3) * np.array(4*[0., 0., 2.5*9.81/np.sum(self.gait[j, :])]))
+                index_augmented += 1
+                # Warm-start
+                self.x_init.append(np.concatenate([xref[:, j+1], p0]))
+                self.u_init.append(np.repeat(self.gait[j, :], 3) * np.array(4*[0., 0., 2.5*9.81/np.sum(self.gait[j, :])]))
 
             # Update row matrix
             j += 1
@@ -236,9 +244,11 @@ class MPC_crocoddyl_planner():
 
         self.ddp = crocoddyl.SolverDDP(self.problem)
 
-    def get_latest_result(self):
+    def get_latest_result(self, oRh, oTh):
         """ 
         Return the desired contact forces that have been computed by the last iteration of the MPC
+        Args : 
+         - q ( Array 7x1 ) : pos, quaternion orientation
         """
         index = 0
         N = int(self.T_mpc / self.dt)
@@ -247,9 +257,9 @@ class MPC_crocoddyl_planner():
             if self.action_models[i].__class__.__name__ != "ActionModelQuadrupedStep":
                 if index >= N:
                     raise ValueError("Too many action model considering the current MPC prediction horizon")
-                result[:12, index] = self.ddp.xs[i][:12]
+                result[:12, index] = self.ddp.xs[i+1][:12] # First node correspond to current state
                 result[12:24, index] = self.ddp.us[i]
-                result[24:, index] = self.ddp.xs[i][12:]
+                result[24:, index] = ( oRh[:2,:2] @ (self.ddp.xs[i+1][12:].reshape((2,4) , order = "F")  ) + oTh[:2]).reshape((8), order = "F")
                 if i > 0 and self.action_models[i-1].__class__.__name__ == "ActionModelQuadrupedStep":
                     pass
                 index += 1
@@ -268,6 +278,7 @@ class MPC_crocoddyl_planner():
         model.min_fz = self.min_fz
         model.relative_forces = True
         model.shoulderContactWeight = self.shoulderContactWeight
+        model.shoulder_hlim = self.shoulder_hlim 
 
         # Weights vectors
         model.stateWeights = self.stateWeights
@@ -304,3 +315,17 @@ class MPC_crocoddyl_planner():
         while np.any(footsteps[j, :]):
             self.gait[j, :] = (footsteps[j, ::3] != 0.0).astype(int)
             j += 1
+
+        # Get the current flying feet and the number of nodes
+        for foot in range(4):
+            row = 0
+            if self.gait[0, foot] == 0:
+                self.flying_foot[foot] = True 
+                while self.gait[row, foot] == 0:
+                    row += 1
+                self.flying_foot_nodes[foot] = int(row)
+            else:
+                self.flying_foot[foot] = False
+    
+
+
