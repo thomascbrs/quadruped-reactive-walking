@@ -75,6 +75,8 @@ class LoggerControl():
         if statePlanner is not None:
             if loop.type_MPC == 3:
                 self.mpc_x_f = np.zeros([logSize, 32, statePlanner.getNSteps()])
+            elif loop.type_MPC == 4:
+                self.mpc_x_f = np.zeros([logSize, 33, statePlanner.getNSteps()])
             else:
                 self.mpc_x_f = np.zeros([logSize, 24, statePlanner.getNSteps()])
 
@@ -152,7 +154,7 @@ class LoggerControl():
         self.planner_h_ref[self.i] = loop.h_ref
 
         # Logging from model predictive control
-        self.mpc_x_f[self.i] = loop.x_f_mpc[:24,:]
+        self.mpc_x_f[self.i] = loop.x_f_mpc[:,:]
 
         # Logging from whole body control
         self.wbc_x_f[self.i] = loop.x_f_wbc
