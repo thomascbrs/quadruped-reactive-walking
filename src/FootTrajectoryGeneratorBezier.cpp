@@ -278,8 +278,9 @@ void FootTrajectoryGeneratorBezier::updateFootPosition(int const& k, int const& 
   if (t0 < t1 - lockTime_) {
     // compute reference polynoms coefficients
     if (t0s[i_foot] < 10e-4 || k == 0) {
+      double height_ = std::max(position_(2,i_foot), targetFootstep[2]);
       // Update Z coefficients only at the beginning of the flying phase
-      updatePolyCoeff_Z(i_foot, position_.col(i_foot), targetFootstep, t1, h + targetFootstep[2]);
+      updatePolyCoeff_Z(i_foot, position_.col(i_foot), targetFootstep, t1, h + height_);
       // Initale velocity and acceleration nulle
       updatePolyCoeff_XY(i_foot, position_.col(i_foot), Vector3::Zero(), Vector3::Zero(), targetFootstep, t0, t1);
 
