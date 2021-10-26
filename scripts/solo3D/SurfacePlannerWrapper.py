@@ -1,9 +1,9 @@
 from solo3D.SurfacePlanner import SurfacePlanner
 
-from multiprocessing import Process, Lock
-from multiprocessing.sharedctypes import Value, Array
-from ctypes import Structure, c_double
+from multiprocessing import Process
+from multiprocessing.sharedctypes import Value
 import ctypes
+import os
 
 import libquadruped_reactive_walking as lqrw
 
@@ -20,7 +20,7 @@ N_FEET = 4
 N_PHASE = 3
 
 
-class SurfaceDataCtype(Structure):
+class SurfaceDataCtype(ctypes.Structure):
     ''' ctype data structure for the shared memory between processes, for surfaces
     Ax <= b
     If normal as inequalities : A = [A , n , -n] , b = [b , d + eps, -d-eps]
@@ -39,7 +39,7 @@ class SurfaceDataCtype(Structure):
                 ('vertices', ctypes.c_double * 3 * nvertices), ('on', ctypes.c_bool)]
 
 
-class DataOutCtype(Structure):
+class DataOutCtype(ctypes.Structure):
     '''  ctype data structure for the shared memory between processes
     Data Out, list of potential and the selected surfaces given by the MIP
     Potential surfaces are used if the MIP has not converged
@@ -49,7 +49,7 @@ class DataOutCtype(Structure):
                 ('success', ctypes.c_bool)]
 
 
-class DataInCtype(Structure):
+class DataInCtype(ctypes.Structure):
     ''' ctype data structure for the shared memory between processes
     TODO : if more than 4 vertices, add a variable for the number of vertice to reshape the appropriate buffer
     '''
@@ -62,7 +62,7 @@ class SurfacePlanner_Wrapper():
     '''
 
     def __init__(self, params):
-        self.urdf = params.environment_URDF
+        self.urdf = os.environ["SOLO3D_ENV_DIR"] +  params.environment_URDF
         self.T_gait = params.T_gait
         self.shoulders = np.reshape(params.shoulders.tolist(), (3,4), order = "F")
 

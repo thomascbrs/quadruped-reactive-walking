@@ -1,6 +1,7 @@
 import numpy as np
 import pybullet as pyb
 import pybullet_data
+import os
 
 class PybEnvironment3D():
     ''' Class to vizualise the 3D environment and foot trajectory and in PyBullet simulation.
@@ -17,7 +18,7 @@ class PybEnvironment3D():
         - footTrajectoryGenerator: Foot trajectory class (Bezier version).
         """
         self.enable_pyb_GUI = params.enable_pyb_GUI
-        self.URDF = params.environment_URDF
+        self.URDF = os.environ["SOLO3D_ENV_DIR"] + params.environment_URDF
         self.params = params
 
         # Solo3D python class

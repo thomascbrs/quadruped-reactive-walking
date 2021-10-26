@@ -11,7 +11,7 @@ void StatePlanner3D::initialize(Params& params) {
   T_step_ = params.T_gait / 2;
   referenceStates_ = MatrixN::Zero(12, 1 + n_steps_);
   dt_vector_ = VectorN::LinSpaced(n_steps_, dt_, static_cast<double>(n_steps_) * dt_);
-  heightmap_.initialize(params.environment_heightmap);
+  heightmap_.initialize(std::getenv("SOLO3D_ENV_DIR") + params.environment_heightmap);
   configs = MatrixN::Zero(7, n_surface_configs);
   Rz = Matrix3::Zero();
   q_dxdy = Vector3::Zero();

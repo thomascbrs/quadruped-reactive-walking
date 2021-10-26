@@ -45,7 +45,7 @@ def init_afftool():
     vf = ViewerFactory(ps)
     afftool = AffordanceTool()
     afftool.setAffordanceConfig('Support', [0.5, 0.03, 0.00005])
-    afftool.loadObstacleModel(params.environment_URDF, "environment", vf)
+    afftool.loadObstacleModel(os.environ["SOLO3D_ENV_DIR"] + params.environment_URDF, "environment", vf)
     ps.selectPathValidation("RbprmPathValidation", 0.05)
 
     return afftool
@@ -107,8 +107,8 @@ if __name__ == "__main__":
 
     heightmap = Heightmap(N_X, N_Y, X_BOUNDS, Y_BOUNDS)
     heightmap.build(affordances)
-    heightmap.save_binary(params.environment_heightmap)
+    heightmap.save_binary(os.environ["SOLO3D_ENV_DIR"] + params.environment_heightmap)
 
-    ax_heightmap = plot.plot_heightmap(heightmap)
+    ax_heightmap = plot_heightmap(heightmap)
     draw_whole_scene(all_surfaces)
     plt.show(block=True)

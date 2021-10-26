@@ -72,5 +72,5 @@ robot:
     # Parameters fro solo3D simulation
     solo3D: true  # Activation of the 3D environment, and corresponding planner blocks
     enable_multiprocessing_mip: false  # Enable/disable running the MIP in another process in parallel of the main loop
-    environment_URDF: "/local/users/frisbourg/install/share/hpp_environments/urdf/Solo3D/one_step_large.urdf" # URDF files
-    environment_heightmap: "/local/users/frisbourg/install/share/hpp_environments/heightmaps/Solo3D/one_step_large.bin"
+    environment_URDF: "/one_step_large/one_step_large.urdf"
+    environment_heightmap: "/one_step_large/one_step_large.bin"
