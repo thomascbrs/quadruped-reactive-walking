@@ -157,15 +157,12 @@ class Controller:
             self.footstepPlanner = lqrw.FootstepPlannerQP()
             self.footstepPlanner.initialize(params, self.gait, self.surfacePlanner.floor_surface)
 
-            self.footstepPlanner_ref = lqrw.FootstepPlanner()
-            self.footstepPlanner_ref.initialize(params, self.gait)
-
             # Trajectory Generator Bezier
             x_margin_max_ = 0.05  # 4cm margin
-            t_margin_ = 0.3  # 15% of the curve around critical point
+            t_margin_ = 0.15  # 15% of the curve around critical point
             z_margin_ = 0.01  # 1% of the curve after the critical point
-            N_sample = 8  # Number of sample in the least square optimisation for Bezier coeffs
-            N_sample_ineq = 10  # Number of sample while browsing the curve
+            N_sample = 10  # Number of sample in the least square optimisation for Bezier coeffs
+            N_sample_ineq = 12  # Number of sample while browsing the curve
             degree = 7  # Degree of the Bezier curve
 
             self.footTrajectoryGenerator = lqrw.FootTrajectoryGeneratorBezier()
@@ -478,10 +475,12 @@ class Controller:
 
             # Update configuration vector for wbc
             if self.solo3D:  # Update roll, pitch according to heighmap
-                self.q_wbc[3, 0] = self.dt_wbc * (xref[3, 1] -
-                                                  self.q_filt_mpc[3, 0]) / self.dt_mpc + self.q_filt_mpc[3, 0]  # Roll
-                self.q_wbc[4, 0] = self.dt_wbc * (xref[4, 1] -
-                                                  self.q_filt_mpc[4, 0]) / self.dt_mpc + self.q_filt_mpc[4, 0]  # Pitch
+                # self.q_wbc[3, 0] = self.dt_wbc * (xref[3, 1] -
+                #                                   self.q_filt_mpc[3, 0]) / self.dt_mpc + self.q_filt_mpc[3, 0]  # Roll
+                # self.q_wbc[4, 0] = self.dt_wbc * (xref[4, 1] -
+                #                                   self.q_filt_mpc[4, 0]) / self.dt_mpc + self.q_filt_mpc[4, 0]  # Pitch
+                self.q_wbc[3, 0] = self.q_filt_3d[3, 0]  # Roll
+                self.q_wbc[4, 0] = self.q_filt_3d[4, 0]  # Pitch
             else:
                 self.q_wbc[3, 0] = self.q_filt_mpc[3, 0]  # Roll
                 self.q_wbc[4, 0] = self.q_filt_mpc[4, 0]  # Pitch
@@ -586,7 +585,7 @@ class Controller:
         t_wbc = time.time()
 
         # Security check
-        self.security_check()
+        # self.security_check()
 
         # Update PyBullet camera
         # to have yaw update in simu: utils_mpc.quaternionToRPY(self.estimator.q_filt[3:7, 0])[2, 0]

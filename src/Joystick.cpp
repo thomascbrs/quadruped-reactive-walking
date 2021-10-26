@@ -290,7 +290,8 @@ void Joystick::update_v_ref_predefined(int k, int velID) {
         t_switch = MatrixN::Zero(1, 7);
         t_switch << 0, 2, 4, 6, 8, 10, 15;
         v_switch = MatrixN::Zero(6, 7);
-        v_switch.row(0) << 0.0, 0.4, 0.8, 1.0, 1.0, 1.0, 1.0;
+        // v_switch.row(0) << 0.0, 0.4, 0.8, 1.0, 1.0, 1.0, 1.0;
+        v_switch.row(0) << 0.0, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3;
         break;
       default:
         throw std::runtime_error("Unknown velocity ID for the polynomial interpolation.");
