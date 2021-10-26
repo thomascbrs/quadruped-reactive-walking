@@ -121,7 +121,7 @@ class StatePlanner():
         for i in range(i_min, i_max):
             for j in range(j_min, j_max):
                 A[i_pb, :] = [self.map.x[i], self.map.y[j], 1.]
-                b[i_pb] = self.map.zv[i, j]
+                b[i_pb] = self.map.z[i, j]
                 i_pb += 1
 
         return solve_least_square(np.array(A), np.array(b)).x
