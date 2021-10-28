@@ -1,19 +1,11 @@
-# coding: utf8
-
 import numpy as np
-from numpy.lib.function_base import sinc
-from IPython import embed_kernel
 import utils_mpc
 import time
-import math
 
 import MPC_Wrapper
-import Joystick
 import pybullet as pyb
 import pinocchio as pin
-from solopython.utils.viewerClient import viewerClient, NonBlockingViewerFromRobot
 import libquadruped_reactive_walking as lqrw
-from example_robot_data.robots_loader import Solo12Loader
 
 from solo3D.tools.utils import quaternionToRPY
 
@@ -106,7 +98,6 @@ class Controller:
         self.solo = utils_mpc.init_robot(q_init, params)
 
         # Create Joystick object
-        # self.joystick = Joystick.Joystick(params)
         self.joystick = lqrw.Joystick()
         self.joystick.initialize(params)
 
@@ -171,12 +162,12 @@ class Controller:
                                                     degree)
 
             self.pybEnvironment3D = PybEnvironment3D(params, self.gait, self.statePlanner, self.footstepPlanner,
-                                                         self.footTrajectoryGenerator)
+                                                     self.footTrajectoryGenerator)
 
-            self.q_mes_3d = np.zeros((18,1))
-            self.v_mes_3d = np.zeros((18,1))
-            self.q_filt_3d = np.zeros((18,1))
-            self.v_filt_3d = np.zeros((18,1))
+            self.q_mes_3d = np.zeros((18, 1))
+            self.v_mes_3d = np.zeros((18, 1))
+            self.q_filt_3d = np.zeros((18, 1))
+            self.v_filt_3d = np.zeros((18, 1))
             self.filter_q_3d = lqrw.Filter()
             self.filter_q_3d.initialize(params)
             self.filter_v_3d = lqrw.Filter()
@@ -191,10 +182,6 @@ class Controller:
 
             self.footTrajectoryGenerator = lqrw.FootTrajectoryGenerator()
             self.footTrajectoryGenerator.initialize(params, self.gait)
-
-        # ForceMonitor to display contact forces in PyBullet with red lines
-        # import ForceMonitor
-        # myForceMonitor = ForceMonitor.ForceMonitor(pyb_sim.robotId, pyb_sim.planeId)
 
         self.envID = params.envID
         self.velID = params.velID
@@ -262,24 +249,23 @@ class Controller:
         Args:
             device (object): Interface with the masterboard or the simulation
         """
-
         t_start = time.time()
 
         # Update the reference velocity coming from the gamepad
         self.joystick.update_v_ref(self.k, self.velID, self.gait.getIsStatic())
 
         # dummyPos replaced by dummy_state to give Yaw estimated by motion capture to the estimator
-        dummy_state = np.zeros((6,1))  # state = [x,y,z,roll,pitch,yaw]
-        b_baseVel = np.zeros((3,1))
+        dummy_state = np.zeros((6, 1))  # state = [x,y,z,roll,pitch,yaw]
+        b_baseVel = np.zeros((3, 1))
         if self.solo3D and qc == None:
-            dummy_state[:3,0] = device.dummyPos
-            dummy_state[3:,0] = device.imu.attitude_euler  # Yaw only used for solo3D
-            b_baseVel[:,0] = device.b_baseVel
+            dummy_state[:3, 0] = device.dummyPos
+            dummy_state[3:, 0] = device.imu.attitude_euler  # Yaw only used for solo3D
+            b_baseVel[:, 0] = device.b_baseVel
         elif self.solo3D and qc != None:
             # motion capture data
-            dummy_state[:3,0] = qc.getPosition()
+            dummy_state[:3, 0] = qc.getPosition()
             dummy_state[3:] = quaternionToRPY(qc.getOrientationQuat())
-            b_baseVel[:,0] = (self.qc.getOrientationMat9().reshape((3,3)).transpose() @ self.qc.getVelocity().reshape((3, 1))).ravel()
+            b_baseVel[:, 0] = (self.qc.getOrientationMat9().reshape((3, 3)).transpose() @ self.qc.getVelocity().reshape((3, 1))).ravel()
 
         # Process state estimator
         self.estimator.run_filter(self.gait.getCurrentGait(),
@@ -294,7 +280,6 @@ class Controller:
 
         # Update state vectors of the robot (q and v) + transformation matrices between world and horizontal frames
         self.estimator.updateState(self.joystick.getVRef(), self.gait)
-        oRb = self.estimator.getoRb()
         oRh = self.estimator.getoRh()
         hRb = self.estimator.gethRb()
         oTh = self.estimator.getoTh().reshape((3, 1))
@@ -310,39 +295,20 @@ class Controller:
 
         # Use position and velocities from motion capture for solo3D
         if self.solo3D:
-            self.q_mes_3d[:3,0] = self.estimator.getQFilt()[:3]
-            self.q_mes_3d[6:,0] = self.estimator.getQFilt()[7:]
+            self.q_mes_3d[:3, 0] = self.estimator.getQFilt()[:3]
+            self.q_mes_3d[6:, 0] = self.estimator.getQFilt()[7:]
             self.q_mes_3d[3:6] = quaternionToRPY(self.estimator.getQFilt()[3:7])
-            self.v_mes_3d[:,0] = self.estimator.getVFilt()
+            self.v_mes_3d[:, 0] = self.estimator.getVFilt()
             # Quantities go through a 1st order low pass filter with fc = 15 Hz (avoid >25Hz foldback)
             self.q_filt_3d[:6, 0] = self.filter_q_3d.filter(self.q_mes_3d[:6, 0:1], True)
             self.q_filt_3d[6:, 0] = self.q_mes_3d[6:, 0].copy()
             self.v_filt_3d[:6, 0] = self.filter_v_3d.filter(self.v_mes_3d[:6, 0:1], False)
             self.v_filt_3d[6:, 0] = self.v_mes_3d[6:, 0].copy()
-            oTh_3d = np.zeros((3,1))
-            oTh_3d[:2,0] = self.q_filt_3d[:2,0]
-            oRh_3d = pin.rpy.rpyToMatrix(self.q_filt_3d[3:6,0])
+            oTh_3d = np.zeros((3, 1))
+            oTh_3d[:2, 0] = self.q_filt_3d[:2, 0]
+            oRh_3d = pin.rpy.rpyToMatrix(self.q_filt_3d[3:6, 0])
 
         t_filter = time.time()
-
-        """if (self.k % self.k_mpc) == 0 and self.k > 1000:
-            print(self.v_ref[[0, 1, 5], 0])
-            if not self.treshold_static and np.all(self.v_gp[[0, 1, 5], 0] < 0.01):
-                print("SWITCH TO STATIC")
-                self.treshold_static = True
-            elif self.treshold_static and np.any(self.v_gp[[0, 1, 5], 0] > 0.03):
-                print("SWITCH TO TROT")
-                self.treshold_static = False
-
-            if (self.gait.getIsStatic() and not self.treshold_static):
-                print("CODE 3")
-                self.joystick.joystick_code = 3
-            elif (not self.gait.getIsStatic() and self.treshold_static):
-                print("CODE 1")
-                self.joystick.joystick_code = 1"""
-
-        """if self.k == 0:
-            self.joystick.joystick_code = 4"""
 
         # Update gait
         self.gait.updateGait(self.k, self.k_mpc, self.joystick.getJoystickCode())
@@ -368,31 +334,28 @@ class Controller:
                 self.surfacePlanner.selected_surfaces, self.surfacePlanner.mip_success,
                 self.surfacePlanner.mip_iteration)
             # Run state planner (outputs the reference trajectory of the base)
-            self.statePlanner.computeReferenceStates(self.q_filt_3d[0:6, 0:1], self.h_v_filt_mpc[0:6, 0:1].copy(),
-                                                        self.vref_filt_mpc[0:6, 0:1], is_new_step)
+            self.statePlanner.computeReferenceStates(self.q_filt_3d[:6, :1], self.h_v_filt_mpc[:6, :1].copy(),
+                                                     self.vref_filt_mpc[:6, :1], is_new_step)
         else:
             # Compute target footstep based on current and reference velocities
             o_targetFootstep = self.footstepPlanner.updateFootsteps(self.k % self.k_mpc == 0 and self.k != 0,
                                                                     int(self.k_mpc - self.k % self.k_mpc),
-                                                                    self.q[:, 0], self.h_v_windowed[0:6, 0:1].copy(),
-                                                                    self.v_ref[0:6, 0:1])
+                                                                    self.q[:, 0], self.h_v_windowed[:6, :1].copy(),
+                                                                    self.v_ref[:6, :1])
             # Run state planner (outputs the reference trajectory of the base)
-            self.statePlanner.computeReferenceStates(self.q_filt_mpc[0:6, 0:1], self.h_v_filt_mpc[0:6, 0:1].copy(),
-                                                     self.vref_filt_mpc[0:6, 0:1])
+            self.statePlanner.computeReferenceStates(self.q_filt_mpc[:6, :1], self.h_v_filt_mpc[:6, :1].copy(),
+                                                     self.vref_filt_mpc[:6, :1])
 
         # Result can be retrieved with self.statePlanner.getReferenceStates()
         xref = self.statePlanner.getReferenceStates()
         fsteps = self.footstepPlanner.getFootsteps()
         cgait = self.gait.getCurrentGait()
 
-        if is_new_step and self.solo3D: # Run surface planner
+        if is_new_step and self.solo3D:  # Run surface planner
             configs = self.statePlanner.get_configurations().transpose()
             self.surfacePlanner.run(configs, cgait, o_targetFootstep, self.vref_filt_mpc.copy())
 
         t_planner = time.time()
-
-        """if self.k % 250 == 0:
-            print("iteration : " , self.k) # print iteration"""
 
         # TODO: Add 25Hz filter for the inputs of the MPC
 
@@ -403,31 +366,19 @@ class Controller:
                     # Compute the target foostep in local frame, to stop the optimisation around it when t_lock overpass
                     l_targetFootstep = oRh.transpose() @ (self.o_targetFootstep - oTh)
                     self.mpc_wrapper.solve(self.k, xref, fsteps, cgait, l_targetFootstep, oRh, oTh,
-                                                self.footTrajectoryGenerator.getFootPosition(),
-                                                self.footTrajectoryGenerator.getFootVelocity(),
-                                                self.footTrajectoryGenerator.getFootAcceleration(),
-                                                self.footTrajectoryGenerator.getFootJerk(),
-                                                self.footTrajectoryGenerator.getTswing() - self.footTrajectoryGenerator.getT0s())
-                else :
-                    self.mpc_wrapper.solve(self.k, xref, fsteps, cgait, np.zeros((3,4)))
+                                           self.footTrajectoryGenerator.getFootPosition(),
+                                           self.footTrajectoryGenerator.getFootVelocity(),
+                                           self.footTrajectoryGenerator.getFootAcceleration(),
+                                           self.footTrajectoryGenerator.getFootJerk(),
+                                           self.footTrajectoryGenerator.getTswing() - self.footTrajectoryGenerator.getT0s())
+                else:
+                    self.mpc_wrapper.solve(self.k, xref, fsteps, cgait, np.zeros((3, 4)))
 
             except ValueError:
                 print("MPC Problem")
 
-        """if (self.k % self.k_mpc) == 0:
-            from IPython import embed
-            embed()"""
-
         # Retrieve reference contact forces in horizontal frame
         self.x_f_mpc = self.mpc_wrapper.get_latest_result()
-
-        """if self.k >= 8220 and (self.k % self.k_mpc == 0):
-            print(self.k)
-            print(self.x_f_mpc[:, 0])
-            from matplotlib import pyplot as plt
-            plt.figure()
-            plt.plot(self.x_f_mpc[6, :])
-            plt.show(block=True)"""
 
         # Store o_targetFootstep, used with MPC_planner
         self.o_targetFootstep = o_targetFootstep.copy()
@@ -475,10 +426,6 @@ class Controller:
 
             # Update configuration vector for wbc
             if self.solo3D:  # Update roll, pitch according to heighmap
-                # self.q_wbc[3, 0] = self.dt_wbc * (xref[3, 1] -
-                #                                   self.q_filt_mpc[3, 0]) / self.dt_mpc + self.q_filt_mpc[3, 0]  # Roll
-                # self.q_wbc[4, 0] = self.dt_wbc * (xref[4, 1] -
-                #                                   self.q_filt_mpc[4, 0]) / self.dt_mpc + self.q_filt_mpc[4, 0]  # Pitch
                 self.q_wbc[3, 0] = self.q_filt_3d[3, 0]  # Roll
                 self.q_wbc[4, 0] = self.q_filt_3d[4, 0]  # Pitch
             else:
@@ -506,20 +453,7 @@ class Controller:
                 self.feet_p_cmd = self.footTrajectoryGenerator.getFootPositionBaseFrame(
                     hRb @ oRh.transpose(), oTh + np.array([[0.0], [0.0], [self.h_ref]]))
 
-            # Desired position, orientation and velocities of the base
-            """self.xgoals[[0, 1, 2, 5], 0] = np.zeros((4,))
-            if not self.gait.getIsStatic():
-                self.xgoals[3:5, 0] = [0.0, 0.0]  #  Height (in horizontal frame!)
-            else:
-                self.xgoals[3:5, 0] += self.vref_filt_mpc[3:5, 0] * self.dt_wbc
-                self.h_ref += self.vref_filt_mpc[2, 0] * self.dt_wbc
-                self.h_ref = np.clip(self.h_ref, 0.19, 0.26)
-                self.xgoals[3:5, 0] = np.clip(self.xgoals[3:5, 0], [-0.25, -0.17], [0.25, 0.17])"""
-
-
             self.xgoals[6:, 0] = self.vref_filt_mpc[:, 0]  # Velocities (in horizontal frame!)
-
-            #print(" ###### ")
 
             # Run InvKin + WBC QP
             self.wbcWrapper.compute(self.q_wbc, self.dq_wbc,
@@ -546,42 +480,6 @@ class Controller:
                 self.q_display[7:, 0] = self.q_wbc[6:, 0]
                 self.solo.display(self.q_display)
 
-            """if self.k > 0:
-
-                oTh_pyb = device.dummyPos.ravel().tolist()
-                oTh_pyb[2] = 0.30
-                q_oRb_pyb = pin.Quaternion(pin.rpy.rpyToMatrix(self.k/(57.3 * 500), 0.0,
-                                           device.imu.attitude_euler[2])).coeffs().tolist()
-                pyb.resetBasePositionAndOrientation(device.pyb_sim.robotId, oTh_pyb, q_oRb_pyb)"""
-
-        """if self.k >= 8220 and (self.k % self.k_mpc == 0):
-            print(self.k)
-            print("x_f_mpc: ", self.x_f_mpc[:, 0])
-            print("ddq delta: ", self.wbcWrapper.ddq_with_delta)
-            print("f delta: ", self.wbcWrapper.f_with_delta)
-            from matplotlib import pyplot as plt
-            plt.figure()
-            plt.plot(self.x_f_mpc[6, :])
-            plt.show(block=True)
-
-        print("f delta: ", self.wbcWrapper.f_with_delta)"""
-
-        """if self.k == 1:
-            quit()"""
-
-        """np.set_printoptions(precision=3, linewidth=300)
-        print("---- ", self.k)
-        print(self.x_f_mpc[12:24, 0])
-        print(self.result.q_des[:])
-        print(self.result.v_des[:])
-        print(self.result.tau_ff[:])
-        print(self.xgoals.ravel())"""
-
-        """np.set_printoptions(precision=3, linewidth=300)
-        print("#####")
-        print(cgait)
-        print(self.result.tau_ff[:])"""
-
         t_wbc = time.time()
 
         # Security check
@@ -603,14 +501,10 @@ class Controller:
         # Increment loop counter
         self.k += 1
 
-        return 0.0
-
     def pyb_camera(self, device, yaw):
 
         # Update position of PyBullet camera on the robot position to do as if it was attached to the robot
         if self.k > 10 and self.enable_pyb_GUI:
-            # pyb.resetDebugVisualizerCamera(cameraDistance=0.8, cameraYaw=45, cameraPitch=-30,
-            #                                cameraTargetPosition=[1.0, 0.3, 0.25])
             pyb.resetDebugVisualizerCamera(cameraDistance=0.6, cameraYaw=45, cameraPitch=-39.9,
                                            cameraTargetPosition=[device.dummyHeight[0], device.dummyHeight[1], 0.0])
 
@@ -620,7 +514,6 @@ class Controller:
 
             # Display desired feet positions in WBC as green spheres
             oTh_pyb = device.dummyPos.reshape((-1, 1))
-            # print("h: ", oTh_pyb[2, 0], " ", self.h_ref)
             oTh_pyb[2, 0] += 0.0
             oRh_pyb = pin.rpy.rpyToMatrix(0.0, 0.0, device.imu.attitude_euler[2])
             for i in range(4):
@@ -628,7 +521,7 @@ class Controller:
                     pos = oRh_pyb @ self.feet_p_cmd[:, i:(i+1)] + oTh_pyb
                     pyb.resetBasePositionAndOrientation(device.pyb_sim.ftps_Ids_deb[i], pos[:, 0].tolist(), [0, 0, 0, 1])
                 else:
-                    pos = self.o_targetFootstep[:,i]
+                    pos = self.o_targetFootstep[:, i]
                     pyb.resetBasePositionAndOrientation(device.pyb_sim.ftps_Ids_deb[i], pos, [0, 0, 0, 1])
 
             # Display desired footstep positions as blue spheres
@@ -656,9 +549,6 @@ class Controller:
                     pyb.resetBasePositionAndOrientation(device.pyb_sim.ftps_Ids[i, k], [0.0, 0.0, -0.1], [0, 0, 0, 1])
 
             # Display reference trajectory
-            """from IPython import embed
-            embed()"""
-
             xref_rot = np.zeros((3, xref.shape[1]))
             for i in range(xref.shape[1]):
                 xref_rot[:, i:(i+1)] = oRh_pyb @ xref[:3, i:(i+1)] + oTh_pyb + np.array([[0.0], [0.0], [0.05 - self.h_ref]])
@@ -685,11 +575,10 @@ class Controller:
             else:
                 for i in range(self.x_f_mpc.shape[1]-1):
                     device.pyb_sim.lineId_blue[i] = pyb.addUserDebugLine(x_f_mpc_rot[:3, i].tolist(), x_f_mpc_rot[:3, i+1].tolist(),
-                                                                        lineColorRGB=[0.0, 0.0, 1.0], lineWidth=8,
-                                                                        replaceItemUniqueId=device.pyb_sim.lineId_blue[i])
+                                                                         lineColorRGB=[0.0, 0.0, 1.0], lineWidth=8,
+                                                                         replaceItemUniqueId=device.pyb_sim.lineId_blue[i])
 
     def security_check(self):
-
         if (self.error_flag == 0) and (not self.error) and (not self.joystick.getStop()):
             self.error_flag = self.estimator.security_check(self.wbcWrapper.tau_ff)
             if (self.error_flag != 0):
@@ -713,7 +602,6 @@ class Controller:
             self.result.tau_ff[:] = np.zeros(12)
 
     def log_misc(self, tic, t_filter, t_planner, t_mpc, t_wbc):
-
         self.t_filter = t_filter - tic
         self.t_planner = t_planner - t_filter
         self.t_mpc = t_mpc - t_planner

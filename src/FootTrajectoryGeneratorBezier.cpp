@@ -303,12 +303,12 @@ void FootTrajectoryGeneratorBezier::updateFootPosition(int const& k, int const& 
            pastSurface_[i_foot].getHeight(targetFootstep.head(2))) >= 10e-3)
       // Only uphill
       {
-        std::cout << "\n\n\n\n\n--------------------" << std::endl;
-        std::cout << "DIFF SURFACES" << std::endl;
-        std::cout << "newSurface_[i_foot].getb" << std::endl;
-        std::cout << newSurface_[i_foot].getb() << std::endl;
-        std::cout << "pastSurface_[i_foot].getb" << std::endl;
-        std::cout << pastSurface_[i_foot].getb() << std::endl;
+        // std::cout << "\n\n\n\n\n--------------------" << std::endl;
+        // std::cout << "DIFF SURFACES" << std::endl;
+        // std::cout << "newSurface_[i_foot].getb" << std::endl;
+        // std::cout << newSurface_[i_foot].getb() << std::endl;
+        // std::cout << "pastSurface_[i_foot].getb" << std::endl;
+        // std::cout << pastSurface_[i_foot].getb() << std::endl;
 
         int nb_vert = newSurface_[i_foot].vertices_.rows();
         MatrixN vert = newSurface_[i_foot].vertices_;

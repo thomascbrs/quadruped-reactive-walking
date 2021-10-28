@@ -116,45 +116,6 @@ void Joystick::update_v_ref_gamepad(int k, bool gait_is_static) {
         gamepad.w_yaw = -event.value / 32767.0;
     }
   }
-  // printf("Start:%d  Stop:%d  Vx:%f \tVy:%f
-  // \tWyaw:%f\n",gamepad.start,gamepad.select,gamepad.v_x,gamepad.v_y,gamepad.w_yaw);
-
-  /*if (k < 2000)
-  {
-    int a = 1;
-  }
-  else if (k < 4000)
-  {
-    gamepad.v_x = 0.4;
-    gamepad.v_y = 0.4;
-  }
-  else if (k < 7000)
-  {
-    gamepad.v_x = 0.0;
-    gamepad.v_y = 0.0;
-  }
-  else if (k < 10000)
-  {
-    gamepad.L1 = 1;
-    gamepad.v_x = std::sin(2 * M_PI * (k - 7000) / 3000);
-    gamepad.v_y = std::sin(2 * M_PI * (k - 7000) / 3000);
-    gamepad.v_z = 0.7 * std::sin(2 * M_PI * (k - 7000) / 3000);
-    gamepad.w_yaw = 0.7 * std::sin(2 * M_PI * (k - 7000) / 3000);
-  }
-  else if (k < 20000)
-  {
-    gamepad.L1 = 0;
-    gamepad.v_x = 0.0;
-    gamepad.v_y = 0.5;
-    gamepad.v_z = 0.0;
-    gamepad.w_yaw = -0.2;
-  }
-  else if (k < 22000)
-  {
-    gamepad.v_x = 0.0;
-    gamepad.v_y = 0.0;
-    gamepad.w_yaw = 0.0;
-  }*/
 
   // Remember when L1 was pressed for the last time
   if (gamepad.L1 == 1) {
@@ -192,12 +153,6 @@ void Joystick::update_v_ref_gamepad(int k, bool gait_is_static) {
 
   // Joystick code
   joystick_code_ = 0;
-  /*
-  if (gamepad.cross == 1) {joystick_code_ = 1;}
-  else if (gamepad.circle == 1) {joystick_code_ = 2;}
-  else if (gamepad.triangle == 1) {joystick_code_ = 3;}
-  else if (gamepad.square == 1) {joystick_code_ = 4;}
-  */
 
   if (params_->DEMONSTRATION) {
     if (!getL1() && (k % k_mpc == 0) && (k > static_cast<int>(std::round(1.0 / params_->dt_wbc)))) {
@@ -288,10 +243,9 @@ void Joystick::update_v_ref_predefined(int k, int velID) {
         break;
       case 10:
         t_switch = MatrixN::Zero(1, 7);
-        t_switch << 0, 2, 4, 6, 8, 10, 15;
+        t_switch << 0, 2, 4, 6, 8, 10, 13;
         v_switch = MatrixN::Zero(6, 7);
-        // v_switch.row(0) << 0.0, 0.4, 0.8, 1.0, 1.0, 1.0, 1.0;
-        v_switch.row(0) << 0.0, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3;
+        v_switch.row(0) << 0.0, 0.2, 0.2, 0.0, -0.2, -0.2, 0.0;
         break;
       default:
         throw std::runtime_error("Unknown velocity ID for the polynomial interpolation.");

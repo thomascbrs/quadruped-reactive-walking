@@ -5,8 +5,6 @@ from time import perf_counter as clock
 
 from sl1m.problem_definition import Problem
 from sl1m.generic_solver import solve_MIP
-# import matplotlib.pyplot as plt
-# import sl1m.tools.plot_tools as plot
 
 from solo_rbprm.solo_abstract import Robot as SoloAbstract
 
@@ -15,34 +13,26 @@ from hpp.corbaserver.rbprm.tools.surfaces_from_path import getAllSurfacesDict
 from hpp.corbaserver.problem_solver import ProblemSolver
 from hpp.gepetto import ViewerFactory
 
-# from solo3D.tools.ProfileWrapper import ProfileWrapper
-
-# # Store the results from cprofile
-# profileWrap = ProfileWrapper()
-
 # --------------------------------- PROBLEM DEFINITION ---------------------------------------------------------------
 
-paths = [
-    os.environ["INSTALL_HPP_DIR"] + "/solo-rbprm/com_inequalities/feet_quasi_flat/",
-    os.environ["INSTALL_HPP_DIR"] + "/solo-rbprm/relative_effector_positions/"
-]
+paths = [os.environ["INSTALL_HPP_DIR"] + "/solo-rbprm/com_inequalities/feet_quasi_flat/",
+         os.environ["INSTALL_HPP_DIR"] + "/solo-rbprm/relative_effector_positions/"]
 limbs = ['FLleg', 'FRleg', 'HLleg', 'HRleg']
 others = ['FL_FOOT', 'FR_FOOT', 'HL_FOOT', 'HR_FOOT']
 rom_names = ['solo_LFleg_rom', 'solo_RFleg_rom', 'solo_LHleg_rom', 'solo_RHleg_rom']
-N_PHASE = 3
+
 
 class SurfacePlanner:
     """
     Choose the next surface to use by solving a MIP problem
     """
 
-    def __init__(self, environment_URDF, T_gait, shoulders, n_phase):
+    def __init__(self, environment_URDF, T_gait, shoulders):
         """
         Initialize the affordance tool and save the solo abstract rbprm builder, and surface dictionary
         """
         self.T_gait = T_gait
         self.shoulders = shoulders
-        self.n_phase = n_phase
 
         self.solo_abstract = SoloAbstract()
         self.solo_abstract.setJointBounds("root_joint", [-5., 5., -5., 5., 0.241, 1.5])
@@ -71,13 +61,6 @@ class SurfacePlanner:
         :return: gait matrix
         """
         gait = [gait_in[0, :]]
-        # for i in range(1, gait_in.shape[0] - 1):
-        #     if (gait_in[i, :] != gait[-1]).any():
-        #         gait.append(gait_in[i, :])
-
-        # TODO only works if we the last phase is not a flying phase
-        # gait.pop(-1)
-        # gait = np.roll(gait, -2, axis=0)
 
         for i in range(1, gait_in.shape[0] - 1):
             new_phase = True
@@ -90,7 +73,6 @@ class SurfacePlanner:
 
         gait = np.roll(gait, -2, axis=0)
 
-
         return gait
 
     def compute_step_length(self, o_v_ref):
@@ -101,7 +83,7 @@ class SurfacePlanner:
         """
         # TODO: Divide by number of phases in gait
         # step_length = o_v_ref * self.T_gait/4
-        step_length = o_v_ref * self.T_gait / 2
+        step_length = o_v_ref * self.T_gait/2
 
         return np.array([step_length[i][0] for i in range(2)])
 
@@ -133,15 +115,14 @@ class SurfacePlanner:
         empty_list = False
         for id, config in enumerate(configs):
             stance_feet = np.nonzero(gait[id % len(gait)] == 1)[0]
-            previous_swing_feet = np.nonzero(gait[(id - 1) % len(gait)] == 0)[0]
+            previous_swing_feet = np.nonzero(gait[(id-1) % len(gait)] == 0)[0]
             moving_feet = stance_feet[np.in1d(stance_feet, previous_swing_feet, assume_unique=True)]
             roms = np.array(rom_names)[moving_feet]
 
             foot_surfaces = []
             for rom in roms:
                 surfaces = []
-                surfaces_names = self.solo_abstract.clientRbprm.rbprm.getCollidingObstacleAtConfig(
-                    config.tolist(), rom)
+                surfaces_names = self.solo_abstract.clientRbprm.rbprm.getCollidingObstacleAtConfig(config.tolist(), rom)
                 for name in surfaces_names:
                     surfaces.append(self.all_surfaces[name][0])
 
@@ -162,7 +143,7 @@ class SurfacePlanner:
 
     def retrieve_surfaces(self, surfaces, indices=None):
         """
-        Get the surface vertices,  inequalities and selected surface indices if need be
+        Get the surface vertices, inequalities and selected surface indices if need be
         """
         vertices = []
         surfaces_inequalities = []
@@ -211,19 +192,15 @@ class SurfacePlanner:
 
         initial_contacts = [current_contacts[:, i].tolist() for i in range(4)]
 
-        self.pb.generate_problem(R, surfaces, gait, initial_contacts, c0=None, com=False)
-
-        # from IPython import embed
-        # embed()
+        self.pb.generate_problem(R, surfaces, gait, initial_contacts, c0=None,  com=False)
 
         if empty_list:
             print("Surface planner: one step has no potential surface to use.")
             vertices, inequalities, indices = self.retrieve_surfaces(surfaces)
             return vertices, inequalities, indices, None, False
 
-        # effector_positions = self.compute_effector_positions(configs)
-        # costs = {"step_size": [1.0, step_length], "effector_positions": [10.0, effector_positions]}
-        costs = {"step_size": [1.0, step_length]}
+        effector_positions = self.compute_effector_positions(configs)
+        costs = {"step_size": [1.0, step_length], "effector_positions": [10.0, effector_positions]}
         pb_data = solve_MIP(self.pb, costs=costs, com=False)
 
         if pb_data.success:
@@ -234,37 +211,17 @@ class SurfacePlanner:
                 selected_surfaces.append(surfaces[0][foot][index])
 
             t1 = clock()
-            if 1000. * (t1 - t0) > 150.:
-                print("Run took ", 1000. * (t1 - t0))
-
-            # import matplotlib.pyplot as plt
-            # import sl1m.tools.plot_tools as plot
-
-            # ax = plot.draw_whole_scene(self.all_surfaces)
-            # plot.plot_planner_result(pb_data.all_feet_pos, step_size=step_length, ax=ax, show=True)
+            if 1000. * (t1-t0) > 150.:
+                print("Run took ", 1000. * (t1-t0))
 
             vertices, inequalities, indices = self.retrieve_surfaces(surfaces, surface_indices)
 
             return vertices, inequalities, indices, pb_data.all_feet_pos, True
 
         else:
-            # ax = plot.draw_whole_scene(self.all_surfaces)
-            # plot.plot_initial_contacts(initial_contacts, ax=ax)
-            # ax.scatter([c[0] for c in configs], [c[1] for c in configs], [c[2] for c in configs], marker='o', linewidth=5)
-            # ax.plot([c[0] for c in configs], [c[1] for c in configs], [c[2] for c in configs])
-
-            # plt.show()
-
             print("The MIP problem did NOT converge")
             # TODO what if the problem did not converge ???
 
             vertices, inequalities, indices = self.retrieve_surfaces(surfaces)
 
             return vertices, inequalities, indices, None, False
-
-    # def print_profile(self, output_file):
-    #     ''' Print the profile computed with cProfile
-    #     Args :
-    #     - output_file (str) :  file name
-    #     '''
-    #     profileWrap.print_stats(output_file)

@@ -111,7 +111,7 @@ class SurfacePlanner_Wrapper():
             self.dataIn = Value(DataInCtype)
 
         else:
-            self.surfacePlanner = SurfacePlanner(self.urdf, self.T_gait, self.shoulders, N_PHASE)
+            self.surfacePlanner = SurfacePlanner(self.urdf, self.T_gait, self.shoulders)
         
         # Store results to mimic multiprocessing behaviour with synchronous loop
         self.selected_surfaces_syn = lqrw.SurfaceVector()
