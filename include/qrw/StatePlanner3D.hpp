@@ -75,7 +75,7 @@ public:
 private:
     double dt_;               // Time step of the contact sequence (time step of the MPC)
     double referenceHeight_;  // Reference height for the trunk
-    int nSteps_;               // Number of timesteps in the prediction horizon
+    int nSteps_;              // Number of timesteps in the prediction horizon
     double stepDuration_;     // Duration of a timestep
 
     Vector3 rpy_;   // Current roll, pitch and yaw angles
@@ -96,7 +96,7 @@ private:
     int nSurfaceConfigs_;
     MatrixN configs_;
     Vector7 config_;
-    Vector3 rpyConfig_;   // Current roll, pitch and yaw angles
+    Vector3 rpyConfig_;  // Current roll, pitch and yaw angles
 };
 
 #endif  // STATEPLANNER3D_H_INCLUDED

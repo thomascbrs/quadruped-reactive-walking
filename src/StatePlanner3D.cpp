@@ -122,7 +122,7 @@ void StatePlanner3D::computeConfigurations(VectorN const& q, Vector6 const& vRef
     for (int i = 0; i < nSurfaceConfigs_; i++)
     {
         // TODO : Not sure if (i+1)*T_step --> next step for MIP, not current
-        double dt_config = stepDuration_ * i;
+        double dt_config = stepDuration_ * (i+2);
         // TODO : Not sure, take into account height, maybe useless since most constraints desactivated in MIP
         configs_.block(0, i, 2, 1) = q.head(2);
         if (std::abs(vRef(5)) >= 0.001)
