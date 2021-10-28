@@ -32,7 +32,7 @@ class SurfacePlanner:
         Initialize the affordance tool and save the solo abstract rbprm builder, and surface dictionary
         """
         self.T_gait = T_gait
-        self.shoulders = shoulders
+        self.shoulders = [0.1946, 0.14695, 0.1946, -0.14695, -0.1946, 0.14695, -0.1946, -0.14695]
 
         self.solo_abstract = SoloAbstract()
         self.solo_abstract.setJointBounds("root_joint", [-5., 5., -5., 5., 0.241, 1.5])
@@ -97,8 +97,8 @@ class SurfacePlanner:
             for foot in phase.moving:
                 rpy = pin.rpy.matrixToRpy(pin.Quaternion(configs[phase.id][3:7]).toRotationMatrix())
                 shoulders = np.zeros(2)
-                shoulders[0] = self.shoulders[0, foot] * np.cos(rpy[2]) - self.shoulders[1, foot] * np.sin(rpy[2])
-                shoulders[1] = self.shoulders[0, foot] * np.sin(rpy[2]) + self.shoulders[1, foot] * np.cos(rpy[2])
+                shoulders[0] = self.shoulders[2 * foot] * np.cos(rpy[2]) - self.shoulders[2 * foot + 1] * np.sin(rpy[2])
+                shoulders[1] = self.shoulders[2 * foot] * np.sin(rpy[2]) + self.shoulders[2 * foot + 1] * np.cos(rpy[2])
                 if phase.id < self.pb.n_phases-1:
                     effector_positions[foot][phase.id] = np.array(configs[phase.id+1][:2] + shoulders)
                 else:
@@ -202,8 +202,8 @@ class SurfacePlanner:
             return vertices, inequalities, indices, None, False
 
         effector_positions = self.compute_effector_positions(configs)
-        costs = {"step_size": [1.0, step_length]}
-        # costs = {"step_size": [1.0, step_length], "effector_positions": [10.0, effector_positions]}
+        # costs = {"step_size": [1.0, step_length]}
+        costs = {"effector_positions": [10.0, effector_positions]}
         pb_data = solve_MIP(self.pb, costs=costs, com=False)
 
         if pb_data.success:
