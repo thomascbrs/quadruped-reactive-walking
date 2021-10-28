@@ -89,9 +89,8 @@ class SurfacePlanner:
 
     def compute_effector_positions(self, configs):
         """
-        Compute the step_length used for the cost
-        :param o_v_ref: desired velocity
-        :return: desired step_length
+        Compute the desired effector positions
+        :param configs the list of configurations
         """
         effector_positions = np.zeros((4, self.pb.n_phases, 2))
         for phase in self.pb.phaseData:
@@ -100,7 +99,10 @@ class SurfacePlanner:
                 shoulders = np.zeros(2)
                 shoulders[0] = self.shoulders[0, foot] * np.cos(rpy[2]) - self.shoulders[1, foot] * np.sin(rpy[2])
                 shoulders[1] = self.shoulders[0, foot] * np.sin(rpy[2]) + self.shoulders[1, foot] * np.cos(rpy[2])
-                effector_positions[foot][phase.id] = np.array(configs[phase.id][:2] + shoulders)
+                if phase.id < self.pb.n_phases-1:
+                    effector_positions[foot][phase.id] = np.array(configs[phase.id+1][:2] + shoulders)
+                else:
+                    effector_positions[foot][phase.id] = np.array(configs[phase.id][:2] + shoulders)
 
         return effector_positions
 
@@ -200,7 +202,8 @@ class SurfacePlanner:
             return vertices, inequalities, indices, None, False
 
         effector_positions = self.compute_effector_positions(configs)
-        costs = {"step_size": [1.0, step_length], "effector_positions": [10.0, effector_positions]}
+        costs = {"step_size": [1.0, step_length]}
+        # costs = {"step_size": [1.0, step_length], "effector_positions": [10.0, effector_positions]}
         pb_data = solve_MIP(self.pb, costs=costs, com=False)
 
         if pb_data.success:
@@ -214,11 +217,23 @@ class SurfacePlanner:
             if 1000. * (t1-t0) > 150.:
                 print("Run took ", 1000. * (t1-t0))
 
+            import matplotlib.pyplot as plt
+            import sl1m.tools.plot_tools as plot
+
+            ax = plot.draw_whole_scene(self.all_surfaces)
+            plot.plot_planner_result(pb_data.all_feet_pos, step_size=step_length, ax=ax, show=True)
+
             vertices, inequalities, indices = self.retrieve_surfaces(surfaces, surface_indices)
 
             return vertices, inequalities, indices, pb_data.all_feet_pos, True
-
         else:
+            ax = plot.draw_whole_scene(self.all_surfaces)
+            plot.plot_initial_contacts(initial_contacts, ax=ax)
+            ax.scatter([c[0] for c in configs], [c[1] for c in configs], [c[2] for c in configs], marker='o', linewidth=5)
+            ax.plot([c[0] for c in configs], [c[1] for c in configs], [c[2] for c in configs])
+
+            plt.show()
+
             print("The MIP problem did NOT converge")
             # TODO what if the problem did not converge ???
 
