@@ -72,7 +72,7 @@ robot:
     # Parameters fro solo3D simulation
     solo3D: true  # Activation of the 3D environment, and corresponding planner blocks
     enable_multiprocessing_mip: false  # Enable/disable running the MIP in another process in parallel of the main loop
-    # environment_URDF: "/floor_line/floor_line.urdf"
-    # environment_heightmap: "/floor_line/floor_line.bin"
-    environment_URDF: "/stairs_rotation/stairs_rotation.urdf"
-    environment_heightmap: "/stairs_rotation/stairs_rotation.bin"
+    environment_URDF: "/floor_line/floor_line.urdf"
+    environment_heightmap: "/floor_line/floor_line.bin"
+    # environment_URDF: "/stairs_rotation/stairs_rotation.urdf"
+    # environment_heightmap: "/stairs_rotation/stairs_rotation.bin"

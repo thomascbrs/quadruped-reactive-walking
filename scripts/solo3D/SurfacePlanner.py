@@ -82,7 +82,6 @@ class SurfacePlanner:
         :return: desired step_length
         """
         # TODO: Divide by number of phases in gait
-        # step_length = o_v_ref * self.T_gait/4
         step_length = o_v_ref * self.T_gait/2
 
         return np.array([step_length[i] for i in range(2)])
@@ -100,11 +99,11 @@ class SurfacePlanner:
         for phase in self.pb.phaseData:
             for foot in phase.moving:
                 rpy = pin.rpy.matrixToRpy(pin.Quaternion(configs[phase.id][3:7]).toRotationMatrix())
-                yaw = rpy[2] # Get yaw for the predicted configuration
+                yaw = rpy[2]  # Get yaw for the predicted configuration
                 shoulders = np.zeros(2)
                 # Compute heuristic position in base frame
-                rpy[2] = 0. # Yaw = 0. in base frame
-                Rp = pin.rpy.rpyToMatrix(rpy)[:2,:2]
+                rpy[2] = 0.  # Yaw = 0. in base frame
+                Rp = pin.rpy.rpyToMatrix(rpy)[:2, :2]
                 heuristic = 0.5 * t_stance * bvref[:2] + Rp @ np.array([self.shoulders[2 * foot], self.shoulders[2 * foot + 1]])
 
                 # Compute heuristic in world frame, rotation
@@ -211,7 +210,7 @@ class SurfacePlanner:
 
         effector_positions = self.compute_effector_positions(configs, bvref)
         # costs = {"step_size": [1.0, step_length]}
-        costs = {"effector_positions": [10.0, effector_positions]}
+        costs = {"effector_positions": [1.0, effector_positions]}
         pb_data = solve_MIP(self.pb, costs=costs, com=False)
 
         if pb_data.success:
@@ -225,11 +224,11 @@ class SurfacePlanner:
             if 1000. * (t1-t0) > 150.:
                 print("Run took ", 1000. * (t1-t0))
 
-            import matplotlib.pyplot as plt
-            import sl1m.tools.plot_tools as plot
+            # import matplotlib.pyplot as plt
+            # import sl1m.tools.plot_tools as plot
 
-            ax = plot.draw_whole_scene(self.all_surfaces)
-            plot.plot_planner_result(pb_data.all_feet_pos, step_size=step_length, ax=ax, show=True)
+            # ax = plot.draw_whole_scene(self.all_surfaces)
+            # plot.plot_planner_result(pb_data.all_feet_pos, step_size=step_length, ax=ax, show=True)
 
             vertices, inequalities, indices = self.retrieve_surfaces(surfaces, surface_indices)
 
