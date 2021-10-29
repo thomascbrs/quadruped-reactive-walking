@@ -353,7 +353,7 @@ class Controller:
 
         if is_new_step and self.solo3D:  # Run surface planner
             configs = self.statePlanner.get_configurations().transpose()
-            self.surfacePlanner.run(configs, cgait, o_targetFootstep, self.vref_filt_mpc.copy())
+            self.surfacePlanner.run(configs, cgait, o_targetFootstep, self.vref_filt_mpc[:3,0].copy())
 
         t_planner = time.time()
 

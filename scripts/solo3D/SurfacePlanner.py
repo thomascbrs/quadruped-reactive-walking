@@ -85,24 +85,32 @@ class SurfacePlanner:
         # step_length = o_v_ref * self.T_gait/4
         step_length = o_v_ref * self.T_gait/2
 
-        return np.array([step_length[i][0] for i in range(2)])
+        return np.array([step_length[i] for i in range(2)])
 
-    def compute_effector_positions(self, configs):
+    def compute_effector_positions(self, configs, bvref):
         """
         Compute the desired effector positions
         :param configs the list of configurations
+        :param bvref, Array (x3) the desired velocity in base frame
         """
+        # TODO: Divide by number of phases in gait
+        t_stance = self.T_gait/2
         effector_positions = np.zeros((4, self.pb.n_phases, 2))
+
         for phase in self.pb.phaseData:
             for foot in phase.moving:
                 rpy = pin.rpy.matrixToRpy(pin.Quaternion(configs[phase.id][3:7]).toRotationMatrix())
+                yaw = rpy[2] # Get yaw for the predicted configuration
                 shoulders = np.zeros(2)
-                shoulders[0] = self.shoulders[2 * foot] * np.cos(rpy[2]) - self.shoulders[2 * foot + 1] * np.sin(rpy[2])
-                shoulders[1] = self.shoulders[2 * foot] * np.sin(rpy[2]) + self.shoulders[2 * foot + 1] * np.cos(rpy[2])
-                if phase.id < self.pb.n_phases-1:
-                    effector_positions[foot][phase.id] = np.array(configs[phase.id+1][:2] + shoulders)
-                else:
-                    effector_positions[foot][phase.id] = np.array(configs[phase.id][:2] + shoulders)
+                # Compute heuristic position in base frame
+                rpy[2] = 0. # Yaw = 0. in base frame
+                Rp = pin.rpy.rpyToMatrix(rpy)[:2,:2]
+                heuristic = 0.5 * t_stance * bvref[:2] + Rp @ np.array([self.shoulders[2 * foot], self.shoulders[2 * foot + 1]])
+
+                # Compute heuristic in world frame, rotation
+                shoulders[0] = heuristic[0] * np.cos(yaw) - heuristic[1] * np.sin(yaw)
+                shoulders[1] = heuristic[0] * np.sin(yaw) + heuristic[1] * np.cos(yaw)
+                effector_positions[foot][phase.id] = np.array(configs[phase.id][:2] + shoulders)
 
         return effector_positions
 
@@ -173,13 +181,13 @@ class SurfacePlanner:
 
         return vertices, surfaces_inequalities, surface_indices
 
-    def run(self, configs, gait_in, current_contacts, o_v_ref):
+    def run(self, configs, gait_in, current_contacts, bvref):
         """
         Select the nex surfaces to use
         :param xref: successive states
         :param gait: a gait matrix
         :param current_contacts: the initial_contacts to use in the computation
-        :param o_v_ref: the desired velocity for the cost
+        :param bvref: Array (x3) the desired velocity for the cost, in base frame
         :return: the selected surfaces for the first phase
         """
         t0 = clock()
@@ -188,7 +196,7 @@ class SurfacePlanner:
 
         gait = self.compute_gait(gait_in)
 
-        step_length = self.compute_step_length(o_v_ref)
+        step_length = self.compute_step_length(bvref[:2])
 
         surfaces, empty_list = self.get_potential_surfaces(configs, gait)
 
@@ -201,7 +209,7 @@ class SurfacePlanner:
             vertices, inequalities, indices = self.retrieve_surfaces(surfaces)
             return vertices, inequalities, indices, None, False
 
-        effector_positions = self.compute_effector_positions(configs)
+        effector_positions = self.compute_effector_positions(configs, bvref)
         # costs = {"step_size": [1.0, step_length]}
         costs = {"effector_positions": [10.0, effector_positions]}
         pb_data = solve_MIP(self.pb, costs=costs, com=False)

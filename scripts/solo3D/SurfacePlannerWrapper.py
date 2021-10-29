@@ -123,9 +123,9 @@ class SurfacePlanner_Wrapper():
         else:
             self.run_synchronous(configs, gait_in, current_contacts, o_v_ref)
 
-    def run_synchronous(self, configs, gait_in, current_contacts, o_v_ref):
+    def run_synchronous(self, configs, gait_in, current_contacts, bvref):
         surfaces, surface_inequalities, surfaces_indices, all_feet_pos, success = self.surfacePlanner.run(
-            configs, gait_in, current_contacts, o_v_ref)
+            configs, gait_in, current_contacts, bvref)
         self.mip_iteration_syn += 1
         self.mip_success_syn = success
 
