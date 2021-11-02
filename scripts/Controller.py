@@ -64,7 +64,7 @@ class dummyDevice:
         self.imu = dummyIMU()
         self.joints = dummyJoints()
         self.dummyPos = np.zeros(3)
-        self.dummyPos[2] = 0.24
+        self.dummyPos[2] = 0.1944
         self.b_baseVel = np.zeros(3)
 
 
@@ -133,9 +133,11 @@ class Controller:
 
         self.DEMONSTRATION = params.DEMONSTRATION
         self.solo3D = params.solo3D
+        self.SIMULATION = params.SIMULATION
         if params.solo3D:
             from solo3D.SurfacePlannerWrapper import SurfacePlanner_Wrapper
-            from solo3D.tools.pyb_environment_3D import PybEnvironment3D
+            if self.SIMULATION :
+                from solo3D.tools.pyb_environment_3D import PybEnvironment3D
 
         self.enable_multiprocessing_mip = params.enable_multiprocessing_mip
         self.offset_perfect_estimator = 0.
@@ -160,8 +162,8 @@ class Controller:
             self.footTrajectoryGenerator.initialize(params, self.gait, self.surfacePlanner.floor_surface,
                                                     x_margin_max_, t_margin_, z_margin_, N_sample, N_sample_ineq,
                                                     degree)
-
-            self.pybEnvironment3D = PybEnvironment3D(params, self.gait, self.statePlanner, self.footstepPlanner,
+            if self.SIMULATION :
+                self.pybEnvironment3D = PybEnvironment3D(params, self.gait, self.statePlanner, self.footstepPlanner,
                                                      self.footTrajectoryGenerator)
 
             self.q_mes_3d = np.zeros((18, 1))
@@ -262,10 +264,18 @@ class Controller:
             dummy_state[3:, 0] = device.imu.attitude_euler  # Yaw only used for solo3D
             b_baseVel[:, 0] = device.b_baseVel
         elif self.solo3D and qc != None:
+            if self.k <= 1:
+                self.initial_pos = qc.getPosition()
+                self.initial_pos[2] = self.initial_pos[2] - 0.24
+                self.initial_rot = quaternionToRPY(qc.getOrientationQuat())
+                self.initial_matrix = qc.getOrientationMat9().reshape((3, 3)).transpose()
+
             # motion capture data
-            dummy_state[:3, 0] = qc.getPosition()
-            dummy_state[3:] = quaternionToRPY(qc.getOrientationQuat())
-            b_baseVel[:, 0] = (self.qc.getOrientationMat9().reshape((3, 3)).transpose() @ self.qc.getVelocity().reshape((3, 1))).ravel()
+            dummy_state[:3, 0] = self.initial_matrix @ (qc.getPosition() - self.initial_pos)
+            dummy_state[3:] = quaternionToRPY(qc.getOrientationQuat()) - self.initial_rot
+            b_baseVel[:, 0] = (qc.getOrientationMat9().reshape((3, 3)).transpose() @ qc.getVelocity().reshape((3, 1))).ravel()
+
+        # print(dummy_state[:3])
 
         # Process state estimator
         self.estimator.run_filter(self.gait.getCurrentGait(),
@@ -326,7 +336,7 @@ class Controller:
                     self.surfacePlanner.first_iteration = False
                 else:
                     self.surfacePlanner.update_latest_results()
-                    if not self.enable_multiprocessing_mip:  # Update SL1M target without multiprocessing
+                    if not self.enable_multiprocessing_mip and self.SIMULATION :  # Update SL1M target without multiprocessing
                         self.pybEnvironment3D.update_target_SL1M(self.surfacePlanner.all_feet_pos)
             # Compute target footstep based on current and reference velocities
             o_targetFootstep = self.footstepPlanner.updateFootsteps(
@@ -491,7 +501,8 @@ class Controller:
         if not self.solo3D:
             self.pyb_camera(device, 0.0)
         else:  # Update 3D Environment
-            self.pybEnvironment3D.update(self.k)
+            if self.SIMULATION :
+                self.pybEnvironment3D.update(self.k)
 
         # Update debug display (spheres, ...)
         self.pyb_debug(device, fsteps, cgait, xref)

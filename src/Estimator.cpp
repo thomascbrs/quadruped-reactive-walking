@@ -345,7 +345,7 @@ void Estimator::run_filter(MatrixN const& gait, MatrixN const& goals, VectorN co
 
   if (solo3D) {
     Vector3 offset_ = Vector3::Zero();
-    offset_.tail(3) << -0.0155;
+    // offset_.tail(3) << -0.0155;
     filt_lin_pos = filter_xyz_pos_.compute(dummyPos.head(3) - offset_, ob_filt_lin_vel, Vector3(0.995, 0.995, 0.9));
   } else {
     filt_lin_pos = filter_xyz_pos_.compute(FK_xyz_ + xyz_mean_feet_, ob_filt_lin_vel, Vector3(0.995, 0.995, 0.9));
@@ -354,7 +354,7 @@ void Estimator::run_filter(MatrixN const& gait, MatrixN const& goals, VectorN co
   // Output filtered position vector (19 x 1)
   q_filt_.head(3) = filt_lin_pos;
   if (perfect_estimator || solo3D) {
-    q_filt_(2, 0) = dummyPos(2, 0) - 0.0155;  // Minus feet radius
+    q_filt_(2, 0) = dummyPos(2, 0);  // Minus feet radius
   }
   q_filt_.block(3, 0, 4, 1) = filt_ang_pos;
   q_filt_.tail(12) = actuators_pos_;  // Actuators pos are already directly from PyBullet
