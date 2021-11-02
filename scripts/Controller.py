@@ -326,7 +326,8 @@ class Controller:
                     self.surfacePlanner.first_iteration = False
                 else:
                     self.surfacePlanner.update_latest_results()
-                    self.pybEnvironment3D.update_target_SL1M(self.surfacePlanner.all_feet_pos)
+                    if not self.enable_multiprocessing_mip:  # Update SL1M target without multiprocessing
+                        self.pybEnvironment3D.update_target_SL1M(self.surfacePlanner.all_feet_pos)
             # Compute target footstep based on current and reference velocities
             o_targetFootstep = self.footstepPlanner.updateFootsteps(
                 self.k % self.k_mpc == 0 and self.k != 0, int(self.k_mpc - self.k % self.k_mpc), self.q_filt_3d[:, 0],

@@ -11,14 +11,15 @@ from time import perf_counter as clock
 import numpy as np
 
 # TODO : Modify this, should not be defined here
+params =  lqrw.Params()
+
 N_VERTICES_MAX = 4
 N_SURFACE_MAX = 10
 N_SURFACE_CONFIG = 3
-N_gait = 100
+N_gait = int(params.gait.shape[0])
 N_POTENTIAL_SURFACE = 5
 N_FEET = 4
 N_PHASE = 3
-
 
 class SurfaceDataCtype(ctypes.Structure):
     ''' ctype data structure for the shared memory between processes, for surfaces
@@ -54,7 +55,7 @@ class DataInCtype(ctypes.Structure):
     TODO : if more than 4 vertices, add a variable for the number of vertice to reshape the appropriate buffer
     '''
     _fields_ = [('gait', ctypes.c_int64 * 4 * N_gait), ('configs', ctypes.c_double * 7 * N_SURFACE_CONFIG),
-                ('o_vref', ctypes.c_double * 6), ('contacts', ctypes.c_double * 12), ('iteration', ctypes.c_int64)]
+                ('bvref', ctypes.c_double * 3), ('contacts', ctypes.c_double * 12), ('iteration', ctypes.c_int64)]
 
 
 class SurfacePlanner_Wrapper():
@@ -117,11 +118,11 @@ class SurfacePlanner_Wrapper():
         self.selected_surfaces_syn = lqrw.SurfaceVector()
         self.all_feet_pos_syn = []
 
-    def run(self, configs, gait_in, current_contacts, o_v_ref):
+    def run(self, configs, gait_in, current_contacts, bvref):
         if self.multiprocessing:
-            self.run_asynchronous(configs, gait_in, current_contacts, o_v_ref)
+            self.run_asynchronous(configs, gait_in, current_contacts, bvref)
         else:
-            self.run_synchronous(configs, gait_in, current_contacts, o_v_ref)
+            self.run_synchronous(configs, gait_in, current_contacts, bvref)
 
     def run_synchronous(self, configs, gait_in, current_contacts, bvref):
         surfaces, surface_inequalities, surfaces_indices, all_feet_pos, success = self.surfacePlanner.run(
@@ -157,7 +158,7 @@ class SurfacePlanner_Wrapper():
 
             self.all_feet_pos_syn = all_feet_pos.copy()
 
-    def run_asynchronous(self, configs, gait_in, current_contacts, o_v_ref):
+    def run_asynchronous(self, configs, gait_in, current_contacts, bvref):
 
         # If this is the first iteration, creation of the parallel process
         with self.dataIn.get_lock():
@@ -166,7 +167,7 @@ class SurfacePlanner_Wrapper():
                             args=(self.newData, self.newResult, self.running, self.dataIn, self.dataOut))
                 p.start()
         # Stacking data to send them to the parallel process
-        self.compress_dataIn(configs, gait_in, current_contacts, o_v_ref)
+        self.compress_dataIn(configs, gait_in, current_contacts, bvref)
         self.newData.value = True
 
     def create_MIP_asynchronous(self, newData, newResult, running, dataIn, dataOut):
@@ -176,14 +177,14 @@ class SurfacePlanner_Wrapper():
                 # Set the shared variable to false to avoid re-trigering the asynchronous MPC
                 newData.value = False
 
-                configs, gait_in, o_v_ref, current_contacts = self.decompress_dataIn(dataIn)
+                configs, gait_in, bvref, current_contacts = self.decompress_dataIn(dataIn)
 
                 with self.dataIn.get_lock():
                     if self.dataIn.iteration == 0:
-                        loop_planner = SurfacePlanner(self.urdf, self.T_gait, self.shoulders, N_PHASE)
+                        loop_planner = SurfacePlanner(self.urdf, self.T_gait, self.shoulders)
 
                 surfaces, surface_inequalities, surfaces_indices, all_feet_pos, success = loop_planner.run(
-                    configs, gait_in, current_contacts, o_v_ref)
+                    configs, gait_in, current_contacts, bvref)
 
                 with self.dataIn.get_lock():
                     self.dataIn.iteration += 1
@@ -196,7 +197,7 @@ class SurfacePlanner_Wrapper():
                 # Set shared variable to true to signal that a new result is available
                 newResult.value = True
 
-    def compress_dataIn(self, configs, gait_in, current_contacts, o_v_ref):
+    def compress_dataIn(self, configs, gait_in, current_contacts, bvref):
 
         with self.dataIn.get_lock():
 
@@ -207,8 +208,8 @@ class SurfacePlanner_Wrapper():
             gait = np.frombuffer(self.dataIn.gait).reshape((N_gait, 4))
             gait[:, :] = gait_in
 
-            o_vref = np.frombuffer(self.dataIn.o_vref)
-            o_vref[:] = o_v_ref[:, 0]
+            bvref = np.frombuffer(self.dataIn.bvref)
+            bvref[:] = bvref[:]
 
             contact = np.frombuffer(self.dataIn.contacts).reshape((3, 4))
             contact[:, :] = current_contacts[:, :]
@@ -221,11 +222,11 @@ class SurfacePlanner_Wrapper():
 
             gait = np.frombuffer(self.dataIn.gait).reshape((N_gait, 4))
 
-            o_v_ref = np.frombuffer(self.dataIn.o_vref).reshape((6, 1))
+            bvref = np.frombuffer(self.dataIn.bvref).reshape((3))
 
             contacts = np.frombuffer(self.dataIn.contacts).reshape((3, 4))
 
-        return configs, gait, o_v_ref, contacts
+        return configs, gait, bvref, contacts
 
     def compress_dataOut(self, surfaces, surface_inequalities, surfaces_indices, all_feet_pos, success):
         # Modify this
