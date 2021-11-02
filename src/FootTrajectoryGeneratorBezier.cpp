@@ -552,7 +552,7 @@ void FootTrajectoryGeneratorBezier::update(int k, MatrixN const& targetFootstep,
 
   // Update desired position, velocities and accelerations for flying feet
   for (int i = 0; i < (int)feet.size(); i++) {
-    position_.col(feet[i]) = position_FK_.col(feet[i]);
+    // position_.col(feet[i]) = position_FK_.col(feet[i]);
     updateFootPosition(k, feet[i], targetFootstep.col(feet[i]));
   }
   return;

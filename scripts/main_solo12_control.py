@@ -204,12 +204,12 @@ def control_loop(name_interface_clone=None, des_vel_analysis=None):
 
         # Check that the initial position of actuators is not too far from the
         # desired position of actuators to avoid breaking the robot
-        # if (t <= 10 * params.dt_wbc):
-        #     if np.max(np.abs(controller.result.q_des - device.joints.positions)) > 0.15:
-        #         print("DIFFERENCE: ", controller.result.q_des - device.joints.positions)
-        #         print("q_des: ", controller.result.q_des)
-        #         print("q_mes: ", device.joints.positions)
-        #         break
+        if (t <= 10 * params.dt_wbc):
+            if np.max(np.abs(controller.result.q_des - device.joints.positions)) > 0.15:
+                print("DIFFERENCE: ", controller.result.q_des - device.joints.positions)
+                print("q_des: ", controller.result.q_des)
+                print("q_mes: ", device.joints.positions)
+                break
 
         # Set desired quantities for the actuators
         device.joints.set_position_gains(controller.result.P)
@@ -384,7 +384,7 @@ def main():
                         help='Name of the clone interface that will reproduce the movement of the first one \
                               (use ifconfig in a terminal), for instance "enp1s0"')
 
-    os.nice(-20)  #  Set the process to highest priority (from -20 highest to +20 lowest)
+    # os.nice(-20)  #  Set the process to highest priority (from -20 highest to +20 lowest)
     f, v = control_loop(parser.parse_args().clone)  # , np.array([1.5, 0.0, 0.0, 0.0, 0.0, 0.0]))
     print(f, v)
     quit()
