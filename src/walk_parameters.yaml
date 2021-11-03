@@ -17,8 +17,9 @@ robot:
     perfect_estimator: false  # Enable/disable perfect estimator by using data directly from PyBullet
 
     # General control parameters
-    # [0.0, 0.865, -1.583, 0.0, 0.865, -1.583, 0.0, 0.865, -1.583, 0.0, 0.865, -1.583] # h_com = 0.2
-    q_init: [0.0, 0.764, -1.407, 0.0, 0.76407, -1.4, 0.0, 0.76407, -1.407, 0.0, 0.764, -1.407]  # h_com = 0.218
+#     q_init: [ 0.00208551,  0.97841023, -1.77335038,  0.0020868,   0.97951833, -1.77534163, 0.00208551,  0.97841023, -1.77335038,  0.0020868,   0.97951833, -1.77534163]
+    q_init: [0.0, 0.865, -1.583, 0.0, 0.865, -1.583, 0.0, 0.865, -1.583, 0.0, 0.865, -1.583] # h_com = 0.2
+#     q_init: [0.0, 0.764, -1.407, 0.0, 0.76407, -1.4, 0.0, 0.76407, -1.407, 0.0, 0.764, -1.407]  # h_com = 0.218
     # q_init: [0.0, 0.7, -1.4, 0.0, 0.7, -1.4, 0.0, -0.7, 1.4, 0.0, -0.7, 1.4]  # Initial articular positions
     dt_wbc: 0.001  # Time step of the whole body control
     dt_mpc: 0.02  # Time step of the model predictive control
@@ -72,7 +73,7 @@ robot:
     # Parameters fro solo3D simulation
     solo3D: true  # Activation of the 3D environment, and corresponding planner blocks
     enable_multiprocessing_mip: true  # Enable/disable running the MIP in another process in parallel of the main loop
-    environment_URDF: "/floor_line/floor_line.urdf"
-    environment_heightmap: "/floor_line/floor_line.bin"
+    environment_URDF: "/marche_1/marche_1.urdf"
+    environment_heightmap: "/marche_1/marche_1.bin"
     # environment_URDF: "/stairs_rotation/stairs_rotation.urdf"
     # environment_heightmap: "/stairs_rotation/stairs_rotation.bin"

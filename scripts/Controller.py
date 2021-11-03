@@ -251,6 +251,7 @@ class Controller:
         Args:
             device (object): Interface with the masterboard or the simulation
         """
+
         t_start = time.time()
 
         # Update the reference velocity coming from the gamepad
@@ -316,7 +317,7 @@ class Controller:
             self.v_filt_3d[6:, 0] = self.v_mes_3d[6:, 0].copy()
             oTh_3d = np.zeros((3, 1))
             oTh_3d[:2, 0] = self.q_filt_3d[:2, 0]
-            oRh_3d = pin.rpy.rpyToMatrix(self.q_filt_3d[3:6, 0])
+            oRh_3d = pin.rpy.rpyToMatrix(0., 0., self.q_filt_3d[5, 0])
 
         t_filter = time.time()
 
@@ -429,6 +430,7 @@ class Controller:
                 # print(self.joystick.getPRef())
                 # print(self.p_ref[2])
             else:
+                self.xgoals[[3, 4], 0] = xref[[3, 4], 1]
                 self.h_ref = self.h_ref_mem
 
             # If the four feet are in contact then we do not listen to MPC (default contact forces instead)
@@ -455,7 +457,7 @@ class Controller:
                 self.feet_v_cmd = self.footTrajectoryGenerator.getFootVelocityBaseFrame(
                     oRh_3d.transpose(), np.zeros((3, 1)), np.zeros((3, 1)))
                 self.feet_p_cmd = self.footTrajectoryGenerator.getFootPositionBaseFrame(
-                    oRh_3d.transpose(), oTh_3d + np.array([[0.0], [0.0], [self.h_ref]]))
+                    oRh_3d.transpose(), oTh_3d + np.array([[0.0], [0.0], [xref[2, 1]]]))
             else:  # Use ideal base frame
                 self.feet_a_cmd = self.footTrajectoryGenerator.getFootAccelerationBaseFrame(
                     hRb @ oRh.transpose(), np.zeros((3, 1)), np.zeros((3, 1)))

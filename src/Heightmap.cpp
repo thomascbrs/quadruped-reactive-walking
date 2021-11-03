@@ -25,8 +25,8 @@ void Heightmap::initialize(const std::string& file_name)
     dx_ = std::abs((header_.x_init - header_.x_end) / (header_.size_x - 1));
     dy_ = std::abs((header_.y_init - header_.y_end) / (header_.size_y - 1));
 
-    FIT_SIZE_X = 0.3;
-    FIT_SIZE_Y = 0.3;
+    FIT_SIZE_X = 0.4;
+    FIT_SIZE_Y = 0.4;
     FIT_NX = 16;
     FIT_NY = 6;
 

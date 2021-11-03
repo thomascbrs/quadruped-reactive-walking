@@ -6,7 +6,7 @@ import pinocchio as pin
 # Parameters of the Invkin 
 l = 0.1946 * 2
 L = 0.14695 * 2
-h = 0.218
+h = 0.18
 q_init = [0.0, 0.7, -1.4, -0.0, 0.7, -1.4, 0.0, 0.7, -1.4, -0.0, 0.7, -1.4]
 
 # Load robot model and data
@@ -67,7 +67,7 @@ while np.any(np.abs(e_basispos) > 0.001):
     q = pin.integrate(solo.model, q, 0.01 * np.linalg.pinv(J) @ x_err)
 
 # Compute final position of CoM
-q[7:] = np.array([0.0, 0.764, -1.407, 0.0, 0.76407, -1.4, 0.0, 0.76407, -1.407, 0.0, 0.764, -1.407])
+#q[7:] = np.array([0.0, 0.764, -1.407, 0.0, 0.76407, -1.4, 0.0, 0.76407, -1.407, 0.0, 0.764, -1.407])
 pin.forwardKinematics(solo.model, solo.data, q, np.zeros(
         solo.model.nv), np.zeros(solo.model.nv))
 pos = solo.com()
