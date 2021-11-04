@@ -581,7 +581,7 @@ struct SurfacePythonVisitor : public bp::def_visitor<SurfacePythonVisitor<Surfac
         .add_property("vertices",
                       bp::make_function(&Surface::getVertices, bp::return_value_policy<bp::return_by_value>()))
 
-        .def("get_height", &Surface::getHeight, bp::args("point"), "get the height of a point of the surface.\n")
+        .def("getHeight", &Surface::getHeight, bp::args("point"), "get the height of a point of the surface.\n")
         .def("has_point", &Surface::hasPoint, bp::args("point"), "return true if the point is in the surface.\n");
   }
 

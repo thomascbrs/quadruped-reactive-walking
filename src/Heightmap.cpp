@@ -1,6 +1,11 @@
 #include "qrw/Heightmap.hpp"
 
 Heightmap::Heightmap()
+    : result_(VectorN::Zero(3))
+    , fitSize_(0.4)
+    , nFit_(16)
+    , A_(MatrixN::Ones(nFit_ * nFit_, 3))
+    , b_(VectorN::Zero(nFit_ * nFit_))
 {
     // empty
 }
@@ -25,11 +30,6 @@ void Heightmap::initialize(const std::string& file_name)
     dx_ = std::abs((header_.x_init - header_.x_end) / (header_.size_x - 1));
     dy_ = std::abs((header_.y_init - header_.y_end) / (header_.size_y - 1));
 
-    FIT_SIZE_X = 0.4;
-    FIT_SIZE_Y = 0.4;
-    FIT_NX = 16;
-    FIT_NY = 16;
-
     int i = 0;
     int j = 0;
     double read;
@@ -45,13 +45,9 @@ void Heightmap::initialize(const std::string& file_name)
         }
         i++;
     }
-
-    A = MatrixN::Zero(FIT_NX * FIT_NY, 3);
-    b = VectorN::Zero(FIT_NX * FIT_NY);
-    surface_eq = Vector3::Zero();
 }
 
-int Heightmap::map_x(double x)
+int Heightmap::xIndex(double x)
 {
     if (x < header_.x_init || x > header_.x_end)
     {
@@ -63,7 +59,7 @@ int Heightmap::map_x(double x)
     }
 }
 
-int Heightmap::map_y(double y)
+int Heightmap::yIndex(double y)
 {
     if (y < header_.y_init || y > header_.y_end)
     {
@@ -75,10 +71,10 @@ int Heightmap::map_y(double y)
     }
 }
 
-double Heightmap::get_height(double x, double y)
+double Heightmap::getHeight(double x, double y)
 {
-    int index_x = map_x(x);
-    int index_y = map_y(y);
+    int index_x = xIndex(x);
+    int index_y = yIndex(y);
     if (index_x == -10 || index_y == -10)
     {
         return 0.0;
@@ -91,19 +87,16 @@ double Heightmap::get_height(double x, double y)
 
 Vector3 Heightmap::computeMeanSurface(double x, double y)
 {
-    VectorN x_surface = VectorN::LinSpaced(FIT_NX, x - FIT_SIZE_X / 2, x + FIT_SIZE_X / 2);
-    VectorN y_surface = VectorN::LinSpaced(FIT_NY, y - FIT_SIZE_Y / 2, y + FIT_SIZE_Y / 2);
-
-    MatrixN A_ = MatrixN::Ones(FIT_NX*FIT_NY, 3);
-    VectorN b_ = VectorN::Ones(FIT_NX*FIT_NY);
+    VectorN x_surface = VectorN::LinSpaced(nFit_, x - fitSize_ / 2, x + fitSize_ / 2);
+    VectorN y_surface = VectorN::LinSpaced(nFit_, y - fitSize_ / 2, y + fitSize_ / 2);
 
     int i_pb = 0;
-    for (int i = 0; i < FIT_NX; i++)
+    for (int i = 0; i < nFit_; i++)
     {
-        for (int j = 0; j < FIT_NY; j++)
+        for (int j = 0; j < nFit_; j++)
         {
             A_.block(i_pb, 0, 1, 2) << x_surface[i], y_surface[j];
-            b_.block(i_pb, 0, 1, 1) << get_height(x_surface[i], y_surface[j]);
+            b_.block(i_pb, 0, 1, 1) << getHeight(x_surface[i], y_surface[j]);
             i_pb += 1;
         }
     }
@@ -111,6 +104,7 @@ Vector3 Heightmap::computeMeanSurface(double x, double y)
     qp.reset(3, 0, 0);
     P_ = A_.transpose() * A_;
     q_ = -A_.transpose() * b_;
-    status = qp.solve_quadprog(P_, q_, C_, d_, G_, h_, surface_eq);
-    return surface_eq;
+    status = qp.solve_quadprog(P_, q_, C_, d_, G_, h_, result_);
+
+    return result_;
 }

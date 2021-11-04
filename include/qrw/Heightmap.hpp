@@ -60,7 +60,7 @@ class Heightmap {
   /// \param[in] x x-axis position
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  int map_x(double x);
+  int xIndex(double x);
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
   ///
@@ -69,7 +69,7 @@ class Heightmap {
   /// \param[in] y y-axis position
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  int map_y(double y);
+  int yIndex(double y);
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
   ///
@@ -79,7 +79,7 @@ class Heightmap {
   /// \param[in] y y-axis position
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  double get_height(double x, double y);
+  double getHeight(double x, double y);
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
   ///
@@ -95,7 +95,7 @@ class Heightmap {
   MatrixN z_;
   MatrixN x_;
   MatrixN y_;
-  VectorN surface_eq = VectorN::Zero(3); // [a,b,c], such as ax + by -z + c = 0
+  VectorN result_; // [a,b,c], such as ax + by -z + c = 0
 
  private:
   Header header_;  // Contain the size and parameters of the heightmap
@@ -103,10 +103,8 @@ class Heightmap {
   double dx_;  // interval size x-axis
   double dy_;  //  interval size y-axis
 
-  double FIT_SIZE_X;  // size around x-axis the robot to detect the surface
-  double FIT_SIZE_Y;  // size around x-axis the robot to detect the surface
-  int FIT_NX;         // Number of point for the QP, to compute the surface, x-axis
-  int FIT_NY;         // Number of point for the QP, to compute the surface, y-axis
+  double fitSize_;  // size around the robot to detect the surface
+  int nFit_;        // Number of point for the QP, to compute the surface, x-axis
 
   // min. 1/2 * x' C_ x + q_' x
   // s.t. C_ x + d_ = 0
@@ -125,7 +123,7 @@ class Heightmap {
   eiquadprog::solvers::EiquadprogFast_status status;
   eiquadprog::solvers::EiquadprogFast qp;
 
-  MatrixN A;
-  VectorN b;
+  MatrixN A_;
+  VectorN b_;
 };
 #endif  // HEIGHTMAP_H_INCLUDED
