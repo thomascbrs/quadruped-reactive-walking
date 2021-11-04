@@ -332,6 +332,7 @@ struct WbcWrapperPythonVisitor : public bp::def_visitor<WbcWrapperPythonVisitor<
             .def_readonly("JcTf_out", &WbcWrapper::get_JcTf_out)
 
             // Run WbcWrapper from Python
+            .def("clamp", &WbcWrapper::clamp, bp::args("q"), "Clamp desired joint positions sent to the PD controller.\n")
             .def("compute", &WbcWrapper::compute, bp::args("q", "dq", "f_cmd", "contacts", "pgoals", "vgoals",
                                                            "agoals", "xgoals"), "Run WbcWrapper from Python.\n");
     }

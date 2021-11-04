@@ -631,7 +631,8 @@ void WbcWrapper::initialize(Params &params) {
   q_wbc_(6, 0) = 1.0;
 
   // Initialize joint positions
-  qdes_.tail(12) = Vector12(params_->q_init.data());
+  qinit_ = Vector12(params_->q_init.data());
+  qdes_.tail(12) = qinit_;
 
   // Compute the upper triangular part of the joint space inertia matrix M by using the Composite Rigid Body Algorithm
   // Result is stored in data_.M
@@ -850,4 +851,27 @@ void WbcWrapper::compute(VectorN const &q, VectorN const &dq, VectorN const &f_c
 
   // Increment log counter
   k_log_++;
+}
+
+Vector12 WbcWrapper::clamp(Vector12 q) {
+
+  const double q_max = 80.0 * M_PI / 180.0;  // Upper hip limit to avoid being close from horizontal position
+  const double q_min = 10.0 * M_PI / 180.0;  // Lower knee limit to avoid singularity
+  // Clamp q vector between q_min and q_max angular positions
+  for (int i = 0; i < 4; i++) {
+    // Hip
+    if (qinit_(3 * i + 1, 0) >= 0) {
+      q(3 * i + 1, 0) = std::min(q_max, q(3 * i + 1, 0));
+    } else {
+      q(3 * i + 1, 0) = std::max(q_max, q(3 * i + 1, 0));
+    }
+
+    // Knee
+    if (qinit_(3 * i + 2, 0) >= 0) {
+      q(3 * i + 2, 0) = std::max(q_min, q(3 * i + 2, 0));
+    } else {
+      q(3 * i + 2, 0) = std::min(q_min, q(3 * i + 2, 0));
+    }
+  }
+  return q;
 }

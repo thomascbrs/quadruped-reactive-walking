@@ -324,6 +324,16 @@ class WbcWrapper {
   void compute(VectorN const &q, VectorN const &dq, VectorN const &f_cmd, MatrixN const &contacts,
                MatrixN const &pgoals, MatrixN const &vgoals, MatrixN const &agoals, VectorN const &xgoals);
 
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  ///
+  /// \brief Clamp desired joint positions sent to the PD controller to avoid joint limit and
+  ///        singularities
+  ///
+  /// \param[in] q The joint positions that should be clamped
+  ///
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  Vector12 clamp(Vector12 q);
+
   VectorN get_bdes() { return bdes_; }
   VectorN get_qdes() { return qdes_; }
   VectorN get_vdes() { return vdes_; }
@@ -370,7 +380,8 @@ class WbcWrapper {
   Vector12 f_with_delta_;    // Contact forces with deltas found by QP solver
   Vector18 ddq_with_delta_;  // Actuator accelerations with deltas found by QP solver
 
-  Vector6 nle_;  // Non linear effects
+  Vector12 qinit_;  // Initial position of actuators
+  Vector6 nle_;     // Non linear effects
 
   Matrix34 log_feet_pos_target;  // Store the target feet positions
   Matrix34 log_feet_vel_target;  // Store the target feet velocities
