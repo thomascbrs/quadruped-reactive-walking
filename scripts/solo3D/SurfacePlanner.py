@@ -45,7 +45,7 @@ class SurfacePlanner:
         self.afftool = AffordanceTool()
         self.afftool.setAffordanceConfig('Support', [0.5, 0.03, 0.00005])
 
-        self.afftool.loadObstacleModel(environment_URDF, "environment", self.vf, reduceSizes=[0.05, 0.05, 0.])
+        self.afftool.loadObstacleModel(environment_URDF, "environment", self.vf, reduceSizes=[0.05, 0.0, 0.])
         self.ps.selectPathValidation("RbprmPathValidation", 0.05)
 
         self.all_surfaces = getAllSurfacesDict(self.afftool)

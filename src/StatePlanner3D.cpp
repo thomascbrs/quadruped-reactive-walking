@@ -44,7 +44,7 @@ void StatePlanner3D::computeReferenceStates(VectorN const& q, Vector6 const& v, 
 
     if (is_new_step)
     {
-        meanSurface_ = heightmap_.compute_mean_surface(q(0), q(1));  // Update surface equality before new step
+        meanSurface_ = heightmap_.computeMeanSurface(q(0), q(1));  // Update surface equality before new step
         rpyMap_(0) = -std::atan2(meanSurface_(1), 1.);
         rpyMap_(1) = -std::atan2(meanSurface_(0), 1.);
         computeConfigurations(q, vRef);
@@ -115,37 +115,39 @@ void StatePlanner3D::computeReferenceStates(VectorN const& q, Vector6 const& v, 
     }
 }
 
-void StatePlanner3D::computeConfigurations(VectorN const& q, Vector6 const& vRef) {
-  Vector3 meanSurfaceTmp = Vector3::Zero();  // Temporary mean surface vector
-  Vector3 rpyMapTmp = Vector3::Zero();       // Temporary rpy configuration from surface
+void StatePlanner3D::computeConfigurations(VectorN const& q, Vector6 const& vRef)
+{
+    Vector3 meanSurfaceTmp = Vector3::Zero();  // Temporary mean surface vector
+    Vector3 rpyMapTmp = Vector3::Zero();       // Temporary rpy configuration from surface
 
-  for (int i = 0; i < nSurfaceConfigs_; i++) {
-    double dt_config = stepDuration_ * (i + 2);  // Delay of 2 phase of contact for MIP
+    for (int i = 0; i < nSurfaceConfigs_; i++)
+    {
+        double dt_config = stepDuration_ * (i + 2);  // Delay of 2 phase of contact for MIP
 
-    if (std::abs(vRef(5)) >= 0.001) {
-      configs_(0, i) =
-          (vRef(0) * std::sin(vRef(5) * dt_config) + vRef(1) * (std::cos(vRef(5) * dt_config) - 1.0)) / vRef(5);
-      configs_(1, i) =
-          (vRef(1) * std::sin(vRef(5) * dt_config) - vRef(0) * (std::cos(vRef(5) * dt_config) - 1.0)) / vRef(5);
-    } else {
-      configs_(0, i) = vRef(0) * dt_config;
-      configs_(1, i) = vRef(1) * dt_config;
+        if (std::abs(vRef(5)) >= 0.001)
+        {
+            configs_(0, i) = (vRef(0) * std::sin(vRef(5) * dt_config) + vRef(1) * (std::cos(vRef(5) * dt_config) - 1.0)) / vRef(5);
+            configs_(1, i) = (vRef(1) * std::sin(vRef(5) * dt_config) - vRef(0) * (std::cos(vRef(5) * dt_config) - 1.0)) / vRef(5);
+        }
+        else
+        {
+            configs_(0, i) = vRef(0) * dt_config;
+            configs_(1, i) = vRef(1) * dt_config;
+        }
+        configs_(0, i) = std::cos(q(5)) * configs_(0, i) - std::sin(q(5)) * configs_(1, i);  // Yaw rotation for dx
+        configs_(1, i) = std::sin(q(5)) * configs_(0, i) + std::cos(q(5)) * configs_(1, i);  // Yaw rotation for dy
+        configs_.block(0, i, 2, 1) += q.head(2);                                             // Add initial position
+
+        // Compute the mean surface according to the prediction
+        meanSurfaceTmp = heightmap_.computeMeanSurface(configs_(0, i), configs_(1, i));
+        rpyMapTmp(0) = -std::atan2(meanSurfaceTmp(1), 1.);
+        rpyMapTmp(1) = -std::atan2(meanSurfaceTmp(0), 1.);
+        // Update according to heightmap
+        configs_(2, i) = meanSurfaceTmp(0) * configs_(0, i) + meanSurfaceTmp(1) * configs_(1, i) + meanSurfaceTmp(2) + referenceHeight_;
+        rpyConfig_(2) = q(5) + vRef(5) * dt_config;
+        rpyConfig_(0) = rpyMapTmp(0) * std::cos(rpyConfig_(2)) - rpyMapTmp(1) * std::sin(rpyConfig_(2));
+        rpyConfig_(1) = rpyMapTmp(0) * std::sin(rpyConfig_(2)) + rpyMapTmp(1) * std::cos(rpyConfig_(2));
+
+        configs_.block(3, i, 4, 1) = pinocchio::SE3::Quaternion(pinocchio::rpy::rpyToMatrix(rpyConfig_)).coeffs();
     }
-    configs_(0, i) = std::cos(q(5)) * configs_(0, i) - std::sin(q(5)) * configs_(1, i);  // Yaw rotation for dx
-    configs_(1, i) = std::sin(q(5)) * configs_(0, i) + std::cos(q(5)) * configs_(1, i);  // Yaw rotation for dy
-    configs_.block(0, i, 2, 1) += q.head(2);                                             // Add initial position
-
-    // Compute the mean surface according to the prediction
-    meanSurfaceTmp = heightmap_.compute_mean_surface(configs_(0, i), configs_(1, i));
-    rpyMapTmp(0) = -std::atan2(meanSurfaceTmp(1), 1.);
-    rpyMapTmp(1) = -std::atan2(meanSurfaceTmp(0), 1.);
-    // Update according to heightmap
-    configs_(2, i) =
-        meanSurfaceTmp(0) * configs_(0, i) + meanSurfaceTmp(1) * configs_(1, i) + meanSurfaceTmp(2) + referenceHeight_;
-    rpyConfig_(2) = q(5) + vRef(5) * dt_config;
-    rpyConfig_(0) = rpyMapTmp(0) * std::cos(rpyConfig_(2)) - rpyMapTmp(1) * std::sin(rpyConfig_(2));
-    rpyConfig_(1) = rpyMapTmp(0) * std::sin(rpyConfig_(2)) + rpyMapTmp(1) * std::cos(rpyConfig_(2));
-
-    configs_.block(3, i, 4, 1) = pinocchio::SE3::Quaternion(pinocchio::rpy::rpyToMatrix(rpyConfig_)).coeffs();
-  }
 }

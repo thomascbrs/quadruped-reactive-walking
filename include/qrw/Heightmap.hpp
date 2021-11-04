@@ -90,7 +90,7 @@ class Heightmap {
   /// \param[in] y y-axis position
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  Vector3 compute_mean_surface(double x, double y);
+  Vector3 computeMeanSurface(double x, double y);
 
   MatrixN z_;
   MatrixN x_;

@@ -11,7 +11,7 @@ from time import perf_counter as clock
 import numpy as np
 
 # TODO : Modify this, should not be defined here
-params =  lqrw.Params()
+params = lqrw.Params()
 
 N_VERTICES_MAX = 4
 N_SURFACE_MAX = 10
@@ -59,22 +59,23 @@ class DataInCtype(ctypes.Structure):
 
 
 class SurfacePlanner_Wrapper():
-    ''' Wrapper for the class SurfacePlanner for the paralellisation
+    ''' 
+    Wrapper for the class SurfacePlanner for the paralellisation
     '''
 
     def __init__(self, params):
-        self.urdf = os.environ["SOLO3D_ENV_DIR"] +  params.environment_URDF
+        self.urdf = os.environ["SOLO3D_ENV_DIR"] + params.environment_URDF
         self.T_gait = params.T_gait
-        self.shoulders = np.reshape(params.shoulders.tolist(), (3,4), order = "F")
+        self.shoulders = np.reshape(params.shoulders.tolist(), (3, 4), order="F")
 
         # TODO : Modify this
         # Usefull for 1st iteration of QP
         A = [[-1.0000000, 0.0000000, 0.0000000],
-            [0.0000000, -1.0000000, 0.0000000],
-            [0.0000000, 1.0000000, 0.0000000],
-            [1.0000000, 0.0000000, 0.0000000],
-            [0.0000000, 0.0000000, 1.0000000],
-            [-0.0000000, -0.0000000, -1.0000000]]
+             [0.0000000, -1.0000000, 0.0000000],
+             [0.0000000, 1.0000000, 0.0000000],
+             [1.0000000, 0.0000000, 0.0000000],
+             [0.0000000, 0.0000000, 1.0000000],
+             [-0.0000000, -0.0000000, -1.0000000]]
 
         b = [1.3946447, 0.9646447, 0.9646447, 0.5346446, 0.0000, 0.0000]
 
@@ -113,7 +114,7 @@ class SurfacePlanner_Wrapper():
 
         else:
             self.surfacePlanner = SurfacePlanner(self.urdf, self.T_gait, self.shoulders)
-        
+
         # Store results to mimic multiprocessing behaviour with synchronous loop
         self.selected_surfaces_syn = lqrw.SurfaceVector()
         self.all_feet_pos_syn = []
@@ -137,16 +138,6 @@ class SurfacePlanner_Wrapper():
             for i, (S, s) in enumerate(foot_surfaces):
                 list_surfaces.append(lqrw.Surface(S, s, surfaces[foot][i].T))
             self.potential_surfaces.append(list_surfaces)
-
-        # Use directly the MIP surfaces computed
-        # self.selected_surfaces = lqrw.SurfaceVector()
-        # if success:
-        #     for foot, foot_surfaces in enumerate(surface_inequalities):
-        #         i = surfaces_indices[foot]
-        #         S, s = foot_surfaces[i]
-        #         self.selected_surfaces.append(lqrw.Surface(S, s, surfaces[foot][i].T))
-
-        #     self.all_feet_pos = all_feet_pos.copy()
 
         # Mimic the multiprocessing behaviour, store the resuts and get them with update function
         self.selected_surfaces_syn = lqrw.SurfaceVector()
@@ -189,10 +180,7 @@ class SurfacePlanner_Wrapper():
                 with self.dataIn.get_lock():
                     self.dataIn.iteration += 1
 
-                t1 = clock()
                 self.compress_dataOut(surfaces, surface_inequalities, surfaces_indices, all_feet_pos, success)
-                t2 = clock()
-                # print("TIME COMPRESS DATA [ms] :  ", 1000 * (t2 - t1))
 
                 # Set shared variable to true to signal that a new result is available
                 newResult.value = True
@@ -215,15 +203,10 @@ class SurfacePlanner_Wrapper():
             contact[:, :] = current_contacts[:, :]
 
     def decompress_dataIn(self, dataIn):
-
         with dataIn.get_lock():
-
             configs = [np.frombuffer(config) for config in dataIn.configs]
-
             gait = np.frombuffer(self.dataIn.gait).reshape((N_gait, 4))
-
             bvref = np.frombuffer(self.dataIn.bvref).reshape((3))
-
             contacts = np.frombuffer(self.dataIn.contacts).reshape((3, 4))
 
         return configs, gait, bvref, contacts
@@ -251,7 +234,6 @@ class SurfacePlanner_Wrapper():
 
             if success:
                 self.dataOut.success = True
-                # self.dataOut.all_feet_pos = all_feet_pos
 
                 # Compress selected surfaces
                 for foot, index in enumerate(surfaces_indices):
@@ -293,11 +275,6 @@ class SurfacePlanner_Wrapper():
                         for s in self.dataOut.selectedSurfaces:
                             self.selected_surfaces.append(
                                 lqrw.Surface(np.array(s.A), np.array(s.b), np.array(s.vertices)))
-
-                        # self.all_feet_pos = self.dataOut.all_feet_pos.copy()
-                        # for foot in self.all_feet_pos:
-                        #     foot.pop(0)
-
                     else:
                         self.mip_success = False
                         self.mip_iteration += 1
@@ -316,14 +293,7 @@ class SurfacePlanner_Wrapper():
                 self.all_feet_pos = self.all_feet_pos_syn.copy()
 
     def stop_parallel_loop(self):
-        """Stop the infinite loop in the parallel process to properly close the simulation
         """
-
+        Stop the infinite loop in the parallel process to properly close the simulation
+        """
         self.running.value = False
-
-    # def print_profile(self, output_file):
-    #     ''' Print the profile computed with cProfile
-    #     Args :
-    #     - output_file (str) :  file name
-    #     '''
-    #     profileWrap.print_stats(output_file)
