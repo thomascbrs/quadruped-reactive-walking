@@ -2,7 +2,7 @@
 
 Heightmap::Heightmap()
     : result_(VectorN::Zero(3))
-    , fitSize_(0.4)
+    , fitSize_(0.5)
     , nFit_(16)
     , A_(MatrixN::Ones(nFit_ * nFit_, 3))
     , b_(VectorN::Zero(nFit_ * nFit_))
