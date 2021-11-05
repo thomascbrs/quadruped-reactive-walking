@@ -269,9 +269,7 @@ class Controller:
                 self.initial_pos = qc.getPosition()
                 self.initial_pos[2] = self.initial_pos[2] - 0.24
                 self.initial_rot = quaternionToRPY(qc.getOrientationQuat())
-                self.initial_matrix = pin.rpy.rpyToMatrix(0., 0., self.initial_rot[2,0])
-                print("------------------------------------------------")
-                print(self.initial_rot)
+                self.initial_matrix = pin.rpy.rpyToMatrix(0., 0., self.initial_rot[2, 0]).transpose()
 
             # motion capture data
             dummy_state[:3, 0] = self.initial_matrix @ (qc.getPosition() - self.initial_pos)

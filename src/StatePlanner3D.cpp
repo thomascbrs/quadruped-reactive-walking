@@ -139,14 +139,19 @@ void StatePlanner3D::computeConfigurations(VectorN const& q, Vector6 const& vRef
         configs_.block(0, i, 2, 1) += q.head(2);                                             // Add initial position
 
         // Compute the mean surface according to the prediction
-        meanSurfaceTmp = heightmap_.computeMeanSurface(configs_(0, i), configs_(1, i));
-        rpyMapTmp(0) = -std::atan2(meanSurfaceTmp(1), 1.);
-        rpyMapTmp(1) = -std::atan2(meanSurfaceTmp(0), 1.);
+        // meanSurfaceTmp = heightmap_.computeMeanSurface(configs_(0, i), configs_(1, i));
+        // rpyMapTmp(0) = -std::atan2(meanSurfaceTmp(1), 1.);
+        // rpyMapTmp(1) = -std::atan2(meanSurfaceTmp(0), 1.);
         // Update according to heightmap
-        configs_(2, i) = meanSurfaceTmp(0) * configs_(0, i) + meanSurfaceTmp(1) * configs_(1, i) + meanSurfaceTmp(2) + referenceHeight_;
+        // configs_(2, i) = meanSurfaceTmp(0) * configs_(0, i) + meanSurfaceTmp(1) * configs_(1, i) + meanSurfaceTmp(2) + referenceHeight_;
+        // rpyConfig_(2) = q(5) + vRef(5) * dt_config;
+        // rpyConfig_(0) = rpyMapTmp(0) * std::cos(rpyConfig_(2)) - rpyMapTmp(1) * std::sin(rpyConfig_(2));
+        // rpyConfig_(1) = rpyMapTmp(0) * std::sin(rpyConfig_(2)) + rpyMapTmp(1) * std::cos(rpyConfig_(2));
+
+        configs_(2, i) = meanSurface_(0) * configs_(0, i) + meanSurface_(1) * configs_(1, i) + meanSurface_(2) + referenceHeight_;
         rpyConfig_(2) = q(5) + vRef(5) * dt_config;
-        rpyConfig_(0) = rpyMapTmp(0) * std::cos(rpyConfig_(2)) - rpyMapTmp(1) * std::sin(rpyConfig_(2));
-        rpyConfig_(1) = rpyMapTmp(0) * std::sin(rpyConfig_(2)) + rpyMapTmp(1) * std::cos(rpyConfig_(2));
+        rpyConfig_(0) = rpyMap_(0) * std::cos(rpyConfig_(2)) - rpyMap_(1) * std::sin(rpyConfig_(2));
+        rpyConfig_(1) = rpyMap_(0) * std::sin(rpyConfig_(2)) + rpyMap_(1) * std::cos(rpyConfig_(2));
 
         configs_.block(3, i, 4, 1) = pinocchio::SE3::Quaternion(pinocchio::rpy::rpyToMatrix(rpyConfig_)).coeffs();
     }
