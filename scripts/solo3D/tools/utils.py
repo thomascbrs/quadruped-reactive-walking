@@ -88,10 +88,9 @@ def getAllSurfacesDict_inner(all_surfaces, margin):
     all_names = []
     surfaces = []
     for name_surface in all_surfaces :
-        vertices = np.array(all_surfaces.get(name_surface)[0])
-        ineq, ineq_vect, vertcies_ordered, normal = compute_inequalities(vertices)
-        ineq_inner, ineq_inner_vect = compute_inner_inequalities(vertcies_ordered, ineq, ineq_vect, margin, ineq[-1, :])
-        vertices_inner = compute_inner_vertices(vertcies_ordered, ineq_inner, ineq_inner_vect )
+        vertices = order(np.array(all_surfaces.get(name_surface)[0]))
+        ineq_inner, ineq_inner_vect, normal = compute_inner_inequalities(vertices, margin)
+        vertices_inner = compute_inner_vertices(vertices, ineq_inner, ineq_inner_vect )
 
         # Save inner vertices
         all_names.append(name_surface)
@@ -129,7 +128,7 @@ def order(vertices, method="convexHull"):
     return vert
 
 
-def compute_inner_inequalities(vertices, ineq, ineq_vect, margin, normal):
+def compute_inner_inequalities(vertices, margin):
     """Compute surface inequalities from the vertices list with a margin, update self.ineq_inner, 
     self.ineq_vect_inner
 ineq_iner X <= ineq_vect_inner
@@ -140,12 +139,19 @@ Vertice of the surface  = [[x1 ,y1 ,z1 ]
                                 ...      ]]
                                 """
     nb_vert = vertices.shape[0]
+
+    # Computes normal surface
+    S_normal = np.cross(vertices[0, :] - vertices[1, :], vertices[0, :] - vertices[2, :])
+    if S_normal @ np.array([0., 0., 1.]) < 0.: # Check orientation of the normal
+        S_normal = -S_normal
+
+    normal = S_normal / np.linalg.norm(S_normal)
+
     ineq_inner = np.zeros((nb_vert + 1, 3))
     ineq_vect_inner = np.zeros((nb_vert + 1))
 
-    # same normal vector
-    ineq_inner[-1, :] = ineq[-1, :]
-    ineq_vect_inner[-1] = ineq_vect[-1]
+    ineq_inner[-1, :] = normal
+    ineq_vect_inner[-1] = -(-normal[0] * vertices[0, 0] - normal[1] * vertices[0, 1] - normal[2] * vertices[0, 2])
 
     for i in range(nb_vert):
 
@@ -171,57 +177,7 @@ Vertice of the surface  = [[x1 ,y1 ,z1 ]
         ineq_inner[i, :] = -np.array([n_plan[0], n_plan[1], n_plan[2]])
         ineq_vect_inner[i] = -n_plan[0] * M[0] - n_plan[1] * M[1] - n_plan[2] * M[2]
 
-    return ineq_inner, ineq_vect_inner
-
-
-def compute_inequalities(vertices):
-    """Compute surface inequalities from the vertices array such as :
-    S x <= d
-    The last row contains the equality normal
-    Vertice of the surface = [[x1 ,y1 ,z1 ]
-                                [x2 ,y2 ,z2 ]
-                                   ...      ]]
-                                   """
-    nb_vert = vertices.shape[0]
-
-    # Computes normal surface
-    S_normal = np.cross(vertices[0, :] - vertices[1, :], vertices[0, :] - vertices[2, :])
-    if S_normal @ np.array([0., 0., 1.]) < 0.:
-        S_normal = -S_normal
-
-    normal = S_normal / np.linalg.norm(S_normal)
-
-    ineq = np.zeros((nb_vert + 1, 3))
-    ineq_vect = np.zeros((nb_vert + 1))
-
-    ineq[-1, :] = normal
-    ineq_vect[-1] = -(-normal[0] * vertices[0, 0] - normal[1] * vertices[0, 1] - normal[2] * vertices[0, 2])
-
-    # Order the whole list (convex hull on 2D order in counterclock wise)
-    # Not ordering the list for the previous step is importamt since the 3 first points comes from
-    # the .obj, and with the convex, we obtain the proper direction for the normal
-    vertcies_ordered = order(vertices)
-
-    for i in range(nb_vert):
-
-        if i < nb_vert - 1:
-            AB = vertcies_ordered[i, :] - vertcies_ordered[i + 1, :]
-        else:
-            AB = vertcies_ordered[i, :] - vertcies_ordered[0, :]  # last point of the list with first
-
-        n_plan = np.cross(AB, normal)
-        n_plan = n_plan / np.linalg.norm(n_plan)
-
-        # normal = [a,b,c].T
-        # To keep the half space in the direction of the normal :
-        # ax + by + cz + d >= 0
-        # - [a,b,c] * X <= d
-
-        ineq[i, :] = -np.array([n_plan[0], n_plan[1], n_plan[2]])
-        ineq_vect[i] = -n_plan[0] * vertcies_ordered[i, 0] - n_plan[1] * vertcies_ordered[
-            i, 1] - n_plan[2] * vertcies_ordered[i, 2]
-
-    return ineq, ineq_vect, vertcies_ordered, normal
+    return ineq_inner, ineq_vect_inner, normal
 
 
 def compute_inner_vertices( vertices, ineq_inner, ineq_vect_inner):
@@ -306,9 +262,3 @@ Returns : 1 point,  np.array, shape (3,)
     si = -plane_normal.dot(w) / ndotu
     Psi = w + si * rayDirection + planePoint
     return Psi
-
-
-
-# vertices = np.array([[1.,1.,0.] , [-1,1.,0.] , [-1,-1,0.] , [1.,-1,0.]])
-# vert_inner = getAllSurfacesDict(vertices, 0.05)
-# print(vert_inner)
