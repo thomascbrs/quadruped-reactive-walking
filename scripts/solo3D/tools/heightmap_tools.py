@@ -60,6 +60,7 @@ class Heightmap:
         affordances until one is found
         :param affordances list of affordances
         """
+        last_z = 0.
         for i in range(self.n_x):
             for j in range(self.n_y):
                 p1 = np.array([self.x[i], self.y[j], -1.])
@@ -78,14 +79,9 @@ class Heightmap:
 
                 if len(intersections) != 0:
                     self.z[i, j] = np.max(np.array(intersections))
-
-    def map_index(self, x, y):
-        """
-        Get the i, j indices of a given position in the heightmap
-        """
-        i = np.searchsorted(self.x, x) - 1
-        j = np.searchsorted(self.y, y) - 1
-        return i, j
+                    last_z = self.z[i, j]
+                else:
+                    self.z[i, j] = last_z
 
 
 def affordance_to_convex(affordance):

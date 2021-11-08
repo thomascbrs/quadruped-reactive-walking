@@ -15,10 +15,10 @@ import libquadruped_reactive_walking as lqrw
 # --------------------------------- PROBLEM DEFINITION ---------------------------------------------------------------
 params = lqrw.Params()
 
-N_X = 100
-N_Y = 100
-X_BOUNDS = [-0.5, 1.5]
-Y_BOUNDS = [-1.5, 1.5]
+N_X = 450
+N_Y = 200
+X_BOUNDS = [-1.5, 3.0]
+Y_BOUNDS = [-1.0, 1.0]
 
 rom_names = ['solo_LFleg_rom', 'solo_RFleg_rom', 'solo_LHleg_rom', 'solo_RHleg_rom']
 others = ['FL_FOOT', 'FR_FOOT', 'HL_FOOT', 'HR_FOOT']
