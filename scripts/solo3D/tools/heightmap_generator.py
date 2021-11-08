@@ -3,6 +3,7 @@ import os
 import numpy as np
 
 from solo3D.tools.heightmap_tools import Heightmap
+from solo3D.tools.utils import getAllSurfacesDict_inner
 
 from solo_rbprm.solo_abstract import Robot
 
@@ -104,11 +105,13 @@ if __name__ == "__main__":
     afftool = init_afftool()
     affordances = afftool.getAffordancePoints('Support')
     all_surfaces = getAllSurfacesDict(afftool)
+    new_surfaces = getAllSurfacesDict_inner(all_surfaces, 0.1)
 
     heightmap = Heightmap(N_X, N_Y, X_BOUNDS, Y_BOUNDS)
     heightmap.build(affordances)
     heightmap.save_binary(os.environ["SOLO3D_ENV_DIR"] + params.environment_heightmap)
 
     ax_heightmap = plot_heightmap(heightmap)
-    draw_whole_scene(all_surfaces)
+    ax = draw_whole_scene(all_surfaces)
+    draw_whole_scene(new_surfaces, ax)
     plt.show(block=True)

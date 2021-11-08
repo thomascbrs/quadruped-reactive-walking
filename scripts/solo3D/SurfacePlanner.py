@@ -10,6 +10,7 @@ from solo_rbprm.solo_abstract import Robot as SoloAbstract
 
 from hpp.corbaserver.affordance.affordance import AffordanceTool
 from hpp.corbaserver.rbprm.tools.surfaces_from_path import getAllSurfacesDict
+from solo3D.tools.utils import getAllSurfacesDict_inner
 from hpp.corbaserver.problem_solver import ProblemSolver
 from hpp.gepetto import ViewerFactory
 
@@ -48,7 +49,7 @@ class SurfacePlanner:
         self.afftool.loadObstacleModel(environment_URDF, "environment", self.vf, reduceSizes=[0.06, 0.06, 0.])
         self.ps.selectPathValidation("RbprmPathValidation", 0.05)
 
-        self.all_surfaces = getAllSurfacesDict(self.afftool)
+        self.all_surfaces = getAllSurfacesDict_inner(getAllSurfacesDict(self.afftool), margin = 0.05)
 
         self.potential_surfaces = []
 
@@ -216,9 +217,13 @@ class SurfacePlanner:
         if pb_data.success:
             surface_indices = pb_data.surface_indices
 
-            selected_surfaces = []
-            for foot, index in enumerate(surface_indices[0]):
-                selected_surfaces.append(surfaces[0][foot][index])
+            # Not used
+            # selected_surfaces = []
+            # for index_phase in range(len(surface_indices)):
+            #     surface_tmp = []
+            #     for foot, index in enumerate(surface_indices[index_phase]):
+            #         surface_tmp.append(surfaces[index_phase][foot][index])
+            #     selected_surfaces.append(surface_tmp)
 
             t1 = clock()
             if 1000. * (t1-t0) > 150.:
