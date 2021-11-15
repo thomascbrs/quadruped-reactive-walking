@@ -93,8 +93,8 @@ void StatePlanner3D::computeReferenceStates(VectorN const& q, Vector6 const& v, 
 
         referenceStates_(2, 1 + i) = meanSurface_(0) * DxDy_(0) + meanSurface_(1) * DxDy_(1) + meanSurface_(2) + referenceHeight_;
 
-        referenceStates_(3, 1 + i) = rpyMap_[0] * std::cos(-rpy_[2]) - rpyMap_[1] * std::sin(-rpy_[2]);
-        referenceStates_(4, 1 + i) = rpyMap_[0] * std::sin(-rpy_[2]) + rpyMap_[1] * std::cos(-rpy_[2]);
+        referenceStates_(3, 1 + i) = 1.0 * (rpyMap_[0] * std::cos(-rpy_[2]) - rpyMap_[1] * std::sin(-rpy_[2]));
+        referenceStates_(4, 1 + i) = 1.0 * (rpyMap_[0] * std::sin(-rpy_[2]) + rpyMap_[1] * std::cos(-rpy_[2]));
     }
 
     // Update velocities according to heightmap

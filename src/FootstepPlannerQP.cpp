@@ -137,8 +137,16 @@ MatrixN FootstepPlannerQP::computeTargetFootstep(int k, Vector6 const& q, Vector
   q_tmp = q.head(3);
   q_tmp(2) = 0.0;
 
+  // ! b_vref and b_v corresponds to h_v, velocities in horizontal frame
+  // b_v given in horizontal frame, b_vref given in base frame
+  Vector3 RP_ = RPY_;
+  RP_[2] = 0;  // Yaw taken into account later
+  Vector6 h_vref;
+  h_vref.head(3) = pinocchio::rpy::rpyToMatrix(RP_) * b_vref.head(3);
+  h_vref.tail(3) = pinocchio::rpy::rpyToMatrix(RP_) * b_vref.tail(3);
+
   // Compute the desired location of footsteps over the prediction horizon
-  computeFootsteps(k, b_v, b_vref);
+  computeFootsteps(k, b_v, h_vref);
 
   // Update desired location of footsteps on the ground
   updateTargetFootsteps();

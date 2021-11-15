@@ -151,11 +151,11 @@ class Controller:
             self.footstepPlanner.initialize(params, self.gait, self.surfacePlanner.floor_surface)
 
             # Trajectory Generator Bezier
-            x_margin_max_ = 0.05  # 4cm margin
-            t_margin_ = 0.15  # 15% of the curve around critical point
-            z_margin_ = 0.01  # 1% of the curve after the critical point
-            N_sample = 10  # Number of sample in the least square optimisation for Bezier coeffs
-            N_sample_ineq = 12  # Number of sample while browsing the curve
+            x_margin_max_ = 0.06  # 4cm margin
+            t_margin_ = 0.28  # 15% of the curve around critical point
+            z_margin_ = 0.06  # 1% of the curve after the critical point
+            N_sample = 8  # Number of sample in the least square optimisation for Bezier coeffs
+            N_sample_ineq = 10  # Number of sample while browsing the curve
             degree = 7  # Degree of the Bezier curve
 
             self.footTrajectoryGenerator = lqrw.FootTrajectoryGeneratorBezier()
@@ -266,18 +266,27 @@ class Controller:
             b_baseVel[:, 0] = device.b_baseVel
         elif self.solo3D and qc != None:
             if self.k <= 1:
-                self.initial_pos = qc.getPosition()
-                self.initial_pos[2] = self.initial_pos[2] - 0.24
-                self.initial_rot = quaternionToRPY(qc.getOrientationQuat())
-                self.initial_matrix = pin.rpy.rpyToMatrix(0., 0., self.initial_rot[2, 0]).transpose()
+                self.initial_pos = [0.419, 0.009, -0.047]
+                # self.initial_pos = qc.getPosition()
+                # self.initial_pos[2] = self.initial_pos[2] - 0.22
+                # self.initial_rot = quaternionToRPY(qc.getOrientationQuat())
+                self.initial_rot = np.array([0., 0., 0.])
+                # self.initial_matrix = pin.rpy.rpyToMatrix(0., 0., self.initial_rot[2, 0]).transpose()
+                self.initial_matrix = pin.rpy.rpyToMatrix(0., 0., 0.).transpose()
+
+                # print("initial pos : \n", self.initial_pos)
+                # print("\ninitial rot : \n", self.initial_rot)
 
             # motion capture data
             dummy_state[:3, 0] = self.initial_matrix @ (qc.getPosition() - self.initial_pos)
-            dummy_state[3:] = quaternionToRPY(qc.getOrientationQuat()) - self.initial_rot
+            dummy_state[3:] = quaternionToRPY(qc.getOrientationQuat()) 
             b_baseVel[:, 0] = (qc.getOrientationMat9().reshape((3, 3)).transpose() @ qc.getVelocity().reshape((3, 1))).ravel()
 
-        # print(dummy_state[:3])
+            # from IPython import embed
+            # embed()
+            # TODO : nan value + (previous - current) > err
 
+            
         # Process state estimator
         self.estimator.run_filter(self.gait.getCurrentGait(),
                                   self.footTrajectoryGenerator.getFootPosition(),
@@ -333,6 +342,7 @@ class Controller:
         is_new_step = self.k % self.k_mpc == 0 and self.gait.isNewPhase()
         if self.solo3D:
             if is_new_step:
+                print(self.k)
                 if self.surfacePlanner.first_iteration:
                     self.surfacePlanner.first_iteration = False
                 else:
@@ -496,7 +506,7 @@ class Controller:
         t_wbc = time.time()
 
         # Security check
-        # self.security_check()
+        self.security_check()
 
         # Update PyBullet camera
         # to have yaw update in simu: utils_mpc.quaternionToRPY(self.estimator.q_filt[3:7, 0])[2, 0]
@@ -598,7 +608,7 @@ class Controller:
             if (self.error_flag != 0):
                 self.error = True
                 if (self.error_flag == 1):
-                    self.error_value = self.estimator.getQFilt()[7:] * 180 / 3.1415
+                    self.error_value = self.estimator.getQFilt()[7:]
                 elif (self.error_flag == 2):
                     self.error_value = self.estimator.getVSecu()
                 else:

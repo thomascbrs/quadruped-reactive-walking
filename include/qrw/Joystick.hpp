@@ -171,9 +171,9 @@ class Joystick {
   double gp_alpha_vel_heavy_filter = 0.002;  // Low pass filter coefficient for v_ref_heavy_filter_
 
   // Maximum velocity values
-  double vXScale = 0.3;    // Lateral
-  double vYScale = 0.5;    // Forward
-  double vYawScale = 1.0;  // Rotation
+  double vXScale = 0.15;    // Lateral
+  double vYScale = 0.25;    // Forward
+  double vYawScale = 0.5;  // Rotation
 
   // Maximum position values
   double pRollScale = -0.32;  // Lateral

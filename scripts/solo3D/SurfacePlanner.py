@@ -33,7 +33,9 @@ class SurfacePlanner:
         Initialize the affordance tool and save the solo abstract rbprm builder, and surface dictionary
         """
         self.T_gait = T_gait
-        self.shoulders = [0.1946, 0.14695, 0.1946, -0.14695, -0.1946, 0.14695, -0.1946, -0.14695]
+        shoulders = [0.1946, 0.14695, 0.1946, -0.14695, -0.1946, 0.14695, -0.1946, -0.14695]
+        self.shoulders = np.zeros((3,4))
+        self.shoulders[:2,:] = np.reshape(shoulders,(2,4), order = "F")
 
         self.solo_abstract = SoloAbstract()
         self.solo_abstract.setJointBounds("root_joint", [-5., 5., -5., 5., 0.241, 1.5])
@@ -46,7 +48,7 @@ class SurfacePlanner:
         self.afftool = AffordanceTool()
         self.afftool.setAffordanceConfig('Support', [0.5, 0.03, 0.00005])
 
-        self.afftool.loadObstacleModel(environment_URDF, "environment", self.vf, reduceSizes=[0.06, 0.06, 0.])
+        self.afftool.loadObstacleModel(environment_URDF, "environment", self.vf)
         self.ps.selectPathValidation("RbprmPathValidation", 0.05)
 
         self.all_surfaces = getAllSurfacesDict_inner(getAllSurfacesDict(self.afftool), margin = 0.05)
@@ -102,10 +104,10 @@ class SurfacePlanner:
                 rpy = pin.rpy.matrixToRpy(pin.Quaternion(configs[phase.id][3:7]).toRotationMatrix())
                 yaw = rpy[2]  # Get yaw for the predicted configuration
                 shoulders = np.zeros(2)
-                # Compute heuristic position in base frame
-                rpy[2] = 0.  # Yaw = 0. in base frame
+                # Compute heuristic position in horizontal frame
+                rpy[2] = 0.  # Yaw = 0. in horizontal frame
                 Rp = pin.rpy.rpyToMatrix(rpy)[:2, :2]
-                heuristic = 0.5 * t_stance * bvref[:2] + Rp @ np.array([self.shoulders[2 * foot], self.shoulders[2 * foot + 1]])
+                heuristic = 0.5 * t_stance * Rp @ bvref[:2] + Rp @ self.shoulders[:2,foot]
 
                 # Compute heuristic in world frame, rotation
                 shoulders[0] = heuristic[0] * np.cos(yaw) - heuristic[1] * np.sin(yaw)
@@ -113,6 +115,20 @@ class SurfacePlanner:
                 effector_positions[foot][phase.id] = np.array(configs[phase.id][:2] + shoulders)
 
         return effector_positions
+
+    def compute_shoulder_positions(self, configs):
+        """
+        Compute the shoulder positions 
+        :param configs the list of configurations
+        """
+        shoulder_positions = np.zeros((4, self.pb.n_phases, 3))
+
+        for phase in self.pb.phaseData:
+            for foot in phase.moving:
+                R = pin.Quaternion(configs[phase.id][3:7]).toRotationMatrix()
+                shoulder_positions[foot][phase.id] = R @ self.shoulders[:,foot] + configs[phase.id][:3]
+
+        return shoulder_positions
 
     def get_potential_surfaces(self, configs, gait):
         """
@@ -210,8 +226,10 @@ class SurfacePlanner:
             return vertices, inequalities, indices, None, False
 
         effector_positions = self.compute_effector_positions(configs, bvref)
+        shoulder_positions = self.compute_shoulder_positions(configs)
         # costs = {"step_size": [1.0, step_length]}
-        costs = {"effector_positions": [1.0, effector_positions]}
+        # costs = {"effector_positions": [1.0, effector_positions]}
+        costs = {"effector_positions": [1.0, effector_positions] , "effector_positions_3D": [0.1, shoulder_positions]}
         pb_data = solve_MIP(self.pb, costs=costs, com=False)
 
         if pb_data.success:
@@ -239,12 +257,12 @@ class SurfacePlanner:
 
             return vertices, inequalities, indices, pb_data.all_feet_pos, True
         else:
-            ax = plot.draw_whole_scene(self.all_surfaces)
-            plot.plot_initial_contacts(initial_contacts, ax=ax)
-            ax.scatter([c[0] for c in configs], [c[1] for c in configs], [c[2] for c in configs], marker='o', linewidth=5)
-            ax.plot([c[0] for c in configs], [c[1] for c in configs], [c[2] for c in configs])
+            # ax = plot.draw_whole_scene(self.all_surfaces)
+            # plot.plot_initial_contacts(initial_contacts, ax=ax)
+            # ax.scatter([c[0] for c in configs], [c[1] for c in configs], [c[2] for c in configs], marker='o', linewidth=5)
+            # ax.plot([c[0] for c in configs], [c[1] for c in configs], [c[2] for c in configs])
 
-            plt.show()
+            # plt.show()
 
             print("The MIP problem did NOT converge")
             # TODO what if the problem did not converge ???
