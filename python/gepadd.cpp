@@ -502,7 +502,9 @@ struct ParamsPythonVisitor : public bp::def_visitor<ParamsPythonVisitor<Params>>
             .def_readwrite("solo3D", &Params::solo3D)
             .def_readwrite("enable_multiprocessing_mip", &Params::enable_multiprocessing_mip)
             .def_readwrite("environment_URDF", &Params::environment_URDF)
-            .def_readwrite("environment_heightmap", &Params::environment_heightmap);
+            .def_readwrite("environment_heightmap", &Params::environment_heightmap)
+            .def_readwrite("heightmap_fit_length", &Params::heightmap_fit_length)
+            .def_readwrite("heightmap_fit_size", &Params::heightmap_fit_size);
     }
 
     static void expose()

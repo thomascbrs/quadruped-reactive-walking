@@ -10,16 +10,18 @@
 #define HEIGHTMAP_H_INCLUDED
 
 #include <stdio.h>
+
+#include <Eigen/Dense>
 #include <fstream>
 #include <iostream>
-#include "qrw/Types.h"
-#include "qrw/Params.hpp"
-#include <Eigen/Dense>
+
 #include "eiquadprog/eiquadprog-fast.hpp"
+#include "qrw/Params.hpp"
+#include "qrw/Types.h"
 
 using namespace std;
 
-struct Header {
+struct Map {
   int size_x;
   int size_y;
   double x_init;
@@ -93,33 +95,29 @@ class Heightmap {
   Vector3 computeMeanSurface(double x, double y);
 
   MatrixN z_;
-  MatrixN x_;
-  MatrixN y_;
-  VectorN result_; // [a,b,c], such as ax + by -z + c = 0
+  VectorN fit_;  // [a,b,c], such as ax + by -z + c = 0
 
  private:
-  Header header_;  // Contain the size and parameters of the heightmap
+  Params p;  // parameters
+
+  Map map_;  // Contain the size and parameters of the heightmap
 
   double dx_;  // interval size x-axis
   double dy_;  //  interval size y-axis
 
-  double fitSize_;  // size around the robot to detect the surface
-  int nFit_;        // Number of point for the QP, to compute the surface, x-axis
-
   // min. 1/2 * x' C_ x + q_' x
   // s.t. C_ x + d_ = 0
   //      G_ x + h_ >= 0
-  MatrixN P_= MatrixN::Zero(3, 3);
-  VectorN q_= VectorN::Zero(3);
+  MatrixN P_ = MatrixN::Zero(3, 3);
+  VectorN q_ = VectorN::Zero(3);
 
-  MatrixN G_= MatrixN::Zero(3, 3);
-  VectorN h_= VectorN::Zero(3);
+  MatrixN G_ = MatrixN::Zero(3, 3);
+  VectorN h_ = VectorN::Zero(3);
 
-  MatrixN C_= MatrixN::Zero(3, 3);
-  VectorN d_= VectorN::Zero(3);
+  MatrixN C_ = MatrixN::Zero(3, 3);
+  VectorN d_ = VectorN::Zero(3);
 
   // qp solver
-  eiquadprog::solvers::EiquadprogFast_status expected = eiquadprog::solvers::EIQUADPROG_FAST_OPTIMAL;
   eiquadprog::solvers::EiquadprogFast_status status;
   eiquadprog::solvers::EiquadprogFast qp;
 

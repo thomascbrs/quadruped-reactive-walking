@@ -24,7 +24,6 @@ class Heightmap:
         :param x_lim bounds in x
         :param y_lim bounds in y
         """
-
         self.n_x = n_x
         self.n_y = n_y
 

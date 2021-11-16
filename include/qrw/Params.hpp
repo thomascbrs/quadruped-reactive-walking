@@ -11,8 +11,9 @@
 #ifndef PARAMS_H_INCLUDED
 #define PARAMS_H_INCLUDED
 
-#include "qrw/Types.h"
 #include <yaml-cpp/yaml.h>
+
+#include "qrw/Types.h"
 
 class Params {
  public:
@@ -119,7 +120,9 @@ class Params {
   bool solo3D;                        // Enable the 3D environment with corresponding planner blocks
   bool enable_multiprocessing_mip;    // Enable/disable running the MIP in another process in parallel of the main loop
   std::string environment_URDF;       // URDF path for the 3D environment
-  std::string environment_heightmap;  // path to the heightmap
+  std::string environment_heightmap;  // Path to the heightmap
+  double heightmap_fit_length;              // Size of the heightmap around the robot
+  int heightmap_fit_size;     // Number of points used in the heightmap QP
 
   // Not defined in yaml
   Eigen::MatrixXd gait;                           // Initial gait matrix (Eigen)

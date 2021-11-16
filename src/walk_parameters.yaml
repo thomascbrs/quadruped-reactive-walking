@@ -78,5 +78,5 @@ robot:
     enable_multiprocessing_mip: true  # Enable/disable running the MIP in another process in parallel of the main loop
     environment_URDF: "/stairs_1/stairs_1.urdf"
     environment_heightmap: "/stairs_1/stairs_1.bin"
-    # environment_URDF: "/stairs_rotation/stairs_rotation.urdf"
-    # environment_heightmap: "/stairs_rotation/stairs_rotation.bin"
+    heightmap_fit_length: 0.3 # Length of half the heightmap fit in a direction
+    heightmap_fit_size: 10 # Number of points on each axis in the heightmap fit
