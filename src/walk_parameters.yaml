@@ -80,3 +80,5 @@ robot:
     environment_heightmap: "/stairs_1/stairs_1.bin"
     heightmap_fit_length: 0.3 # Length of half the heightmap fit in a direction
     heightmap_fit_size: 10 # Number of points on each axis in the heightmap fit
+    number_steps: 3 # Number of steps to ptimize with the MIP
+    max_velocity: [0.4, 0.4, 0.1] # Maximum velocity of the base

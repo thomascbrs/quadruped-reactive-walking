@@ -9,6 +9,7 @@ import libquadruped_reactive_walking as lqrw
 
 from solo3D.tools.utils import quaternionToRPY
 
+
 class Result:
     """Object to store the result of the control loop
     It contains what is sent to the robot (gains, desired positions and velocities,
@@ -136,7 +137,7 @@ class Controller:
         self.SIMULATION = params.SIMULATION
         if params.solo3D:
             from solo3D.SurfacePlannerWrapper import SurfacePlanner_Wrapper
-            if self.SIMULATION :
+            if self.SIMULATION:
                 from solo3D.tools.pyb_environment_3D import PybEnvironment3D
 
         self.enable_multiprocessing_mip = params.enable_multiprocessing_mip
@@ -162,9 +163,9 @@ class Controller:
             self.footTrajectoryGenerator.initialize(params, self.gait, self.surfacePlanner.floor_surface,
                                                     x_margin_max_, t_margin_, z_margin_, N_sample, N_sample_ineq,
                                                     degree)
-            if self.SIMULATION :
+            if self.SIMULATION:
                 self.pybEnvironment3D = PybEnvironment3D(params, self.gait, self.statePlanner, self.footstepPlanner,
-                                                     self.footTrajectoryGenerator)
+                                                         self.footTrajectoryGenerator)
 
             self.q_mes_3d = np.zeros((18, 1))
             self.v_mes_3d = np.zeros((18, 1))
@@ -279,14 +280,13 @@ class Controller:
 
             # motion capture data
             dummy_state[:3, 0] = self.initial_matrix @ (qc.getPosition() - self.initial_pos)
-            dummy_state[3:] = quaternionToRPY(qc.getOrientationQuat()) 
+            dummy_state[3:] = quaternionToRPY(qc.getOrientationQuat())
             b_baseVel[:, 0] = (qc.getOrientationMat9().reshape((3, 3)).transpose() @ qc.getVelocity().reshape((3, 1))).ravel()
 
             # from IPython import embed
             # embed()
             # TODO : nan value + (previous - current) > err
 
-            
         # Process state estimator
         self.estimator.run_filter(self.gait.getCurrentGait(),
                                   self.footTrajectoryGenerator.getFootPosition(),
@@ -342,12 +342,11 @@ class Controller:
         is_new_step = self.k % self.k_mpc == 0 and self.gait.isNewPhase()
         if self.solo3D:
             if is_new_step:
-                print(self.k)
                 if self.surfacePlanner.first_iteration:
                     self.surfacePlanner.first_iteration = False
                 else:
                     self.surfacePlanner.update_latest_results()
-                    if not self.enable_multiprocessing_mip and self.SIMULATION :  # Update SL1M target without multiprocessing
+                    if not self.enable_multiprocessing_mip and self.SIMULATION:  # Update SL1M target without multiprocessing
                         self.pybEnvironment3D.update_target_SL1M(self.surfacePlanner.all_feet_pos)
             # Compute target footstep based on current and reference velocities
             o_targetFootstep = self.footstepPlanner.updateFootsteps(
@@ -374,8 +373,8 @@ class Controller:
         cgait = self.gait.getCurrentGait()
 
         if is_new_step and self.solo3D:  # Run surface planner
-            configs = self.statePlanner.get_configurations().transpose()
-            self.surfacePlanner.run(configs, cgait, o_targetFootstep, self.vref_filt_mpc[:3,0].copy())
+            configs = self.statePlanner.getConfigurations().transpose()
+            self.surfacePlanner.run(configs, cgait, o_targetFootstep, self.vref_filt_mpc[:3, 0].copy())
 
         t_planner = time.time()
 
@@ -513,7 +512,7 @@ class Controller:
         if not self.solo3D:
             self.pyb_camera(device, 0.0)
         else:  # Update 3D Environment
-            if self.SIMULATION :
+            if self.SIMULATION:
                 self.pybEnvironment3D.update(self.k)
 
         # Update debug display (spheres, ...)

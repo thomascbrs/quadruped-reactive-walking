@@ -90,7 +90,7 @@ struct StatePlannerPythonVisitor : public bp::def_visitor<StatePlannerPythonVisi
         cl.def(bp::init<>(bp::arg(""), "Default constructor."))
 
             .def("getReferenceStates", &StatePlanner::getReferenceStates, "Get xref matrix.\n")
-            .def("getNSteps", &StatePlanner::getNSteps, "Get number of steps in prediction horizon.\n")
+            .def("getNumberStates", &StatePlanner::getNumberStates, "Get number of steps in prediction horizon.\n")
 
             .def("initialize", &StatePlanner::initialize, bp::args("params"),
                  "Initialize StatePlanner from Python.\n")
@@ -504,7 +504,9 @@ struct ParamsPythonVisitor : public bp::def_visitor<ParamsPythonVisitor<Params>>
             .def_readwrite("environment_URDF", &Params::environment_URDF)
             .def_readwrite("environment_heightmap", &Params::environment_heightmap)
             .def_readwrite("heightmap_fit_length", &Params::heightmap_fit_length)
-            .def_readwrite("heightmap_fit_size", &Params::heightmap_fit_size);
+            .def_readwrite("heightmap_fit_size", &Params::heightmap_fit_size)
+            .def_readwrite("number_steps", &Params::number_steps)
+            .def_readwrite("max_velocity", &Params::max_velocity);
     }
 
     static void expose()
@@ -638,8 +640,8 @@ struct StatePlanner3DPythonVisitor : public bp::def_visitor<StatePlanner3DPython
     cl.def(bp::init<>(bp::arg(""), "Default constructor."))
 
         .def("getReferenceStates", &StatePlanner3D::getReferenceStates, "Get xref matrix.\n")
-        .def("getNSteps", &StatePlanner3D::getNSteps, "Get number of steps in prediction horizon.\n")
-        .def("get_configurations", &StatePlanner3D::get_configurations, "Get conf vector.\n")
+        .def("getNumberStates", &StatePlanner3D::getNumberStates, "Get number of steps in prediction horizon.\n")
+        .def("getConfigurations", &StatePlanner3D::getConfigurations, "Get conf vector.\n")
 
         .def("initialize", &StatePlanner3D::initialize, bp::args("params"), "Initialize StatePlanner3D from Python.\n")
 

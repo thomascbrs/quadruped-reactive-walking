@@ -92,7 +92,7 @@ class Heightmap {
   /// \param[in] y y-axis position
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  Vector3 computeMeanSurface(double x, double y);
+  Vector3 fitSurface_(double x, double y);
 
   MatrixN z_;
   VectorN fit_;  // [a,b,c], such as ax + by -z + c = 0

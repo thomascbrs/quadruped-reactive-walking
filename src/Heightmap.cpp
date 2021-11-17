@@ -9,7 +9,7 @@ Heightmap::Heightmap()
   // empty
 }
 
-void Heightmap::initialize(const std::string& fileName) {
+void Heightmap::initialize(const std::string &fileName) {
   // Open the binary file
   std::ifstream file(fileName, std::ios::in | std::ios::out | std::ios::binary);
   if (!file) {
@@ -17,7 +17,7 @@ void Heightmap::initialize(const std::string& fileName) {
   }
 
   // Extract header from binary file
-  file.read(reinterpret_cast<char*>(&map_), sizeof map_);
+  file.read(reinterpret_cast<char *>(&map_), sizeof map_);
 
   // Resize matrix and vector according to header
   z_ = MatrixN::Zero(map_.size_x, map_.size_y);
@@ -32,7 +32,7 @@ void Heightmap::initialize(const std::string& fileName) {
   while (i < map_.size_x && !file.eof()) {
     j = 0;
     while (j < map_.size_y && !file.eof()) {
-      file.read(reinterpret_cast<char*>(&read), sizeof read);
+      file.read(reinterpret_cast<char *>(&read), sizeof read);
       z_(i, j) = read;
       j++;
     }
@@ -41,11 +41,11 @@ void Heightmap::initialize(const std::string& fileName) {
 }
 
 int Heightmap::xIndex(double x) {
-  return (x < map_.x_init || x > map_.x_end) ? -1 : (int) std::round((x - map_.x_init) / dx_);
+  return (x < map_.x_init || x > map_.x_end) ? -1 : (int)std::round((x - map_.x_init) / dx_);
 }
 
 int Heightmap::yIndex(double y) {
-  return (y < map_.y_init || y > map_.y_end) ? -1 : (int) std::round((y - map_.y_init) / dy_);
+  return (y < map_.y_init || y > map_.y_end) ? -1 : (int)std::round((y - map_.y_init) / dy_);
 }
 
 double Heightmap::getHeight(double x, double y) {
@@ -54,16 +54,16 @@ double Heightmap::getHeight(double x, double y) {
   return (iX == -1 || iY == -1) ? 0. : z_(iX, iY);
 }
 
-Vector3 Heightmap::computeMeanSurface(double x, double y) {
+Vector3 Heightmap::fitSurface_(double x, double y) {
   VectorN xVector = VectorN::LinSpaced(p.heightmap_fit_size, x - p.heightmap_fit_length, x + p.heightmap_fit_length);
   VectorN yVector = VectorN::LinSpaced(p.heightmap_fit_size, y - p.heightmap_fit_length, y + p.heightmap_fit_length);
 
-  int i_pb = 0;
+  int index = 0;
   for (int i = 0; i < p.heightmap_fit_size; i++) {
     for (int j = 0; j < p.heightmap_fit_size; j++) {
-      A_.block(i_pb, 0, 1, 2) << xVector[i], yVector[j];
-      b_(i_pb) = getHeight(xVector[i], yVector[j]);
-      i_pb++;
+      A_.block(index, 0, 1, 2) << xVector[i], yVector[j];
+      b_(index) = getHeight(xVector[i], yVector[j]);
+      index++;
     }
   }
 

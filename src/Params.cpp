@@ -232,6 +232,12 @@ void Params::initialize(const std::string& file_path) {
 
   assert_yaml_parsing(robot_node, "robot", "heightmap_fit_size");
   heightmap_fit_size = robot_node["heightmap_fit_size"].as<int>();
+
+  assert_yaml_parsing(robot_node, "robot", "number_steps");
+  number_steps = robot_node["number_steps"].as<int>();
+
+  assert_yaml_parsing(robot_node, "robot", "max_velocity");
+  max_velocity = robot_node["max_velocity"].as<std::vector<double> >(); 
 }
 
 void Params::convert_gait_vec() {

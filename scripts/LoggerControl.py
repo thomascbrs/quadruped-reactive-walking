@@ -72,7 +72,7 @@ class LoggerControl():
         self.planner_is_static = np.zeros([logSize])  # if the planner is in static mode or not
 
         # State planner
-        self.planner_xref = np.zeros([logSize, 12, 1+statePlanner.getNSteps()])  # Reference trajectory
+        self.planner_xref = np.zeros([logSize, 12, 1+statePlanner.getNumberStates()])  # Reference trajectory
 
         # Footstep planner
         self.planner_fsteps = np.zeros([logSize, gait.getCurrentGait().shape[0], 12])  # Reference footsteps position
@@ -91,9 +91,9 @@ class LoggerControl():
         # Model Predictive Control
         # output vector of the MPC (next state + reference contact force)
         if loop.type_MPC == 3:
-            self.mpc_x_f = np.zeros([logSize, 32, statePlanner.getNSteps()])
+            self.mpc_x_f = np.zeros([logSize, 32, statePlanner.getNumberStates()])
         else:
-            self.mpc_x_f = np.zeros([logSize, 24, statePlanner.getNSteps()])
+            self.mpc_x_f = np.zeros([logSize, 24, statePlanner.getNumberStates()])
         self.mpc_solving_duration = np.zeros([logSize])
 
         # Whole body control

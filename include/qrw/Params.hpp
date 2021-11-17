@@ -121,9 +121,11 @@ class Params {
   bool enable_multiprocessing_mip;    // Enable/disable running the MIP in another process in parallel of the main loop
   std::string environment_URDF;       // URDF path for the 3D environment
   std::string environment_heightmap;  // Path to the heightmap
-  double heightmap_fit_length;              // Size of the heightmap around the robot
-  int heightmap_fit_size;     // Number of points used in the heightmap QP
-
+  double heightmap_fit_length;        // Size of the heightmap around the robot
+  int heightmap_fit_size;             // Number of points used in the heightmap QP
+  int number_steps;                   // Number of steps to ptimize with the MIP
+  std::vector<double> max_velocity;   // Maximum velocity of the base
+  
   // Not defined in yaml
   Eigen::MatrixXd gait;                           // Initial gait matrix (Eigen)
   double T_gait;                                  // Period of the gait
