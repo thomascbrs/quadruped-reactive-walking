@@ -17,9 +17,10 @@ N_VERTICES_MAX = 4
 N_SURFACE_MAX = 10
 N_SURFACE_CONFIG = 3
 N_gait = int(params.gait.shape[0])
-N_POTENTIAL_SURFACE = 5
+N_POTENTIAL_SURFACE = 7
 N_FEET = 4
 N_PHASE = 3
+
 
 class SurfaceDataCtype(ctypes.Structure):
     ''' ctype data structure for the shared memory between processes, for surfaces
@@ -64,60 +65,41 @@ class SurfacePlanner_Wrapper():
     '''
 
     def __init__(self, params):
-        self.urdf = os.environ["SOLO3D_ENV_DIR"] + params.environment_URDF
-        self.T_gait = params.T_gait
-        self.shoulders = np.reshape(params.shoulders.tolist(), (3, 4), order="F")
 
-        # TODO : Modify this
+        self.params = params
+
         # Usefull for 1st iteration of QP
-        A = [[-1.0000000, 0.0000000, 0.0000000],
-             [0.0000000, -1.0000000, 0.0000000],
-             [0.0000000, 1.0000000, 0.0000000],
-             [1.0000000, 0.0000000, 0.0000000],
-             [0.0000000, 0.0000000, 1.0000000],
-             [-0.0000000, -0.0000000, -1.0000000]]
-
+        A = [[-1.0000000, 0.0000000, 0.0000000], [0.0000000, -1.0000000, 0.0000000],
+             [0.0000000, 1.0000000, 0.0000000], [1.0000000, 0.0000000, 0.0000000],
+             [0.0000000, 0.0000000, 1.0000000], [0.0000000, 0.0000000, -1.0000000]]
         b = [1.3946447, 0.9646447, 0.9646447, 0.5346446, 0.0000, 0.0000]
-
         vertices = [[-1.3946447276978748, 0.9646446609406726, 0.0], [-1.3946447276978748, -0.9646446609406726, 0.0],
                     [0.5346445941834704, -0.9646446609406726, 0.0], [0.5346445941834704, 0.9646446609406726, 0.0]]
-
         self.floor_surface = lqrw.Surface(np.array(A), np.array(b), np.array(vertices))
 
-        # Results from MIP
-        # Potential and selected surfaces for QP planner
+        # Results used by controller
         self.potential_surfaces = lqrw.SurfaceVectorVector()
         self.selected_surfaces = lqrw.SurfaceVector()
-
         self.all_feet_pos = []
-
-        # MIP status
         self.mip_iteration = 0
         self.mip_success = False
         self.first_iteration = True
 
-        # MIP status synchronous, this is updated just after the run of SL1M,
-        # but used in the controller only at the next flying phase
+        # When synchronous, values are stored to be used by controller only at the next flying phase
         self.mip_iteration_syn = 0
         self.mip_success_syn = False
+        self.selected_surfaces_syn = lqrw.SurfaceVector()
+        self.all_feet_pos_syn = []
 
         self.multiprocessing = params.enable_multiprocessing_mip
         if self.multiprocessing:  # Setup variables in the shared memory
             self.newData = Value('b', False)
             self.newResult = Value('b', True)
             self.running = Value('b', True)
-
-            # Data Out :
             self.dataOut = Value(DataOutCtype)
-            # Data IN :
             self.dataIn = Value(DataInCtype)
-
         else:
-            self.surfacePlanner = SurfacePlanner(self.urdf, self.T_gait, self.shoulders)
-
-        # Store results to mimic multiprocessing behaviour with synchronous loop
-        self.selected_surfaces_syn = lqrw.SurfaceVector()
-        self.all_feet_pos_syn = []
+            self.surfacePlanner = SurfacePlanner(params)
 
     def run(self, configs, gait_in, current_contacts, bvref):
         if self.multiprocessing:
@@ -161,18 +143,18 @@ class SurfacePlanner_Wrapper():
         self.compress_dataIn(configs, gait_in, current_contacts, bvref)
         self.newData.value = True
 
-    def create_MIP_asynchronous(self, newData, newResult, running, dataIn, dataOut):
-        while running.value:
+    def create_MIP_asynchronous(self):
+        while self.running.value:
             # Checking if new data is available to trigger the asynchronous MPC
-            if newData.value:
+            if self.newData.value:
                 # Set the shared variable to false to avoid re-trigering the asynchronous MPC
-                newData.value = False
+                self.newData.value = False
 
-                configs, gait_in, bvref, current_contacts = self.decompress_dataIn(dataIn)
+                configs, gait_in, bvref, current_contacts = self.decompress_dataIn()
 
                 with self.dataIn.get_lock():
                     if self.dataIn.iteration == 0:
-                        loop_planner = SurfacePlanner(self.urdf, self.T_gait, self.shoulders)
+                        loop_planner = SurfacePlanner(self.params)
 
                 surfaces, surface_inequalities, surfaces_indices, all_feet_pos, success = loop_planner.run(
                     configs, gait_in, current_contacts, bvref)
@@ -180,10 +162,10 @@ class SurfacePlanner_Wrapper():
                 with self.dataIn.get_lock():
                     self.dataIn.iteration += 1
 
-                self.compress_dataOut(surfaces, surface_inequalities, surfaces_indices, all_feet_pos, success)
+                self.compress_dataOut(surfaces, surface_inequalities, surfaces_indices, success)
 
                 # Set shared variable to true to signal that a new result is available
-                newResult.value = True
+                self.newResult.value = True
 
     def compress_dataIn(self, configs, gait_in, current_contacts, bvref):
 
@@ -202,20 +184,17 @@ class SurfacePlanner_Wrapper():
             contact = np.frombuffer(self.dataIn.contacts).reshape((3, 4))
             contact[:, :] = current_contacts[:, :]
 
-    def decompress_dataIn(self, dataIn):
-        with dataIn.get_lock():
-            configs = [np.frombuffer(config) for config in dataIn.configs]
+    def decompress_dataIn(self):
+        with self.dataIn.get_lock():
+            configs = [np.frombuffer(config) for config in self.dataIn.configs]
             gait = np.frombuffer(self.dataIn.gait).reshape((N_gait, 4))
             bvref = np.frombuffer(self.dataIn.bvref).reshape((3))
             contacts = np.frombuffer(self.dataIn.contacts).reshape((3, 4))
 
         return configs, gait, bvref, contacts
 
-    def compress_dataOut(self, surfaces, surface_inequalities, surfaces_indices, all_feet_pos, success):
-        # Modify this
-        nvertices = 4
-        nrow = nvertices + 2
-
+    def compress_dataOut(self, surfaces, surface_inequalities, surfaces_indices, success):
+        nrow = N_VERTICES_MAX + 2
         with self.dataOut.get_lock():
             # Compress potential surfaces :
             for foot, foot_surfaces in enumerate(surface_inequalities):

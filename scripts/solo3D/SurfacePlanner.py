@@ -28,14 +28,17 @@ class SurfacePlanner:
     Choose the next surface to use by solving a MIP problem
     """
 
-    def __init__(self, environment_URDF, T_gait, shoulders):
+    def __init__(self, params):
         """
         Initialize the affordance tool and save the solo abstract rbprm builder, and surface dictionary
         """
-        self.T_gait = T_gait
-        shoulders = [0.1946, 0.14695, 0.1946, -0.14695, -0.1946, 0.14695, -0.1946, -0.14695]
-        self.shoulders = np.zeros((3,4))
-        self.shoulders[:2,:] = np.reshape(shoulders,(2,4), order = "F")
+        self.plot = False
+
+        self.T_gait = params.T_gait
+        self.shoulders = np.reshape(params.shoulders.tolist(), (3, 4), order="F")
+        # shoulders = [0.1946, 0.14695, 0.1946, -0.14695, -0.1946, 0.14695, -0.1946, -0.14695]
+        # self.shoulders = np.zeros((3, 4))
+        # self.shoulders[:2, :] = np.reshape(shoulders, (2, 4), order="F")
 
         self.solo_abstract = SoloAbstract()
         self.solo_abstract.setJointBounds("root_joint", [-5., 5., -5., 5., 0.241, 1.5])
@@ -48,10 +51,10 @@ class SurfacePlanner:
         self.afftool = AffordanceTool()
         self.afftool.setAffordanceConfig('Support', [0.5, 0.03, 0.00005])
 
-        self.afftool.loadObstacleModel(environment_URDF, "environment", self.vf)
+        self.afftool.loadObstacleModel(os.environ["SOLO3D_ENV_DIR"] + params.environment_URDF, "environment", self.vf)
         self.ps.selectPathValidation("RbprmPathValidation", 0.05)
 
-        self.all_surfaces = getAllSurfacesDict_inner(getAllSurfacesDict(self.afftool), margin = 0.05)
+        self.all_surfaces = getAllSurfacesDict_inner(getAllSurfacesDict(self.afftool), margin=0.05)
 
         self.potential_surfaces = []
 
@@ -89,11 +92,11 @@ class SurfacePlanner:
 
         return np.array([step_length[i] for i in range(2)])
 
-    def compute_effector_positions(self, configs, bvref):
+    def compute_effector_positions(self, configs, b_v_ref):
         """
         Compute the desired effector positions
         :param configs the list of configurations
-        :param bvref, Array (x3) the desired velocity in base frame
+        :param b_v_ref, Array (x3) the desired velocity in base frame
         """
         # TODO: Divide by number of phases in gait
         t_stance = self.T_gait/2
@@ -107,7 +110,7 @@ class SurfacePlanner:
                 # Compute heuristic position in horizontal frame
                 rpy[2] = 0.  # Yaw = 0. in horizontal frame
                 Rp = pin.rpy.rpyToMatrix(rpy)[:2, :2]
-                heuristic = 0.5 * t_stance * Rp @ bvref[:2] + Rp @ self.shoulders[:2,foot]
+                heuristic = 0.5 * t_stance * Rp @ b_v_ref[:2] + Rp @ self.shoulders[:2, foot]
 
                 # Compute heuristic in world frame, rotation
                 shoulders[0] = heuristic[0] * np.cos(yaw) - heuristic[1] * np.sin(yaw)
@@ -126,7 +129,7 @@ class SurfacePlanner:
         for phase in self.pb.phaseData:
             for foot in phase.moving:
                 R = pin.Quaternion(configs[phase.id][3:7]).toRotationMatrix()
-                shoulder_positions[foot][phase.id] = R @ self.shoulders[:,foot] + configs[phase.id][:3]
+                shoulder_positions[foot][phase.id] = R @ self.shoulders[:, foot] + configs[phase.id][:3]
 
         return shoulder_positions
 
@@ -135,7 +138,7 @@ class SurfacePlanner:
         Get the rotation matrix and surface condidates for each configuration in configs
         :param configs: a list of successive configurations of the robot
         :param gait: a gait matrix
-        :return: a list of surface candidates
+        :return: a list of surface candidates and a boolean set to false if one foot hase no potential surface
         """
         surfaces_list = []
         empty_list = False
@@ -197,76 +200,66 @@ class SurfacePlanner:
 
         return vertices, surfaces_inequalities, surface_indices
 
-    def run(self, configs, gait_in, current_contacts, bvref):
+    def run(self, configs, gait_in, current_contacts, b_v_ref):
         """
-        Select the nex surfaces to use
+        Select the next surfaces to use
         :param xref: successive states
         :param gait: a gait matrix
         :param current_contacts: the initial_contacts to use in the computation
-        :param bvref: Array (x3) the desired velocity for the cost, in base frame
+        :param b_v_ref: Array (x3) the desired velocity for the cost, in base frame
         :return: the selected surfaces for the first phase
         """
         t0 = clock()
 
         R = [pin.XYZQUATToSE3(np.array(config)).rotation for config in configs]
-
         gait = self.compute_gait(gait_in)
 
-        step_length = self.compute_step_length(bvref[:2])
+        step_length = self.compute_step_length(b_v_ref[:2])
 
         surfaces, empty_list = self.get_potential_surfaces(configs, gait)
 
         initial_contacts = [current_contacts[:, i].tolist() for i in range(4)]
 
-        self.pb.generate_problem(R, surfaces, gait, initial_contacts, c0=None,  com=False)
+        self.pb.generate_problem(R, surfaces, gait, initial_contacts, c0=None, com=False)
 
         if empty_list:
             print("Surface planner: one step has no potential surface to use.")
             vertices, inequalities, indices = self.retrieve_surfaces(surfaces)
             return vertices, inequalities, indices, None, False
 
-        effector_positions = self.compute_effector_positions(configs, bvref)
+        effector_positions = self.compute_effector_positions(configs, b_v_ref)
         shoulder_positions = self.compute_shoulder_positions(configs)
-        # costs = {"step_size": [1.0, step_length]}
-        # costs = {"effector_positions": [1.0, effector_positions]}
-        costs = {"effector_positions": [1.0, effector_positions] , "effector_positions_3D": [0.1, shoulder_positions]}
+        costs = {"effector_positions": [1.0, effector_positions], "effector_positions_3D": [0.1, shoulder_positions]}
         pb_data = solve_MIP(self.pb, costs=costs, com=False)
+
+        t1 = clock()
+
+        if 1000. * (t1-t0) > 150.:
+            print("Run took ", 1000. * (t1-t0))
 
         if pb_data.success:
             surface_indices = pb_data.surface_indices
 
-            # Not used
-            # selected_surfaces = []
-            # for index_phase in range(len(surface_indices)):
-            #     surface_tmp = []
-            #     for foot, index in enumerate(surface_indices[index_phase]):
-            #         surface_tmp.append(surfaces[index_phase][foot][index])
-            #     selected_surfaces.append(surface_tmp)
-
-            t1 = clock()
-            if 1000. * (t1-t0) > 150.:
-                print("Run took ", 1000. * (t1-t0))
-
-            # import matplotlib.pyplot as plt
-            # import sl1m.tools.plot_tools as plot
-
-            # ax = plot.draw_whole_scene(self.all_surfaces)
-            # plot.plot_planner_result(pb_data.all_feet_pos, step_size=step_length, ax=ax, show=True)
+            if self.plot:
+                import matplotlib.pyplot as plt
+                import sl1m.tools.plot_tools as plot
+                ax = plot.draw_whole_scene(self.all_surfaces)
+                plot.plot_planner_result(pb_data.all_feet_pos, step_size=step_length, ax=ax, show=True)
 
             vertices, inequalities, indices = self.retrieve_surfaces(surfaces, surface_indices)
-
             return vertices, inequalities, indices, pb_data.all_feet_pos, True
-        else:
-            # ax = plot.draw_whole_scene(self.all_surfaces)
-            # plot.plot_initial_contacts(initial_contacts, ax=ax)
-            # ax.scatter([c[0] for c in configs], [c[1] for c in configs], [c[2] for c in configs], marker='o', linewidth=5)
-            # ax.plot([c[0] for c in configs], [c[1] for c in configs], [c[2] for c in configs])
 
-            # plt.show()
+        if self.plot:
+            import matplotlib.pyplot as plt
+            import sl1m.tools.plot_tools as plot
+            ax = plot.draw_whole_scene(self.all_surfaces)
+            plot.plot_initial_contacts(initial_contacts, ax=ax)
+            ax.scatter([c[0] for c in configs], [c[1] for c in configs], [c[2] for c in configs], marker='o', linewidth=5)
+            ax.plot([c[0] for c in configs], [c[1] for c in configs], [c[2] for c in configs])
+            plt.show()
 
-            print("The MIP problem did NOT converge")
-            # TODO what if the problem did not converge ???
+        print("The MIP problem did NOT converge")
 
-            vertices, inequalities, indices = self.retrieve_surfaces(surfaces)
+        vertices, inequalities, indices = self.retrieve_surfaces(surfaces)
 
-            return vertices, inequalities, indices, None, False
+        return vertices, inequalities, indices, None, False

@@ -1,3 +1,4 @@
+from cmath import nan
 import numpy as np
 import utils_mpc
 import time
@@ -108,7 +109,7 @@ class Controller:
         self.h_ref = params.h_ref
         self.h_ref_mem = params.h_ref
         self.q = np.zeros((18, 1))  # Orientation part is in roll pitch yaw
-        self.q[0:6, 0] = np.array([0.0, 0.0, self.h_ref, 0.0, 0.0, 0.0])
+        self.q[:6, 0] = np.array([0.0, 0.0, self.h_ref, 0.0, 0.0, 0.0])
         self.q[6:, 0] = q_init
         self.v = np.zeros((18, 1))
         self.b_v = np.zeros((18, 1))
@@ -267,26 +268,23 @@ class Controller:
             b_baseVel[:, 0] = device.b_baseVel
         elif self.solo3D and qc != None:
             if self.k <= 1:
-                self.initial_pos = [0.419, 0.009, -0.047]
                 # self.initial_pos = qc.getPosition()
                 # self.initial_pos[2] = self.initial_pos[2] - 0.22
+                self.initial_pos = [0.419, 0.009, -0.047]
+
                 # self.initial_rot = quaternionToRPY(qc.getOrientationQuat())
                 self.initial_rot = np.array([0., 0., 0.])
+
                 # self.initial_matrix = pin.rpy.rpyToMatrix(0., 0., self.initial_rot[2, 0]).transpose()
                 self.initial_matrix = pin.rpy.rpyToMatrix(0., 0., 0.).transpose()
-
-                # print("initial pos : \n", self.initial_pos)
-                # print("\ninitial rot : \n", self.initial_rot)
 
             # motion capture data
             dummy_state[:3, 0] = self.initial_matrix @ (qc.getPosition() - self.initial_pos)
             dummy_state[3:] = quaternionToRPY(qc.getOrientationQuat())
             b_baseVel[:, 0] = (qc.getOrientationMat9().reshape((3, 3)).transpose() @ qc.getVelocity().reshape((3, 1))).ravel()
 
-            # from IPython import embed
-            # embed()
-            # TODO : nan value + (previous - current) > err
-
+        dummy_state[3] = nan
+        
         # Process state estimator
         self.estimator.run_filter(self.gait.getCurrentGait(),
                                   self.footTrajectoryGenerator.getFootPosition(),
@@ -303,14 +301,13 @@ class Controller:
         oRh = self.estimator.getoRh()
         hRb = self.estimator.gethRb()
         oTh = self.estimator.getoTh().reshape((3, 1))
-        self.a_ref[0:6, 0] = self.estimator.getARef()
-        self.v_ref[0:6, 0] = self.estimator.getVRef()
-        self.h_v[0:6, 0] = self.estimator.getHV()
-        self.h_v_windowed[0:6, 0] = self.estimator.getHVWindowed()
+        self.a_ref[:6, 0] = self.estimator.getARef()
+        self.v_ref[:6, 0] = self.estimator.getVRef()
+        self.h_v[:6, 0] = self.estimator.getHV()
+        self.h_v_windowed[:6, 0] = self.estimator.getHVWindowed()
         self.q[:, 0] = self.estimator.getQUpdated()
         self.v[:, 0] = self.estimator.getVUpdated()
         self.yaw_estim = self.estimator.getYawEstim()
-        # TODO: Understand why using Python or C++ h_v leads to a slightly different result since the
         # difference between them at each time step is 1e-16 at max (butterfly effect?)
 
         # Use position and velocities from motion capture for solo3D
@@ -351,7 +348,7 @@ class Controller:
             # Compute target footstep based on current and reference velocities
             o_targetFootstep = self.footstepPlanner.updateFootsteps(
                 self.k % self.k_mpc == 0 and self.k != 0, int(self.k_mpc - self.k % self.k_mpc), self.q_filt_3d[:, 0],
-                self.h_v_windowed[0:6, 0:1].copy(), self.v_ref[0:6, 0:1], self.surfacePlanner.potential_surfaces,
+                self.h_v_windowed[:6, 0:1].copy(), self.v_ref[:6, 0:1], self.surfacePlanner.potential_surfaces,
                 self.surfacePlanner.selected_surfaces, self.surfacePlanner.mip_success,
                 self.surfacePlanner.mip_iteration)
             # Run state planner (outputs the reference trajectory of the base)
