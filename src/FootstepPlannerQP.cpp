@@ -33,7 +33,7 @@ FootstepPlannerQP::FootstepPlannerQP()
       d_{VectorN::Zero(0)},
       x{VectorN::Zero(N)},
       surfaceStatus_(false),
-      surfaceIteration_(0){
+      surfaceIteration_(0) {
   // Empty
 }
 
@@ -74,7 +74,8 @@ void FootstepPlannerQP::initialize(Params& params, Gait& gaitIn, Surface initial
   // QP initialization
   qp.reset(N, 0, M);
   weights_.setZero(N);
-  weights_ << 1000., 1000., 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0;;
+  weights_ << 1000., 1000., 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0;
+  ;
   P_.diagonal() << weights_;
 
   // Path to the robot URDF (TODO: Automatic path)
@@ -99,12 +100,9 @@ void FootstepPlannerQP::initialize(Params& params, Gait& gaitIn, Surface initial
   foot_ids_[3] = static_cast<int>(model_.getFrameId("HR_FOOT"));
 }
 
-MatrixN FootstepPlannerQP::updateFootsteps(bool refresh, int k, VectorN const& q, Vector6 const& b_v,
-                                           Vector6 const& b_vref, SurfaceVectorVector const& potentialSurfaces,
-                                           SurfaceVector const& surfaces, bool const surfaceStatus,
-                                           int const surfaceIteration) {
+MatrixN FootstepPlannerQP::updateFootsteps(bool refresh, int k, VectorN const& q, Vector6 const& b_v, Vector6 const& b_vref) {
   if (q.rows() != 18) {
-    throw std::runtime_error("q should be a vector of size 18 (pos+RPY+mot)");
+    throw std::runtime_error("q should be a vector of size 18 (base position + base RPY + joint)");
   }
 
   // Update location of feet in stance phase (for those which just entered stance phase)
@@ -113,20 +111,17 @@ MatrixN FootstepPlannerQP::updateFootsteps(bool refresh, int k, VectorN const& q
   }
 
   // Compute location of footsteps
-  return computeTargetFootstep(k, q.head(6), b_v, b_vref, potentialSurfaces, surfaces, surfaceStatus,
-                               surfaceIteration);
+  return computeTargetFootstep(k, q.head(6), b_v, b_vref);
 }
 
-MatrixN FootstepPlannerQP::computeTargetFootstep(int k, Vector6 const& q, Vector6 const& b_v, Vector6 const& b_vref,
-                                                 SurfaceVectorVector const& potentialSurfaces,
-                                                 SurfaceVector const& surfaces, bool const surfaceStatus,
-                                                 int const surfaceIteration) {
-  // Update intern parameters
+void FootstepPlannerQP::updateSurfaces(SurfaceVectorVector const& potentialSurfaces, SurfaceVector const& surfaces, bool const surfaceStatus, int const surfaceIteration) {
   surfaceStatus_ = surfaceStatus;
   surfaceIteration_ = surfaceIteration;
   surfaces_ = surfaces;
   potentialSurfaces_ = potentialSurfaces;
+}
 
+MatrixN FootstepPlannerQP::computeTargetFootstep(int k, Vector6 const& q, Vector6 const& b_v, Vector6 const& b_vref) {
   // Rotation matrix along z axis
   RPY_ = q.tail(3);
   double c = std::cos(RPY_(2));
@@ -199,8 +194,7 @@ void FootstepPlannerQP::computeFootsteps(int k, Vector6 const& b_v, Vector6 cons
   // Update the footstep matrix depending on the different phases of the gait (swing & stance)
   int phase = 0;
   optimVector_.clear();
-  for (int i = 1; i < gait.rows(); i++)
-  {
+  for (int i = 1; i < gait.rows(); i++) {
     // Feet that were in stance phase and are still in stance phase do not move
     for (int j = 0; j < 4; j++) {
       if (gait(i - 1, j) * gait(i, j) > 0) {
@@ -282,10 +276,10 @@ void FootstepPlannerQP::computeFootsteps(int k, Vector6 const& b_v, Vector6 cons
   // Convert problem to inequalities
   int iStart = 0;
   int foot = 0;
-  for (uint id_l = 0; id_l < optimVector_.size(); id_l++)
-  {
-      iStart = surfaceInequalities(iStart, optimVector_[id_l].surface, optimVector_[id_l].constant_term, id_l, optimVector_[id_l].Rz_tmp);
-      foot++;
+  for (uint id_l = 0; id_l < optimVector_.size(); id_l++) {
+    iStart = surfaceInequalities(iStart, optimVector_[id_l].surface, optimVector_[id_l].constant_term, id_l,
+                                 optimVector_[id_l].Rz_tmp);
+    foot++;
   }
   status = qp.solve_quadprog(P_, q_, C_, d_, G_, h_, x);  // solve QP
 
@@ -300,7 +294,6 @@ void FootstepPlannerQP::computeFootsteps(int k, Vector6 const& b_v, Vector6 cons
     // Offset to the future position
     q_dxdy << dx(i - 1, 0), dy(i - 1, 0), 0.0;
 
-    
     delta_x(0) = x(2 + 3 * id_l);
     delta_x(1) = x(2 + 3 * id_l + 1);
     delta_x(2) = x(2 + 3 * id_l + 2);
@@ -316,15 +309,15 @@ void FootstepPlannerQP::computeFootsteps(int k, Vector6 const& b_v, Vector6 cons
     for (int foot = 0; foot < 4; foot++) {
       if (gait(i - 1, foot) * gait(i, foot) > 0) {
         footsteps_[i].col(foot) = footsteps_[i - 1].col(foot);
-        b_footsteps_[i].col(foot) = b_footsteps_[i-1].col(foot);
+        b_footsteps_[i].col(foot) = b_footsteps_[i - 1].col(foot);
       }
     }
   }
 }
 
-void FootstepPlannerQP::computeNextFootstep(int i, int j, Vector6 const& b_v, Vector6 const& b_vref,
-                                            Vector3& footstep, bool feedback_term) {
-  footstep.setZero(); // set to 0 the vector to fill
+void FootstepPlannerQP::computeNextFootstep(int i, int j, Vector6 const& b_v, Vector6 const& b_vref, Vector3& footstep,
+                                            bool feedback_term) {
+  footstep.setZero();  // set to 0 the vector to fill
 
   double t_stance = gait_->getPhaseDuration(i, j, 1.0);  // 1.0 for stance phase
 
@@ -333,8 +326,8 @@ void FootstepPlannerQP::computeNextFootstep(int i, int j, Vector6 const& b_v, Ve
 
   // Add feedback term
   footstep += params_->k_feedback * b_v.head(3);
-  if (feedback_term){
-    footstep += - params_->k_feedback * b_vref.head(3);
+  if (feedback_term) {
+    footstep += -params_->k_feedback * b_vref.head(3);
   }
 
   // Add centrifugal term
@@ -371,7 +364,8 @@ void FootstepPlannerQP::updateTargetFootsteps() {
 void FootstepPlannerQP::updateNewContact(Vector18 const& q) {
   // Get position of the feet in world frame, using estimated state q
   q_FK_.head(3) = q.head(3);
-  q_FK_.block(3, 0, 4, 1) = pinocchio::SE3::Quaternion(pinocchio::rpy::rpyToMatrix(q(3, 0), q(4, 0), q(5,0))).coeffs();
+  q_FK_.block(3, 0, 4, 1) =
+      pinocchio::SE3::Quaternion(pinocchio::rpy::rpyToMatrix(q(3, 0), q(4, 0), q(5, 0))).coeffs();
   q_FK_.tail(12) = q.tail(12);
 
   // Update model and data of the robot
@@ -387,7 +381,7 @@ void FootstepPlannerQP::updateNewContact(Vector18 const& q) {
   for (int i = 0; i < 4; i++) {
     if (gait_->getCurrentGaitCoeff(0, i) == 1.0) {
       currentFootstep_.block(0, i, 2, 1) = pos_feet_.block(0, i, 2, 1);  // Get only x and y from IK
-      currentFootstep_(2, i) = footsteps_[1](2, i);                       // Z from the height map
+      currentFootstep_(2, i) = footsteps_[1](2, i);                      // Z from the height map
     }
   }
 }
@@ -470,9 +464,10 @@ Surface FootstepPlannerQP::selectSurfaceFromPoint(Vector3 const& point, int phas
   return sf;
 }
 
-int FootstepPlannerQP::surfaceInequalities(int i_start, Surface const& surface, Vector3 const& next_ft, int id_l, Matrix3 Rz_tmp) {
+int FootstepPlannerQP::surfaceInequalities(int i_start, Surface const& surface, Vector3 const& next_ft, int id_l,
+                                           Matrix3 Rz_tmp) {
   int n_rows = int(surface.getA().rows());
-  MatrixN mat_tmp = MatrixN::Zero(n_rows,3);
+  MatrixN mat_tmp = MatrixN::Zero(n_rows, 3);
   mat_tmp = surface.getA() * Rz * Rz_tmp;
   G_.block(i_start, 0, n_rows, 2) = params_->k_feedback * mat_tmp.block(0, 0, n_rows, 2);
   G_.block(i_start, 2 + 3 * id_l, n_rows, 3) = -surface.getA();

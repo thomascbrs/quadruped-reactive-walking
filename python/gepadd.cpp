@@ -168,7 +168,6 @@ struct FootstepPlannerPythonVisitor : public bp::def_visitor<FootstepPlannerPyth
             // Compute target location of footsteps from Python
             .def("updateFootsteps", &FootstepPlanner::updateFootsteps, bp::args("refresh", "k", "q", "b_v", "b_vref"),
                  "Update and compute location of footsteps from Python.\n");
-
     }
 
     static void expose()
@@ -616,7 +615,9 @@ struct FootstepPlannerQPPythonVisitor : public bp::def_visitor<FootstepPlannerQP
 
         // Compute target location of footsteps from Python
         .def("updateFootsteps", &FootstepPlannerQP::updateFootsteps, bp::args("refresh", "k", "q", "b_v", "b_vref"),
-             "Update and compute location of footsteps from Python.\n");
+             "Update and compute location of footsteps from Python.\n")
+        .def("updateSurfaces", &FootstepPlannerQP::updateSurfaces, bp::args("potential_surfaces", "selected_surfaces", "status", "iterations"),
+                 "Update the surfaces from surface planner.\n");
   }
 
   static void expose() {
@@ -647,7 +648,9 @@ struct StatePlanner3DPythonVisitor : public bp::def_visitor<StatePlanner3DPython
 
         // Run StatePlanner3D from Python
         .def("computeReferenceStates", &StatePlanner3D::computeReferenceStates,
-             bp::args("q", "v", "b_vref", "is_new_step"), "Run StatePlanner from Python.\n");
+             bp::args("q", "v", "b_vref"), "Run StatePlanner from Python.\n")
+        .def("updateSurface", &StatePlanner3D::updateSurface,
+             bp::args("q", "b_vref"), "Update the average surface from heightmap and positions.\n");
   }
 
   static void expose() {

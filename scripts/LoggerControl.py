@@ -167,7 +167,7 @@ class LoggerControl():
         self.loop_t_wbc[self.i] = loop.t_wbc
         self.loop_t_loop[self.i] = loop.t_loop
         self.loop_t_loop_if[self.i] = dT_whole
-        self.loop_q_filt_mpc[self.i] = loop.q_filt_mpc[:6, 0]
+        self.loop_q_filt_mpc[self.i] = loop.q_filter[:6, 0]
         self.loop_h_v_filt_mpc[self.i] = loop.h_v_filt_mpc[:, 0]
         self.loop_vref_filt_mpc[self.i] = loop.vref_filt_mpc[:, 0]
 

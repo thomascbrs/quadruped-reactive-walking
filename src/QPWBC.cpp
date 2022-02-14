@@ -713,7 +713,7 @@ void WbcWrapper::compute(VectorN const &q, VectorN const &dq, VectorN const &f_c
   Vector6 RNEA_NLE = data_.tau.head(6);
   RNEA_NLE(2, 0) -= 9.81 * data_.mass[0];
   pinocchio::rnea(model_, data_, q_wbc_, dq_wbc_, ddq_cmd_);
-  Vector12 f_compensation = pseudoInverse(Jc_.transpose()) * (data_.tau.head(6) - RNEA_without_joints + RNEA_NLE);  
+  Vector12 f_compensation = pseudoInverse(Jc_.transpose()) * (data_.tau.head(6) - RNEA_without_joints + RNEA_NLE);
 
   /*std::cout << "M inertia" << std::endl;
   std::cout << data_.M << std::endl;*/
@@ -738,15 +738,15 @@ void WbcWrapper::compute(VectorN const &q, VectorN const &dq, VectorN const &f_c
 
   // std::cout << "M : " << std::endl << data_.M.block(0, 0, 3, 18) << std::endl;
   // std::cout << "ddq: " << std::endl << ddq_cmd_.transpose() << std::endl;
-  
+
   /*
   std::cout << "-- BEFORE QP PROBLEM --" << std::endl;
   std::cout << "M ddq_u: " << std::endl << (data_.M.block(0, 0, 3, 6) * ddq_cmd_.head(6)).transpose() << std::endl;
-  std::cout << "M ddq_a: " << std::endl << (data_.M.block(0, 6, 3, 12) * ddq_cmd_.tail(12)).transpose() << std::endl; 
+  std::cout << "M ddq_a: " << std::endl << (data_.M.block(0, 6, 3, 12) * ddq_cmd_.tail(12)).transpose() << std::endl;
   pinocchio::rnea(model_, data_, q_wbc_, dq_wbc_, VectorN::Zero(model_.nv));
   std::cout << "Non linear effects: " << std::endl << data_.tau.head(6).transpose() << std::endl;
-  std::cout << "JcT f_cmd + f_comp: " << std::endl << (Jc_.transpose() * (f_cmd + f_compensation)).transpose() << std::endl;
-  std::cout << "JcT f_comp: " << std::endl << (Jc_.transpose() * (f_compensation)).transpose() << std::endl;
+  std::cout << "JcT f_cmd + f_comp: " << std::endl << (Jc_.transpose() * (f_cmd + f_compensation)).transpose() <<
+  std::endl; std::cout << "JcT f_comp: " << std::endl << (Jc_.transpose() * (f_compensation)).transpose() << std::endl;
   */
 
   // Solve the QP problem
@@ -761,15 +761,15 @@ void WbcWrapper::compute(VectorN const &q, VectorN const &dq, VectorN const &f_c
   // DEBUG INERTIA AND NON LINEAR EFFECTS
 
   Vector6 left = data_.M.block(0, 0, 6, 6) * box_qp_->get_ddq_res() - Jc_.transpose() * box_qp_->get_f_res();
-  Vector6 right = - data_.tau.head(6) + Jc_.transpose() * (f_cmd + f_compensation);
+  Vector6 right = -data_.tau.head(6) + Jc_.transpose() * (f_cmd + f_compensation);
   Vector6 tmp_RNEA = data_.tau.head(6);
 
-  //std::cout << "RNEA: " << std::endl << data_.tau.head(6).transpose() << std::endl;
-  //std::cout << "left: " << std::endl << left.transpose() << std::endl;
-  //std::cout << "right: " << std::endl << right.transpose() << std::endl;
-  //std::cout << "M: " << std::endl << data_.M.block(0, 0, 6, 6) << std::endl;
-  //std::cout << "JcT: " << std::endl << Jc_.transpose() << std::endl;
-  //std::cout << "M: " << std::endl << data_.M.block(0, 0, 3, 18) << std::endl;
+  // std::cout << "RNEA: " << std::endl << data_.tau.head(6).transpose() << std::endl;
+  // std::cout << "left: " << std::endl << left.transpose() << std::endl;
+  // std::cout << "right: " << std::endl << right.transpose() << std::endl;
+  // std::cout << "M: " << std::endl << data_.M.block(0, 0, 6, 6) << std::endl;
+  // std::cout << "JcT: " << std::endl << Jc_.transpose() << std::endl;
+  // std::cout << "M: " << std::endl << data_.M.block(0, 0, 3, 18) << std::endl;
   /*
   pinocchio::rnea(model_, data_, q_wbc_, dq_wbc_, VectorN::Zero(model_.nv));
   Vector6 tmp_NLE = data_.tau.head(6);
@@ -840,38 +840,45 @@ void WbcWrapper::compute(VectorN const &q, VectorN const &dq, VectorN const &f_c
 
   /*
   std::cout << "-- AFTER QP PROBLEM --" << std::endl;
-  std::cout << "M ddq_u: " << std::endl << (data_.M.block(0, 0, 3, 6) * ddq_with_delta_.head(6)).transpose() << std::endl;
-  std::cout << "M ddq_a: " << std::endl << (data_.M.block(0, 6, 3, 12) * ddq_with_delta_.tail(12)).transpose() << std::endl; 
-  pinocchio::rnea(model_, data_, q_wbc_, dq_wbc_, VectorN::Zero(model_.nv));
-  std::cout << "Non linear effects: " << std::endl << data_.tau.head(6).transpose() << std::endl;
-  std::cout << "JcT f_cmd: " << std::endl << (Jc_.transpose() * f_with_delta_).transpose() << std::endl;
+  std::cout << "M ddq_u: " << std::endl << (data_.M.block(0, 0, 3, 6) * ddq_with_delta_.head(6)).transpose() <<
+  std::endl; std::cout << "M ddq_a: " << std::endl << (data_.M.block(0, 6, 3, 12) *
+  ddq_with_delta_.tail(12)).transpose() << std::endl; pinocchio::rnea(model_, data_, q_wbc_, dq_wbc_,
+  VectorN::Zero(model_.nv)); std::cout << "Non linear effects: " << std::endl << data_.tau.head(6).transpose() <<
+  std::endl; std::cout << "JcT f_cmd: " << std::endl << (Jc_.transpose() * f_with_delta_).transpose() << std::endl;
 
-  std::cout << "LEFT " << (tmp_RNEA.head(3) + data_.M.block(0, 0, 3, 6) * box_qp_->get_ddq_res()).transpose() << std::endl;
+  std::cout << "LEFT " << (tmp_RNEA.head(3) + data_.M.block(0, 0, 3, 6) * box_qp_->get_ddq_res()).transpose() <<
+  std::endl;
   */
 
   // Increment log counter
   k_log_++;
 }
 
-Vector12 WbcWrapper::clamp(Vector12 q) {
+VectorN WbcWrapper::clamp(VectorN q) {
+  const double q_max = 100.0 * M_PI / 180.0;  // Upper hip limit to avoid being close from horizontal position
+  const double q_min = 10.0 * M_PI / 180.0;   // Lower knee limit to avoid singularity
 
-  const double q_max = 80.0 * M_PI / 180.0;  // Upper hip limit to avoid being close from horizontal position
-  const double q_min = 10.0 * M_PI / 180.0;  // Lower knee limit to avoid singularity
-  // Clamp q vector between q_min and q_max angular positions
   for (int i = 0; i < 4; i++) {
-    // Hip
     if (qinit_(3 * i + 1, 0) >= 0) {
+      if (qinit_(3 * i + 1, 0) >= q_max) 
+        std::cout << "Clamping the " << i << " hip desired position" << std::endl;
       q(3 * i + 1, 0) = std::min(q_max, q(3 * i + 1, 0));
     } else {
-      q(3 * i + 1, 0) = std::max(q_max, q(3 * i + 1, 0));
+      if (qinit_(3 * i + 1, 0) <= -q_max) 
+        std::cout << "Clamping the " << i << " hip desired position" << std::endl;
+      q(3 * i + 1, 0) = std::max(-q_max, q(3 * i + 1, 0));
     }
 
-    // Knee
     if (qinit_(3 * i + 2, 0) >= 0) {
+      if (qinit_(3 * i + 2, 0) <= q_min) 
+        std::cout << "Clamping the " << i << " knee desired position" << std::endl;
       q(3 * i + 2, 0) = std::max(q_min, q(3 * i + 2, 0));
     } else {
-      q(3 * i + 2, 0) = std::min(q_min, q(3 * i + 2, 0));
+      if (qinit_(3 * i + 2, 0) >= -q_min) 
+        std::cout << "Clamping the " << i << " knee desired position" << std::endl;
+      q(3 * i + 2, 0) = std::min(-q_min, q(3 * i + 2, 0));
     }
   }
+
   return q;
 }

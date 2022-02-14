@@ -332,7 +332,7 @@ class WbcWrapper {
   /// \param[in] q The joint positions that should be clamped
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  Vector12 clamp(Vector12 q);
+  VectorN clamp(VectorN q);
 
   VectorN get_bdes() { return bdes_; }
   VectorN get_qdes() { return qdes_; }

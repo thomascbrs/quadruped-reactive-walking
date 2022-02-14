@@ -9,7 +9,7 @@ def main():
     gait = lqrw.Gait()
     gait.initialize(params)
 
-    print(gait)
+    print(gait.currentGait)
 
     A = [[-1.0000000, 0.0000000, 0.0000000],
          [0.0000000, -1.0000000, 0.0000000],
@@ -26,11 +26,8 @@ def main():
     floor_surface = lqrw.Surface(np.array(A), np.array(b), np.array(vertices))
 
     selected_surfaces = lqrw.SurfaceVector()
-    for foot in range(surface_inequalities):
+    for _ in range(4):
         selected_surfaces.append(floor_surface)
-
-            self.all_feet_pos_syn = all_feet_pos.copy()
-
 
     footTrajectoryGenerator = lqrw.FootTrajectoryGeneratorBezier()
     footTrajectoryGenerator.initialize(params, gait, floor_surface, 0.06, 0.28, 0.06, 8, 10, 7)
@@ -39,4 +36,4 @@ def main():
     q = np.zeros(18)
     targetFootstep = np.zeros((3, 4))
 
-    footTrajectoryGenerator.update(k, targetFootstep, surfacePlanner.selected_surfaces, q)
+    footTrajectoryGenerator.update(k, targetFootstep, selected_surfaces, q)

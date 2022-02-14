@@ -43,6 +43,17 @@ class StatePlanner3D {
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
   ///
+  /// \brief Udate the average surface using the heightmap and compute the configurations
+  ///
+  /// \param[in] q current position vector of the flying base in horizontal frame (linear and angular stacked)
+  /// \param[in] vref desired velocity vector of the flying base in horizontal frame (linear and angular stacked)
+  ///
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  void updateSurface(VectorN const& q, Vector6 const& vref);
+
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  ///
   /// \brief Compute the reference trajectory of the CoM for each time step of the
   ///        predition horizon. The ouput is a matrix of size 12 by (N+1) with N the number
   ///        of time steps in the gait cycle (T_gait/dt) and 12 the position, orientation,
@@ -52,10 +63,9 @@ class StatePlanner3D {
   /// \param[in] q current position vector of the flying base in horizontal frame (linear and angular stacked)
   /// \param[in] v current velocity vector of the flying base in horizontal frame (linear and angular stacked)
   /// \param[in] vref desired velocity vector of the flying base in horizontal frame (linear and angular stacked)
-  /// \param[in] z_average average height of feet currently in stance phase
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
-  void computeReferenceStates(VectorN const& q, Vector6 const& v, Vector6 const& vref, int is_new_step);
+  void computeReferenceStates(VectorN const& q, Vector6 const& v, Vector6 const& vref);
 
   ////////////////////////////////////////////////////////////////////////////////////////////////
   ///

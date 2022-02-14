@@ -34,16 +34,16 @@ void StatePlanner3D::initialize(Params& params) {
   configs_ = MatrixN::Zero(7, params.number_steps);
 }
 
-void StatePlanner3D::computeReferenceStates(VectorN const& q, Vector6 const& v, Vector6 const& vRef, int is_new_step) {
-  if (q.rows() != 6) {
-    throw std::runtime_error("StatePlanner3D::computeReferenceStates: q should be a vector of size 6");
-  }
-
-  if (is_new_step) {
+void StatePlanner3D::updateSurface(VectorN const& q, Vector6 const& vRef) {
     fit_ = heightmap_.fitSurface_(q(0), q(1));  // Update surface equality before new step
     rpyMap_(0) = -std::atan2(fit_(1), 1.);
     rpyMap_(1) = -std::atan2(fit_(0), 1.);
     computeConfigurations(q, vRef);
+}
+
+void StatePlanner3D::computeReferenceStates(VectorN const& q, Vector6 const& v, Vector6 const& vRef) {
+  if (q.rows() != 6) {
+    throw std::runtime_error("StatePlanner3D::computeReferenceStates: q should be a vector of size 6");
   }
 
   rpy_ = q.tail(3);
