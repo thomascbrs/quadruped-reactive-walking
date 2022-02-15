@@ -30,29 +30,14 @@ void Joystick::initialize(Params& params) {
   }
 }
 
-VectorN Joystick::handle_v_switch_py(double k, VectorN const& k_switch_py, MatrixN const& v_switch_py) {
-  int i = 1;
-  while ((i < k_switch_py.rows()) && k_switch_py[i] <= k) {
-    i++;
-  }
-  if (i != k_switch_py.rows()) {
-    double ev = k - k_switch_py[i - 1];
-    double t1 = k_switch_py[i] - k_switch_py[i - 1];
-    A3_ = 2 * (v_switch_py.col(i - 1) - v_switch_py.col(i)) / pow(t1, 3);
-    A2_ = (-3.0 / 2.0) * t1 * A3_;
-    v_ref_ = v_switch_py.col(i - 1) + A2_ * pow(ev, 2) + A3_ * pow(ev, 3);
-  }
-  return v_ref_;
-}
-
 void Joystick::handle_v_switch(int k) {
   int i = 1;
-  while ((i < k_switch.cols()) && k_switch(0, i) <= k) {
+  while (i < k_switch.size() && k_switch(i) <= k) {
     i++;
   }
-  if (i != k_switch.cols()) {
-    double ev = k - k_switch(0, i - 1);
-    double t1 = k_switch(0, i) - k_switch(0, i - 1);
+  if (i != k_switch.size()) {
+    double ev = k - k_switch(i - 1);
+    double t1 = k_switch(i) - k_switch(i - 1);
     A3_ = 2 * (v_switch.col(i - 1) - v_switch.col(i)) / pow(t1, 3);
     A2_ = (-3.0 / 2.0) * t1 * A3_;
     v_ref_ = v_switch.col(i - 1) + A2_ * pow(ev, 2) + A3_ * pow(ev, 3);
@@ -167,7 +152,7 @@ void Joystick::update_v_ref_gamepad(int k, bool gait_is_static) {
         lock_gp = true;
         lock_time_static_ = std::chrono::system_clock::now();
       } else if (switch_static &&
-                (std::abs(v_gp_(0, 0)) > v_up || std::abs(v_gp_(1, 0)) > v_up || std::abs(v_gp_(5, 0)) > v_up)) {
+                 (std::abs(v_gp_(0, 0)) > v_up || std::abs(v_gp_(1, 0)) > v_up || std::abs(v_gp_(5, 0)) > v_up)) {
         switch_static = false;
         lock_gp = true;
         lock_time_static_ = std::chrono::system_clock::now();
@@ -184,7 +169,8 @@ void Joystick::update_v_ref_gamepad(int k, bool gait_is_static) {
     // Lock gamepad value during switching or after L1 is pressed
     if ((lock_gp && ((std::chrono::duration<double>)(std::chrono::system_clock::now() - lock_time_static_)).count() <
                         lock_duration_) ||
-        (((std::chrono::duration<double>)(std::chrono::system_clock::now() - lock_time_L1_)).count() < lock_duration_)) {
+        (((std::chrono::duration<double>)(std::chrono::system_clock::now() - lock_time_L1_)).count() <
+         lock_duration_)) {
       gp_alpha_vel = 0.0;
       gp_alpha_pos = params_->gp_alpha_pos;
     } else if (lock_gp) {
@@ -212,46 +198,8 @@ void Joystick::update_v_ref_gamepad(int k, bool gait_is_static) {
 void Joystick::update_v_ref_predefined(int k, int velID) {
   // Initialization of velocity profile during first call
   if (k == 0) {
-    MatrixN t_switch;
-    switch (velID) {
-      case 6:
-        t_switch = MatrixN::Zero(1, 9);
-        t_switch << 0, 1, 2, 3, 4, 6, 7, 8, 9;
-        v_switch = MatrixN::Zero(6, 9);
-        v_switch.row(0) << 0.0, 0.0, 0.25, 0.5, 0.8, 0.8, 0.5, 0.25, 0.0;
-        break;
-      case 7:
-        t_switch = MatrixN::Zero(1, 9);
-        t_switch << 0, 1, 3, 4, 6, 7, 9, 10, 11;
-        v_switch = MatrixN::Zero(6, 9);
-        v_switch.row(0) << 0.0, 0.25, 0.5, 0.5, 0.5, 0.5, 0.5, 0.25, 0.0;
-        v_switch.row(5) << 0.0, 0.8, -0.8, -0.8, 0.8, 0.8, -0.8, 0.0, 0.0;
-        break;
-      case 8:
-        t_switch = MatrixN::Zero(1, 9);
-        t_switch << 0, 1, 3, 4, 6, 7, 9, 10, 11;
-        v_switch = MatrixN::Zero(6, 9);
-        v_switch.row(0) << 0.0, 0.4, 0.8, 0.8, 0.4, 0.0, 0.0, 0.0, 0.0;
-        v_switch.row(5) << 0.0, 0.8, -1.2, 0.8, 0.0, 0.0, 0.0, 0.0, 0.0;
-        break;
-      case 9:
-        t_switch = MatrixN::Zero(1, 9);
-        t_switch << 0, 2.5, 6.5, 9;
-        v_switch = MatrixN::Zero(6, 9);
-        v_switch.row(0) << 0.0, 0.6, 0.6, 0.0;
-        v_switch.row(5) << 0.0, 0.4, 0.4, 0.0;
-        break;
-      case 10:
-        t_switch = MatrixN::Zero(1, 5);
-        t_switch << 0, 2, 3,  55, 56 ;
-        v_switch = MatrixN::Zero(6, 5);
-        v_switch.row(0) << 0.0, 0.09, 0.09, 0.09, 0.;
-        v_switch.row(1) << 0.0, -0., 0., 0., 0.;
-        break;
-      default:
-        throw std::runtime_error("Unknown velocity ID for the polynomial interpolation.");
-    }
-    k_switch = (t_switch / dt_wbc).cast<int>();
+    v_switch = params_->v_switch;
+    k_switch = (params_->t_switch / dt_wbc).cast<int>();
   }
   handle_v_switch(k);  // Polynomial interpolation to generate the velocity profile
 }

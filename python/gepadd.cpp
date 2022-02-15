@@ -431,8 +431,7 @@ struct JoystickPythonVisitor : public bp::def_visitor<JoystickPythonVisitor<Joys
             .def("getTriangle", &Joystick::getTriangle, "Get Joystick Triangle status")
             .def("getSquare", &Joystick::getSquare, "Get Joystick Square status")
             .def("getL1", &Joystick::getL1, "Get Joystick L1 status")
-            .def("getR1", &Joystick::getR1, "Get Joystick R1 status")
-            .def("handle_v_switch", &Joystick::handle_v_switch_py, bp::args("k", "k_switch", "v_switch"), "Run security check.\n");
+            .def("getR1", &Joystick::getR1, "Get Joystick R1 status");
     }
 
     static void expose()
@@ -483,7 +482,9 @@ struct ParamsPythonVisitor : public bp::def_visitor<ParamsPythonVisitor<Params>>
             .def_readwrite("osqp_w_states", &Params::osqp_w_states)
             .def_readwrite("osqp_w_forces", &Params::osqp_w_forces)
             .def_readonly("gait", &Params::get_gait)
-            .def_readwrite("enable_pyb_GUI", &Params::enable_pyb_GUI)
+            .def_readonly("t_switch", &Params::get_t_switch)             
+            .def_readonly("v_switch", &Params::get_v_switch)             
+            .def("set_v_switch", &Params::set_v_switch, bp::args("v_switch"), "Set v_switch matrix from Python.\n").def_readwrite("enable_pyb_GUI", &Params::enable_pyb_GUI)
             .def_readwrite("enable_corba_viewer", &Params::enable_corba_viewer)
             .def_readwrite("enable_multiprocessing", &Params::enable_multiprocessing)
             .def_readwrite("perfect_estimator", &Params::perfect_estimator)
