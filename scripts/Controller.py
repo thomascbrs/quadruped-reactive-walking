@@ -414,9 +414,6 @@ class Controller:
                                     self.feet_v_cmd,
                                     self.feet_a_cmd,
                                     self.xgoals)
-            if self.k > 4000:
-                time.sleep(0.05)
-
             # Quantities sent to the control board
             self.result.P = np.array(self.Kp_main.tolist() * 4)
             self.result.D = np.array(self.Kd_main.tolist() * 4)
@@ -563,30 +560,35 @@ class Controller:
             clamped = True
         return clamped
 
-    def clamp_result(self, device):
+    def clamp_result(self, device, set_error=False):
         """
         Clamp the result
         """
         hip_max = 120. * np.pi / 180.
         knee_min = 5. * np.pi / 180.
-        knee_max = 170. * np.pi / 180.
         for i in range(4):
             if self.clamp(self.result.q_des[3 * i + 1], -hip_max, hip_max):
                 print("Clamping hip n " + str(i))
+                self.error = False
             if self.q_init[3 * i + 2] >= 0 and self.clamp(self.result.q_des[3 * i + 2], knee_min):
                 print("Clamping knee n " + str(i))
+                self.error = False
             elif self.clamp(self.result.q_des[3 * i + 2], max_value=-knee_min):
                 print("Clamping knee n " + str(i))
+                self.error = False
 
         for i in range(12):
-            if self.clamp(self.result.q_des[i], device.joints.positions[i] - 0.5, device.joints.positions[i] + 0.5):
+            if self.clamp(self.result.q_des[i], device.joints.positions[i] - 1., device.joints.positions[i] + 1.):
                 print("Clamping position difference of motor n " + str(i))
+                self.error = False
 
-            if self.clamp(self.result.v_des[i], device.joints.velocities[i] - 10., device.joints.velocities[i] + 10.):
+            if self.clamp(self.result.v_des[i], device.joints.velocities[i] - 80., device.joints.velocities[i] + 80.):
                 print("Clamping velocity of motor n " + str(i))
+                self.error = False
 
-            if self.clamp(self.result.tau_ff[i], -5., 5.):
+            if self.clamp(self.result.tau_ff[i], -8., 8.):
                 print("Clamping torque of motor n " + str(i))
+                self.error = False
 
     def set_null_control(self):
         """

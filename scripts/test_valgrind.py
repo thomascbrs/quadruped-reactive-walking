@@ -1,7 +1,5 @@
 import libquadruped_reactive_walking as lqrw
-from solo3D.SurfacePlannerWrapper import SurfacePlanner_Wrapper
 import numpy as np
-
 
 def main():
     params = lqrw.Params()
