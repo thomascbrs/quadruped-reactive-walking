@@ -16,10 +16,10 @@ import libquadruped_reactive_walking as lqrw
 # --------------------------------- PROBLEM DEFINITION ---------------------------------------------------------------
 params = lqrw.Params()
 
-N_X = 450
+N_X = 415
 N_Y = 200
-X_BOUNDS = [-1.5, 3.0]
-Y_BOUNDS = [-1.0, 1.0]
+X_BOUNDS = [-1., 3.15]
+Y_BOUNDS = [-1., 1.]
 
 rom_names = ['solo_LFleg_rom', 'solo_RFleg_rom', 'solo_LHleg_rom', 'solo_RHleg_rom']
 others = ['FL_FOOT', 'FR_FOOT', 'HL_FOOT', 'HR_FOOT']
@@ -65,7 +65,7 @@ def plot_surface(points, ax, color_id=0, alpha=1.):
         ax.plot(xs, ys, zs, color=COLORS[color_id % len(COLORS)], alpha=alpha)
 
 
-def draw_whole_scene(surface_dict, ax=None, title=None):
+def draw_whole_scene(surface_dict, ax=None, title=None, color_id=5):
     """
     Plot all the potential surfaces
     """
@@ -75,7 +75,7 @@ def draw_whole_scene(surface_dict, ax=None, title=None):
             fig.suptitle(title, fontsize=16)
         ax = fig.add_subplot(111, projection="3d")
     for key in surface_dict.keys():
-        plot_surface(np.array(surface_dict[key][0]).T, ax, 5)
+        plot_surface(np.array(surface_dict[key][0]).T, ax, color_id)
     return ax
 
 def plot_heightmap(heightmap, alpha=1., ax=None):
@@ -105,7 +105,7 @@ if __name__ == "__main__":
     afftool = init_afftool()
     affordances = afftool.getAffordancePoints('Support')
     all_surfaces = getAllSurfacesDict(afftool)
-    new_surfaces = getAllSurfacesDict_inner(all_surfaces, 0.1)
+    new_surfaces = getAllSurfacesDict_inner(all_surfaces, 0.01)
 
     heightmap = Heightmap(N_X, N_Y, X_BOUNDS, Y_BOUNDS)
     heightmap.build(affordances)
@@ -113,5 +113,5 @@ if __name__ == "__main__":
 
     ax_heightmap = plot_heightmap(heightmap)
     ax = draw_whole_scene(all_surfaces)
-    draw_whole_scene(new_surfaces, ax)
+    draw_whole_scene(new_surfaces, ax, color_id=0)
     plt.show(block=True)
