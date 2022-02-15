@@ -322,8 +322,6 @@ class Controller:
                 self.statePlanner.updateSurface(self.q_filter[:6, :1], self.vref_filt_mpc[:6, :1])
                 if self.surfacePlanner.initialized:
                     self.error = self.surfacePlanner.get_latest_results()
-                    if not self.enable_multiprocessing_mip and self.SIMULATION:
-                        self.pybEnvironment3D.update_target_SL1M(self.surfacePlanner.all_feet_pos)
 
             self.footstepPlanner.updateSurfaces(self.surfacePlanner.potential_surfaces, self.surfacePlanner.selected_surfaces,
                                                 self.surfacePlanner.mip_success, self.surfacePlanner.mip_iteration)
@@ -343,6 +341,8 @@ class Controller:
             configs = self.statePlanner.getConfigurations().transpose()
             self.surfacePlanner.run(configs, cgait, self.o_targetFootstep, self.vref_filt_mpc[:3, 0].copy())
             self.surfacePlanner.initialized = True
+            if not self.enable_multiprocessing_mip and self.SIMULATION:
+                self.pybEnvironment3D.update_target_SL1M(self.surfacePlanner.all_feet_pos)
 
         t_planner = time.time()
 

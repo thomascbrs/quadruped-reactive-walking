@@ -84,7 +84,6 @@ class SurfacePlanner_Wrapper():
         self.mip_iteration_syn = 0
         self.potential_surfaces_syn = lqrw.SurfaceVectorVector()
         self.selected_surfaces_syn = lqrw.SurfaceVector()
-        self.all_feet_pos_syn = []
 
         self.multiprocessing = params.enable_multiprocessing_mip
         if self.multiprocessing:
@@ -113,7 +112,7 @@ class SurfacePlanner_Wrapper():
         ''' 
         Call the planner and store the result in syn variables
         '''
-        vertices, inequalities, indices, all_feet_pos, success = self.planner.run(configs, gait, current_contacts, b_v_ref)
+        vertices, inequalities, indices, self.all_feet_pos, success = self.planner.run(configs, gait, current_contacts, b_v_ref)
         self.mip_iteration_syn += 1
         self.mip_success_syn = success
 
@@ -129,7 +128,6 @@ class SurfacePlanner_Wrapper():
             for foot, foot_inequalities in enumerate(inequalities):
                 S, s = foot_inequalities[indices[foot]]
                 self.selected_surfaces_syn.append(lqrw.Surface(S, s, vertices[foot][indices[foot]].T))
-            self.all_feet_pos_syn = all_feet_pos.copy()
 
     def run_asynchronous(self, configs, gait_in, current_contacts, b_v_ref):
         ''' 
@@ -232,7 +230,6 @@ class SurfacePlanner_Wrapper():
             self.potential_surfaces = self.potential_surfaces_syn
             if self.mip_success:
                 self.selected_surfaces = self.selected_surfaces_syn
-                self.all_feet_pos = self.all_feet_pos_syn.copy()
         
         return not self.mip_success
 
