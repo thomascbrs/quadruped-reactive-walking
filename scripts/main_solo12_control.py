@@ -187,12 +187,7 @@ def control_loop(name_interface_clone=None, des_vel_analysis=None):
 
     if params.LOGGING or params.PLOTTING:
         loggerSensors = LoggerSensors(device, qualisys=qc, logSize=params.N_SIMULATION-3)
-        loggerControl = LoggerControl(params.dt_wbc, params.gait.shape[0], params.type_MPC, joystick=controller.joystick,
-                                      estimator=controller.estimator, loop=controller,
-                                      gait=controller.gait, statePlanner=controller.statePlanner,
-                                      footstepPlanner=controller.footstepPlanner,
-                                      footTrajectoryGenerator=controller.footTrajectoryGenerator,
-                                      logSize=params.N_SIMULATION-3)
+        loggerControl = LoggerControl(params, controller, logSize=params.N_SIMULATION-3)
 
     if params.SIMULATION:
         device.Init(calibrateEncoders=True, q_init=q_init, envID=params.envID,
@@ -211,7 +206,6 @@ def control_loop(name_interface_clone=None, des_vel_analysis=None):
 
     t_log_whole = np.zeros((params.N_SIMULATION))
     k_log_whole = 0
-    t_start_whole = 0.0
     T_whole = time.time()
     dT_whole = 0.0
 
@@ -256,8 +250,10 @@ def control_loop(name_interface_clone=None, des_vel_analysis=None):
 
         device.send_command_and_wait_end_of_cycle(params.dt_wbc)  # Send command to the robot
         t += params.dt_wbc  # Increment loop time
-
-        dT_whole = time.time() - T_whole
+        
+        dT_whole = T_whole
+        T_whole = time.time()
+        dT_whole = T_whole - dT_whole
 
         t_log_whole[k_log_whole] = t_end_whole - t_start_whole
         k_log_whole += 1
@@ -287,18 +283,16 @@ def control_loop(name_interface_clone=None, des_vel_analysis=None):
         print("Masterboard timeout detected.")
         print("Either the masterboard has been shut down or there has been a connection issue with the cable/wifi.")
 
-    if params.LOGGING:  # Save the logs of the Logger object
-        loggerControl.saveAll(loggerSensors)
-        print("Log saved")
+    if params.LOGGING:
+        loggerControl.saveAll(loggerSensors, "/home/odri/git/fanny/logs/data")
 
-    if params.PLOTTING:  # Plot recorded data
+    if params.PLOTTING:
         loggerControl.plotAll(loggerSensors)
 
-    if params.SIMULATION and params.enable_pyb_GUI:  # Disconnect the PyBullet server (also close the GUI)
+    if params.SIMULATION and params.enable_pyb_GUI:
         device.Stop()
 
     print("End of script")
-
     return finished, des_vel_analysis
 
 

@@ -7,8 +7,12 @@ from time import time
 import pinocchio as pin
 
 class LoggerControl():
-    def __init__(self, dt, N0_gait, type_MPC=None, joystick=None, estimator=None, loop=None, gait=None, statePlanner=None,
-                 footstepPlanner=None, footTrajectoryGenerator=None, logSize=60e3, ringBuffer=False):
+    def __init__(self, params, controller=None, logSize=60e3, ringBuffer=False):
+        dt = params.dt_wbc
+        n_gait = params.gait.shape[0]
+        type_MPC = params.type_MPC
+        self.solo3d = params.solo3D
+
         self.ringBuffer = ringBuffer
         logSize = np.int(logSize)
         self.logSize = logSize
@@ -35,7 +39,6 @@ class LoggerControl():
         self.esti_v_ref = np.zeros([logSize, 6])  # joystick reference velocity (h frame)
         self.esti_v_secu = np.zeros([logSize, 12])  # filtered actuators velocity for security checks
         self.esti_a_ref = np.zeros([logSize, 6])  # joystick reference acceleration (finite difference of v_ref)
-        # h_v, h_v_windowed, yaw_estim, oRb, oRh, hRb, oTh can be reconstructed based on what is logged
 
         self.esti_FK_lin_vel = np.zeros([logSize, 3])  # estimated velocity of the base with FK
         self.esti_FK_xyz = np.zeros([logSize, 3])  # estimated position of the base with FK
@@ -68,16 +71,15 @@ class LoggerControl():
         self.loop_vref_filt_mpc = np.zeros([logSize, 6])  # ref vel in h frame filtered by 1st order low pass
 
         # Gait
-        self.planner_gait = np.zeros([logSize, N0_gait, 4])  # Gait sequence
+        self.planner_gait = np.zeros([logSize, n_gait, 4])  # Gait sequence
         self.planner_is_static = np.zeros([logSize])  # if the planner is in static mode or not
 
         # State planner
-        self.planner_xref = np.zeros([logSize, 12, 1+statePlanner.getNumberStates()])  # Reference trajectory
+        self.planner_xref = np.zeros([logSize, 12, n_gait + 1])  # Reference trajectory
 
         # Footstep planner
-        self.planner_fsteps = np.zeros([logSize, gait.getCurrentGait().shape[0], 12])  # Reference footsteps position
+        self.planner_fsteps = np.zeros([logSize, n_gait, 12])  # Reference footsteps position
         self.planner_target_fsteps = np.zeros([logSize, 3, 4])  # For each foot, next target on the ground
-        # o_target_foosteps can be reconstructed using yaw_ideal and x y ideal (top of q_up)
         self.planner_h_ref = np.zeros([logSize])  # reference height of the planner
 
         # Foot Trajectory Generator
@@ -85,15 +87,12 @@ class LoggerControl():
         self.planner_vgoals = np.zeros([logSize, 3, 4])  # 3D target feet velocities
         self.planner_agoals = np.zeros([logSize, 3, 4])  # 3D target feet accelerations
         self.planner_jgoals = np.zeros([logSize, 3, 4])  # 3D target feet accelerations
-        # References given to the wbc can be retrieved applying a rotation hRb @ oRh.transpose()
-        # and a translation oTh + np.array([[0.0], [0.0], [self.h_ref]]) to the position
 
         # Model Predictive Control
-        # output vector of the MPC (next state + reference contact force)
-        if loop.type_MPC == 3:
-            self.mpc_x_f = np.zeros([logSize, 32, statePlanner.getNumberStates()])
+        if params.type_MPC == 3:
+            self.mpc_x_f = np.zeros([logSize, 32, n_gait])
         else:
-            self.mpc_x_f = np.zeros([logSize, 24, statePlanner.getNumberStates()])
+            self.mpc_x_f = np.zeros([logSize, 24, n_gait])
         self.mpc_solving_duration = np.zeros([logSize])
 
         # Whole body control
@@ -119,7 +118,13 @@ class LoggerControl():
         # Timestamps
         self.tstamps = np.zeros(logSize)
 
-    def sample(self, joystick, estimator, loop, gait, statePlanner, footstepPlanner, footTrajectoryGenerator, wbc, dT_whole):
+        # Solo3d logs
+        self.update_mip = np.zeros([logSize, 1])                    # Boolean to know if mip computaition launched
+        self.configs = np.zeros([logSize, 7, params.number_steps])  # Reference configs for surface planner
+        self.initial_contacts = np.zeros([logSize, 3, 4])           # Initial contacts
+        self.t_mip = np.zeros([logSize, 1])                         # Surface planner computation time
+
+    def sample(self, joystick, estimator, controller, gait, statePlanner, footstepPlanner, footTrajectoryGenerator, wbc, dT_whole):
         if (self.i >= self.logSize):
             if self.ringBuffer:
                 self.i = 0
@@ -157,19 +162,19 @@ class LoggerControl():
         self.esti_LP_filt_x[self.i] = estimator.getFilterPosFiltX()
 
         # Logging from the main loop
-        self.loop_o_q[self.i] = loop.q[:, 0]
-        self.loop_o_v[self.i] = loop.v[:, 0]
-        self.loop_h_v[self.i] = loop.h_v[:, 0]
-        self.loop_h_v_windowed[self.i] = loop.h_v_windowed[:, 0]
-        self.loop_t_filter[self.i] = loop.t_filter
-        self.loop_t_planner[self.i] = loop.t_planner
-        self.loop_t_mpc[self.i] = loop.t_mpc
-        self.loop_t_wbc[self.i] = loop.t_wbc
-        self.loop_t_loop[self.i] = loop.t_loop
+        self.loop_o_q[self.i] = controller.q[:, 0]
+        self.loop_o_v[self.i] = controller.v[:, 0]
+        self.loop_h_v[self.i] = controller.h_v[:, 0]
+        self.loop_h_v_windowed[self.i] = controller.h_v_windowed[:, 0]
+        self.loop_t_filter[self.i] = controller.t_filter
+        self.loop_t_planner[self.i] = controller.t_planner
+        self.loop_t_mpc[self.i] = controller.t_mpc
+        self.loop_t_wbc[self.i] = controller.t_wbc
+        self.loop_t_loop[self.i] = controller.t_loop
         self.loop_t_loop_if[self.i] = dT_whole
-        self.loop_q_filt_mpc[self.i] = loop.q_filter[:6, 0]
-        self.loop_h_v_filt_mpc[self.i] = loop.h_v_filt_mpc[:, 0]
-        self.loop_vref_filt_mpc[self.i] = loop.vref_filt_mpc[:, 0]
+        self.loop_q_filt_mpc[self.i] = controller.q_filter[:6, 0]
+        self.loop_h_v_filt_mpc[self.i] = controller.h_v_filt_mpc[:, 0]
+        self.loop_vref_filt_mpc[self.i] = controller.vref_filt_mpc[:, 0]
 
         # Logging from the planner
         self.planner_xref[self.i] = statePlanner.getReferenceStates()
@@ -181,19 +186,19 @@ class LoggerControl():
         self.planner_agoals[self.i] = footTrajectoryGenerator.getFootAcceleration()
         self.planner_jgoals[self.i] = footTrajectoryGenerator.getFootJerk()
         self.planner_is_static[self.i] = gait.getIsStatic()
-        self.planner_h_ref[self.i] = loop.h_ref
+        self.planner_h_ref[self.i] = controller.h_ref
 
         # Logging from model predictive control
-        self.mpc_x_f[self.i] = loop.x_f_mpc
-        self.mpc_solving_duration[self.i] = loop.mpc_wrapper.t_mpc_solving_duration
+        self.mpc_x_f[self.i] = controller.x_f_mpc
+        self.mpc_solving_duration[self.i] = controller.mpc_wrapper.t_mpc_solving_duration
 
         # Logging from whole body control
-        self.wbc_P[self.i] = loop.result.P
-        self.wbc_D[self.i] = loop.result.D
-        self.wbc_q_des[self.i] = loop.result.q_des
-        self.wbc_v_des[self.i] = loop.result.v_des
-        self.wbc_FF[self.i] = loop.result.FF
-        self.wbc_tau_ff[self.i] = loop.result.tau_ff
+        self.wbc_P[self.i] = controller.result.P
+        self.wbc_D[self.i] = controller.result.D
+        self.wbc_q_des[self.i] = controller.result.q_des
+        self.wbc_v_des[self.i] = controller.result.v_des
+        self.wbc_FF[self.i] = controller.result.FF
+        self.wbc_tau_ff[self.i] = controller.result.tau_ff
         self.wbc_ddq_IK[self.i] = wbc.ddq_cmd
         self.wbc_f_ctc[self.i] = wbc.f_with_delta
         self.wbc_ddq_QP[self.i] = wbc.ddq_with_delta
@@ -210,6 +215,12 @@ class LoggerControl():
         # Logging timestamp
         self.tstamps[self.i] = time()
 
+        # solo3d
+        if self.solo3d:
+            self.update_mip[self.i] = controller.update_mip
+            self.configs[self.i] = statePlanner.getConfigurations()
+            self.initial_contacts[self.i] = controller.o_targetFootstep
+            self.t_mip[self.i] = controller.surfacePlanner.t_mip
         self.i += 1
 
     def processMocap(self, N, loggerSensors):
@@ -235,7 +246,74 @@ class LoggerControl():
             self.mocap_b_w[i] = (oRb.transpose() @ loggerSensors.mocapAngularVelocity[i].reshape((3, 1))).ravel()
             self.mocap_pos[i] = (mRo.transpose() @ (loggerSensors.mocapPosition[i, :] - mTo).reshape((3, 1))).ravel()
 
+    def plotTimes(self):
+        """
+        Estimated computation time for each step of the control architecture
+        """
+        from matplotlib import pyplot as plt
+        t_range = np.array([k*self.dt for k in range(self.tstamps.shape[0])])
+
+        plt.figure()
+        plt.plot(t_range, self.t_mip, '+', color="gold")
+        plt.plot(t_range, self.loop_t_filter, 'r+')
+        plt.plot(t_range, self.loop_t_planner, 'g+')
+        plt.plot(t_range, self.loop_t_mpc, 'b+')
+        plt.plot(t_range, self.loop_t_wbc, '+', color="violet")
+        plt.plot(t_range, self.loop_t_loop, 'k+')
+        plt.plot(t_range, self.loop_t_loop_if, '+', color="rebeccapurple")
+        plt.legend(["SurfacePlanner", "Estimator", "Planner", "MPC", "WBC", "Control loop", "Whole loop"])
+        plt.xlabel("Time [s]")
+        plt.ylabel("Time [s]")
+        self.custom_suptitle("Computation time of each block")
+
+    def plotSurfacePlannerTime(self):
+        """
+        Plot estimated solving time of the model prediction control
+        """
+        from matplotlib import pyplot as plt
+
+        t_range = np.array([k*self.dt for k in range(self.tstamps.shape[0])])
+
+        fig = plt.figure()
+        plt.plot(t_range[100:], self.t_mip[100:], 'k+')
+        plt.legend(["Solving duration"])
+        plt.xlabel("Time [s]")
+        plt.ylabel("Time [s]")
+        self.custom_suptitle("Surface planner solving time")
+
+    def plotMpcTime(self):
+        """
+        Plot estimated solving time of the model prediction control
+        """
+        from matplotlib import pyplot as plt
+        t_range = np.array([k*self.dt for k in range(self.tstamps.shape[0])])
+
+        fig = plt.figure()
+        plt.plot(t_range[35:], self.mpc_solving_duration[35:], 'k+')
+        plt.legend(["Solving duration"])
+        plt.xlabel("Time [s]")
+        plt.ylabel("Time [s]")
+        self.custom_suptitle("MPC solving time")
+
+
+
+    def plotStepTime(self):
+        """"
+        Step in system time at each loop
+        """
+        from matplotlib import pyplot as plt
+
+        plt.figure()
+        plt.plot(np.diff(self.tstamps))
+        plt.legend(["System time step"])
+        plt.xlabel("Loop []")
+        plt.ylabel("Time [s]")
+        self.custom_suptitle("System time step between 2 sucessive loops")
+
     def plotAll(self, loggerSensors):
+        """"
+        Step in system time at each loop
+        """
 
         from matplotlib import pyplot as plt
 
@@ -390,31 +468,6 @@ class LoggerControl():
         self.custom_suptitle("Linear and angular velocities")
 
         print("RMSE: ", np.sqrt(((self.joy_v_ref[:-1000, 0] - self.mocap_h_v[:-1000, 0])**2).mean()))
-
-        # Analysis of the footstep locations (current and future) with a slider to move along time
-        # self.slider_predicted_footholds()
-
-        ####
-        # Analysis of the footholds locations during the whole experiment
-        ####
-        """f_c = ["r", "b", "forestgreen", "rebeccapurple"]
-        quat = np.zeros((4, 1))
-        steps = np.zeros((12, 1))
-        o_step = np.zeros((3, 1))
-        plt.figure()
-        plt.plot(self.loop_o_q[:, 0], self.loop_o_q[:, 1], linewidth=2, color="k")
-        for i in range(self.planner_fsteps.shape[0]):
-            fsteps = self.planner_fsteps[i]
-            RPY = pin.rpy.matrixToRpy(pin.Quaternion(self.loop_o_q[0, 3:7]).toRotationMatrix())
-            quat[:, 0] = pin.Quaternion(pin.rpy.rpyToMatrix(np.array([0.0, 0.0, RPY[2]]))).coeffs()
-            oRh = pin.Quaternion(quat).toRotationMatrix()
-            for j in range(4):
-                #if np.any(fsteps[k, (j*3):((j+1)*3)]) and not np.array_equal(steps[(j*3):((j+1)*3), 0],
-                #                                                                fsteps[k, (j*3):((j+1)*3)]):
-                # steps[(j*3):((j+1)*3), 0] = fsteps[k, (j*3):((j+1)*3)]
-                # o_step[:, 0:1] = oRh @ steps[(j*3):((j+1)*3), 0:1] + self.loop_o_q[i:(i+1), 0:3].transpose()
-                o_step[:, 0:1] = oRh @ fsteps[0:1, (j*3):((j+1)*3)].transpose() + self.loop_o_q[i:(i+1), 0:3].transpose()
-                plt.plot(o_step[0, 0], o_step[1, 0], linestyle=None, linewidth=1, marker="o", color=f_c[j])"""
         
         ####
         # FF torques & FB torques & Sent torques & Meas torques
@@ -503,133 +556,8 @@ class LoggerControl():
         self.custom_suptitle("Actuator velocities")
 
         ####
-        # Evolution of trajectories in position and orientation computed by the MPC
-        ####
-        """
-        log_t_pred = np.array([k*self.dt*10 for k in range(self.mpc_x_f.shape[2])])
-        log_t_ref = np.array([k*self.dt*10 for k in range(self.planner_xref.shape[2])])
-
-        titles = ["X", "Y", "Z", "Roll", "Pitch", "Yaw"]
-        step = 1000
-        plt.figure()
-        for j in range(6):
-            plt.subplot(3, 2, index6[j])
-            c = [[i/(self.mpc_x_f.shape[0]+5), 0.0, i/(self.mpc_x_f.shape[0]+5)]
-                 for i in range(0, self.mpc_x_f.shape[0], step)]
-            for i in range(0, self.mpc_x_f.shape[0], step):
-                h1, = plt.plot(log_t_pred+(i+10)*self.dt,
-                               self.mpc_x_f[i, j, :], "b", linewidth=2, color=c[int(i/step)])
-                h2, = plt.plot(log_t_ref+i*self.dt,
-                               self.planner_xref[i, j, :], linestyle="--", marker='x', color="g", linewidth=2)
-            #h3, = plt.plot(np.array([k*self.dt for k in range(self.mpc_x_f.shape[0])]),
-            #               self.planner_xref[:, j, 0], linestyle=None, marker='x', color="r", linewidth=1)
-            plt.xlabel("Time [s]")
-            plt.legend([h1, h2, h3], ["Output trajectory of MPC",
-                                      "Input trajectory of planner"]) #, "Actual robot trajectory"])
-            plt.title("Predicted trajectory for " + titles[j])
-        self.custom_suptitle("Analysis of trajectories in position and orientation computed by the MPC")
-        """
-
-        ####
-        # Evolution of trajectories of linear and angular velocities computed by the MPC
-        ####
-        """
-        plt.figure()
-        for j in range(6):
-            plt.subplot(3, 2, index6[j])
-            c = [[i/(self.mpc_x_f.shape[0]+5), 0.0, i/(self.mpc_x_f.shape[0]+5)]
-                 for i in range(0, self.mpc_x_f.shape[0], step)]
-            for i in range(0, self.mpc_x_f.shape[0], step):
-                h1, = plt.plot(log_t_pred+(i+10)*self.dt,
-                               self.mpc_x_f[i, j+6, :], "b", linewidth=2, color=c[int(i/step)])
-                h2, = plt.plot(log_t_ref+i*self.dt,
-                               self.planner_xref[i, j+6, :], linestyle="--", marker='x', color="g", linewidth=2)
-            h3, = plt.plot(np.array([k*self.dt for k in range(self.mpc_x_f.shape[0])]),
-                           self.planner_xref[:, j+6, 0], linestyle=None, marker='x', color="r", linewidth=1)
-            plt.xlabel("Time [s]")
-            plt.legend([h1, h2, h3], ["Output trajectory of MPC",
-                                      "Input trajectory of planner", "Actual robot trajectory"])
-            plt.title("Predicted trajectory for velocity in " + titles[j])
-        self.custom_suptitle("Analysis of trajectories of linear and angular velocities computed by the MPC")
-        """
-
-        ####
-        # Evolution of contact force trajectories
-        ####
-        """
-        step = 1000
-        lgd1 = ["Ctct force X", "Ctct force Y", "Ctct force Z"]
-        lgd2 = ["FL", "FR", "HL", "HR"]
-        plt.figure()
-        for i in range(4):
-            if i == 0:
-                ax0 = plt.subplot(1, 4, i+1)
-            else:
-                plt.subplot(1, 4, i+1, sharex=ax0)
-
-            for k in range(0, self.mpc_x_f.shape[0], step):
-                h2, = plt.plot(log_t_pred+k*self.dt, self.mpc_x_f[k, 12+(3*i+2), :], linestyle="--", marker='x', linewidth=2)
-            h1, = plt.plot(t_range, self.mpc_x_f[:, 12+(3*i+2), 0], "r", linewidth=3)
-            # h3, = plt.plot(t_range, self.wbc_f_ctc[:, i], "b", linewidth=3, linestyle="--")
-            plt.plot(t_range, self.esti_feet_status[:, i], "k", linestyle="--")
-            plt.xlabel("Time [s]")
-            plt.ylabel(lgd2[i]+" [N]")
-            plt.legend([h1, h2], ["MPC "+lgd2[i],
-                                  "MPC "+lgd2[i]+" trajectory"])
-            plt.ylim([-1.0, 26.0])
-        self.custom_suptitle("Contact forces trajectories & Actual forces trajectories")
-        """
-
-        ####
-        # Analysis of the complementary filter behaviour
-        ####
-        """
-        clr = ["b", "darkred", "forestgreen"]
-        # Velocity complementary filter
-        lgd_Y = ["dx", "ddx", "alpha dx", "dx_out", "dy", "ddy", "alpha dy", "dy_out", "dz", "ddz", "alpha dz", "dz_out"]
-        plt.figure()
-        for i in range(12):
-            if i == 0:
-                ax0 = plt.subplot(3, 4, i+1)
-            else:
-                plt.subplot(3, 4, i+1, sharex=ax0)
-            if i % 4 == 0:
-                plt.plot(t_range, self.esti_HP_x[:, int(i/4)], color=clr[int(i/4)], linewidth=3, marker='') # x input of the velocity complementary filter
-            elif i % 4 == 1:
-                plt.plot(t_range, self.esti_HP_dx[:, int(i/4)], color=clr[int(i/4)], linewidth=3, marker='') # dx input of the velocity complementary filter
-            elif i % 4 == 2:
-                plt.plot(t_range, self.esti_HP_alpha[:, int(i/4)], color=clr[int(i/4)], linewidth=3, marker='') # alpha parameter of the velocity complementary filter
-            else:
-                plt.plot(t_range, self.esti_HP_filt_x[:, int(i/4)], color=clr[int(i/4)], linewidth=3, marker='') # filtered output of the velocity complementary filter
-            
-            plt.legend([lgd_Y[i]], prop={'size': 8})
-        self.custom_suptitle("Evolution of the quantities of the velocity complementary filter")
-
-        # Position complementary filter
-        lgd_Y = ["x", "dx", "alpha x", "x_out", "y", "dy", "alpha y", "y_out", "z", "dz", "alpha z", "z_out"]
-        plt.figure()
-        for i in range(12):
-            if i == 0:
-                ax0 = plt.subplot(3, 4, i+1)
-            else:
-                plt.subplot(3, 4, i+1, sharex=ax0)
-            if i % 4 == 0:
-                plt.plot(t_range, self.esti_LP_x[:, int(i/4)], color=clr[int(i/4)], linewidth=3, marker='') # x input of the position complementary filter
-            elif i % 4 == 1:
-                plt.plot(t_range, self.esti_LP_dx[:, int(i/4)], color=clr[int(i/4)], linewidth=3, marker='') # dx input of the position complementary filter
-            elif i % 4 == 2:
-                plt.plot(t_range, self.esti_LP_alpha[:, int(i/4)], color=clr[int(i/4)], linewidth=3, marker='') # alpha parameter of the position complementary filter
-            else:
-                plt.plot(t_range, self.esti_LP_filt_x[:, int(i/4)], color=clr[int(i/4)], linewidth=3, marker='') # filtered output of the position complementary filter
-            
-            plt.legend([lgd_Y[i]], prop={'size': 8})
-        self.custom_suptitle("Evolution of the quantities of the position complementary filter")
-        """
-
-        ####
         # Power supply profile
         ####
-        
         plt.figure()
         for i in range(3):
             if i == 0:
@@ -648,82 +576,11 @@ class LoggerControl():
                 plt.ylabel("Bus energy [J]")
                 plt.xlabel("Time [s]")
         
+        self.plotTimes()
+        self.plotMpcTime()
+        self.plotSurfacePlannerTime()
+        self.plotStepTime()
 
-        ####
-        # Estimated computation time for each step of the control architecture
-        ####
-        plt.figure()
-        plt.plot(t_range, self.loop_t_filter, 'r+')
-        plt.plot(t_range, self.loop_t_planner, 'g+')
-        plt.plot(t_range, self.loop_t_mpc, 'b+')
-        plt.plot(t_range, self.loop_t_wbc, '+', color="violet")
-        plt.plot(t_range, self.loop_t_loop, 'k+')
-        plt.plot(t_range, self.loop_t_loop_if, '+', color="rebeccapurple")
-        plt.legend(["Estimator", "Planner", "MPC", "WBC", "Control loop", "Whole loop"])
-        plt.xlabel("Time [s]")
-        plt.ylabel("Time [s]")
-        self.custom_suptitle("Computation time of each block")
-
-        # Plot estimated solving time of the model prediction control
-        fig = plt.figure()
-        plt.plot(t_range[35:], self.mpc_solving_duration[35:], 'k+')
-        plt.legend(["Solving duration"])
-        plt.xlabel("Time [s]")
-        plt.ylabel("Time [s]")
-        self.custom_suptitle("MPC solving time")
-
-        ####
-        # Step in system time at each loop
-        ####
-        plt.figure()
-        plt.plot(np.diff(self.tstamps))
-        plt.legend(["System time step"])
-        plt.xlabel("Loop []")
-        plt.ylabel("Time [s]")
-        self.custom_suptitle("System time step between 2 sucessive loops")
-
-        ####
-        # Comparison of raw and filtered quantities (15 Hz and windowed)
-        ####
-        """
-        lgd = ["Position X", "Position Y", "Position Z", "Position Roll", "Position Pitch", "Position Yaw"]
-        plt.figure()
-        for i in range(6):
-            if i == 0:
-                ax0 = plt.subplot(3, 2, index6[i])
-            else:
-                plt.subplot(3, 2, index6[i], sharex=ax0)
-
-            plt.plot(t_range, self.loop_o_q[:, i], linewidth=3)
-            plt.plot(t_range, self.loop_q_filt_mpc[:, i], linewidth=3)
-
-            plt.legend(["Estimated", "Estimated 15Hz filt"], prop={'size': 8})
-            plt.ylabel(lgd[i])
-        self.custom_suptitle("Comparison between position quantities before and after 15Hz low-pass filtering")
-
-        lgd = ["Linear vel X", "Linear vel Y", "Linear vel Z",
-               "Angular vel Roll", "Angular vel Pitch", "Angular vel Yaw"]
-        plt.figure()
-        for i in range(6):
-            if i == 0:
-                ax0 = plt.subplot(3, 2, index6[i])
-            else:
-                plt.subplot(3, 2, index6[i], sharex=ax0)
-
-            plt.plot(t_range, self.loop_h_v[:, i], linewidth=3)
-            plt.plot(t_range, self.loop_h_v_windowed[:, i], linewidth=3)
-            plt.plot(t_range, self.loop_h_v_filt_mpc[:, i], linewidth=3)
-            plt.plot(t_range, self.loop_vref_filt_mpc[:, i], linewidth=3)
-
-            plt.legend(["Estimated", "Estimated 3Hz windowed", "Estimated 15Hz filt",
-                        "Estimated 15Hz filt 3Hz windowed", "Reference 15Hz filt"], prop={'size': 8})
-            plt.ylabel(lgd[i])
-        self.custom_suptitle("Comparison between velocity quantities before and after 15Hz low-pass filtering")
-        """
-
-        ###############################
-        # Display all graphs and wait #
-        ###############################
         plt.show(block=True)
 
     def custom_suptitle(self, name):
@@ -736,8 +593,9 @@ class LoggerControl():
 
     def saveAll(self, loggerSensors, fileName="data"):
         date_str = datetime.now().strftime('_%Y_%m_%d_%H_%M')
+        name = fileName + date_str + "_" + str(self.type_MPC) + ".npz"
 
-        np.savez_compressed(fileName + date_str + "_" + str(self.type_MPC) + ".npz",
+        np.savez_compressed(name,
 
                             joy_v_ref=self.joy_v_ref,
 
@@ -816,6 +674,11 @@ class LoggerControl():
 
                             tstamps=self.tstamps,
 
+                            update_mip=self.update_mip,
+                            configs = self.configs,
+                            initial_contacts = self.initial_contacts,
+                            t_mip = self.t_mip,
+
                             q_mes=loggerSensors.q_mes,
                             v_mes=loggerSensors.v_mes,
                             baseOrientation=loggerSensors.baseOrientation,
@@ -833,6 +696,7 @@ class LoggerControl():
                             voltage=loggerSensors.voltage,
                             energy=loggerSensors.energy,
                             )
+        print("Log saved in " + name)
 
     def loadAll(self, loggerSensors, fileName=None):
 
@@ -921,6 +785,11 @@ class LoggerControl():
         self.wbc_tasks_err = data["wbc_tasks_err"]
 
         self.tstamps = data["tstamps"]
+
+        self.update_mip = data["update_mip"]
+        self.configs = data["configs"]
+        self.initial_contacts = data["initial_contacts"]
+        self.t_mip = data["t_mip"]
 
         # Load LoggerSensors arrays
         loggerSensors.q_mes = data["q_mes"]
@@ -1134,19 +1003,18 @@ if __name__ == "__main__":
     import sys
     import os
     from sys import argv
+    import libquadruped_reactive_walking as lqrw
+
     sys.path.insert(0, os.getcwd()) # adds current directory to python path
 
     # Data file name to load
-    file_name = "/home/odri/data_2021_10_07_17_40.npz"
+    file_name =  "/home/odri/git/fanny/logs/data_2022_02_16_13_33_0.npz"
 
     # Create loggers
     loggerSensors = LoggerSensors.LoggerSensors(logSize=20000-3)
-    logger = LoggerControl(0.001, 30, logSize=20000-3)
+    params = lqrw.Params()  # Object that holds all controller parameters
 
-    # Load data from .npz file
+    logger = LoggerControl(params, logSize=20000-3)
+
     logger.loadAll(loggerSensors, fileName= file_name)
-
-    # Call all ploting functions
     logger.plotAll(loggerSensors)
-
-    # logger.slider_predicted_trajectory()

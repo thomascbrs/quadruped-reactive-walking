@@ -1,7 +1,6 @@
 import pinocchio as pin
 import numpy as np
 import os
-from time import perf_counter as clock
 
 from sl1m.problem_definition import Problem
 from sl1m.generic_solver import solve_MIP
@@ -33,6 +32,7 @@ class SurfacePlanner:
         Initialize the affordance tool and save the solo abstract rbprm builder, and surface dictionary
         """
         self.plot = False
+        self.use_heuristique = True
 
         self.step_duration = params.T_gait/2
         shoulders = [0.1946, 0.14695, 0.1946, -0.14695, -0.1946, 0.14695, -0.1946, -0.14695]
@@ -58,6 +58,7 @@ class SurfacePlanner:
         self.potential_surfaces = []
 
         self.pb = Problem(limb_names=limbs, other_names=others, constraint_paths=paths)
+
 
     def compute_gait(self, gait_in):
         """
@@ -214,10 +215,13 @@ class SurfacePlanner:
 
         self.pb.generate_problem(R, surfaces, gait, initial_contacts, c0=None, com=False)
 
-        step_length = self.compute_step_length(b_v_ref[:2])
-        effector_positions = self.compute_effector_positions(configs, b_v_ref)
         shoulder_positions = self.compute_shoulder_positions(configs)
-        costs = {"effector_positions": [1.0, effector_positions], "effector_positions_3D": [0.1, shoulder_positions]}
+        if self.use_heuristique:
+            effector_positions = self.compute_effector_positions(configs, b_v_ref)
+            costs = {"effector_positions": [1.0, effector_positions], "effector_positions_3D": [0.1, shoulder_positions]}
+        else:
+            step_length = self.compute_step_length(b_v_ref[:2])
+            costs = {"step_length": [1.0, step_length], "effector_positions_3D": [0.1, shoulder_positions]}
         result = solve_MIP(self.pb, costs=costs, com=False)
 
         if result.success:
@@ -225,7 +229,7 @@ class SurfacePlanner:
                 import matplotlib.pyplot as plt
                 import sl1m.tools.plot_tools as plot
                 ax = plot.draw_whole_scene(self.all_surfaces)
-                plot.plot_planner_result(result.all_feet_pos, step_size=step_length, ax=ax, show=True)
+                plot.plot_planner_result(result.all_feet_pos, ax=ax, show=True)
 
             vertices, inequalities, indices = self.retrieve_surfaces(surfaces, result.surface_indices)
             return vertices, inequalities, indices, result.all_feet_pos, True

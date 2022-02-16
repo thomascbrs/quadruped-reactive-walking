@@ -3,6 +3,7 @@ from solo3D.SurfacePlanner import SurfacePlanner
 from multiprocessing import Process
 from multiprocessing.sharedctypes import Value
 import ctypes
+import time
 
 import libquadruped_reactive_walking as lqrw
 import numpy as np
@@ -40,7 +41,7 @@ class DataOutCtype(ctypes.Structure):
     '''
     _fields_ = [('potentialSurfaces', SurfaceDataCtype * N_POTENTIAL_SURFACE * N_FEET),
                 ('selectedSurfaces', SurfaceDataCtype * N_FEET), ('all_feet', ctypes.c_double * 12 * N_PHASE),
-                ('success', ctypes.c_bool)]
+                ('success', ctypes.c_bool), ('t_mip', ctypes.c_float)]
 
 
 class DataInCtype(ctypes.Structure):
@@ -74,6 +75,7 @@ class SurfacePlanner_Wrapper():
 
         # Results used by controller
         self.mip_success = False
+        self.t_mip = 0.
         self.mip_iteration = 0
         self.potential_surfaces = lqrw.SurfaceVectorVector()
         self.selected_surfaces = lqrw.SurfaceVector()
@@ -112,6 +114,7 @@ class SurfacePlanner_Wrapper():
         ''' 
         Call the planner and store the result in syn variables
         '''
+        t_start = time.time()
         vertices, inequalities, indices, self.all_feet_pos, success = self.planner.run(configs, gait, current_contacts, b_v_ref)
         self.mip_iteration_syn += 1
         self.mip_success_syn = success
@@ -128,6 +131,7 @@ class SurfacePlanner_Wrapper():
             for foot, foot_inequalities in enumerate(inequalities):
                 S, s = foot_inequalities[indices[foot]]
                 self.selected_surfaces_syn.append(lqrw.Surface(S, s, vertices[foot][indices[foot]].T))
+        self.t_mip = time.time() - t_start
 
     def run_asynchronous(self, configs, gait_in, current_contacts, b_v_ref):
         ''' 
@@ -153,6 +157,7 @@ class SurfacePlanner_Wrapper():
         while self.running.value:
             if self.new_data.value:
                 self.new_data.value = False
+                t_start = time.time()
 
                 with self.data_in.get_lock():
                     configs = [np.frombuffer(config) for config in self.data_in.configs]
@@ -161,16 +166,19 @@ class SurfacePlanner_Wrapper():
                     contacts = np.frombuffer(self.data_in.contacts).reshape((3, 4))
 
                 vertices, inequalities, indices, _, success = planner.run(configs, gait, contacts, b_v_ref)
-                self.compress_result(vertices, inequalities, indices, success)
+                
+                t = time.time() - t_start
+                self.compress_result(vertices, inequalities, indices, success, t)
                 self.new_result.value = True
 
 
-    def compress_result(self, vertices, inequalities, indices, success):
+    def compress_result(self, vertices, inequalities, indices, success, t):
         ''' 
         Store the planner result in data_out
         '''
         with self.data_out.get_lock():
             self.data_out.success = success
+            self.data_out.t_mip = t
             for foot, foot_inequalities in enumerate(inequalities):
                 i=0
                 for i, (S, s) in enumerate(foot_inequalities):
@@ -207,6 +215,7 @@ class SurfacePlanner_Wrapper():
 
                 with self.data_out.get_lock():
                     self.mip_success = self.data_out.success
+                    self.t_mip = self.data_out.t_mip
                     self.mip_iteration += 1
 
                     self.potential_surfaces = lqrw.SurfaceVectorVector()

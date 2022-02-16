@@ -144,6 +144,7 @@ class Controller:
 
         self.enable_multiprocessing_mip = params.enable_multiprocessing_mip
         self.offset_perfect_estimator = 0.
+        self.update_mip = False
         if self.solo3D:
             self.surfacePlanner = SurfacePlanner_Wrapper(params)  # MIP Wrapper
 
@@ -313,12 +314,13 @@ class Controller:
             oRh_3d = pin.rpy.rpyToMatrix(0., 0., self.q_filter[5, 0])
 
         t_filter = time.time()
+        self.t_filter = t_filter - t_start
 
         self.gait.updateGait(self.k, self.k_mpc, self.joystick.getJoystickCode())
 
-        update_mip = self.k % self.k_mpc == 0 and self.gait.isNewPhase()
+        self.update_mip = self.k % self.k_mpc == 0 and self.gait.isNewPhase()
         if self.solo3D:
-            if update_mip:
+            if self.update_mip:
                 self.statePlanner.updateSurface(self.q_filter[:6, :1], self.vref_filt_mpc[:6, :1])
                 if self.surfacePlanner.initialized:
                     self.error = self.surfacePlanner.get_latest_results()
@@ -337,7 +339,7 @@ class Controller:
         fsteps = self.footstepPlanner.getFootsteps()
         cgait = self.gait.getCurrentGait()
 
-        if update_mip and self.solo3D:
+        if self.update_mip and self.solo3D:
             configs = self.statePlanner.getConfigurations().transpose()
             self.surfacePlanner.run(configs, cgait, self.o_targetFootstep, self.vref_filt_mpc[:3, 0].copy())
             self.surfacePlanner.initialized = True
@@ -345,6 +347,7 @@ class Controller:
                 self.pybEnvironment3D.update_target_SL1M(self.surfacePlanner.all_feet_pos)
 
         t_planner = time.time()
+        self.t_planner = t_planner - t_filter
 
         # Solve MPC
         if (self.k % self.k_mpc) == 0:
@@ -355,6 +358,7 @@ class Controller:
         self.x_f_mpc = self.mpc_wrapper.get_latest_result()
 
         t_mpc = time.time()
+        self.t_mpc = t_mpc - t_planner
 
         # Update pos, vel and acc references for feet
         if self.solo3D:
@@ -433,7 +437,7 @@ class Controller:
                 self.q_display[7:, 0] = self.q_wbc[6:, 0]
                 self.solo.display(self.q_display)
 
-        t_wbc = time.time()
+        self.t_wbc = time.time() - t_mpc
 
         self.security_check()
         if self.error or self.joystick.getStop():
@@ -446,12 +450,9 @@ class Controller:
             if self.SIMULATION:
                 self.pybEnvironment3D.update(self.k)
 
-        # Update debug display (spheres, ...)
         self.pyb_debug(device, fsteps, cgait, xref)
 
-        # Logs
-        self.log_misc(t_start, t_filter, t_planner, t_mpc, t_wbc)
-
+        self.t_loop = time.time() - t_start
         self.k += 1
 
     def pyb_camera(self, device, yaw):
@@ -465,10 +466,8 @@ class Controller:
     def pyb_debug(self, device, fsteps, cgait, xref):
 
         if self.k > 1 and self.enable_pyb_GUI:
-
             # Display desired feet positions in WBC as green spheres
             oTh_pyb = device.dummyPos.reshape((-1, 1))
-            oTh_pyb[2, 0] += 0.0
             oRh_pyb = pin.rpy.rpyToMatrix(0.0, 0.0, device.imu.attitude_euler[2])
             for i in range(4):
                 if not self.solo3D:
@@ -489,13 +488,11 @@ class Controller:
                     if cpt < cgait.shape[0]:
                         status = cgait[cpt, i]
                         if status:
-                            pos = oRh_pyb @ fsteps[cpt, (3*i):(3*(i+1))].reshape(
-                                (-1, 1)) + oTh_pyb - np.array([[0.0], [0.0], [self.h_ref]])
+                            pos = oRh_pyb @ fsteps[cpt, (3*i):(3*(i+1))].reshape((-1, 1)) + oTh_pyb - np.array([[0.0], [0.0], [oTh_pyb[2, 0]]])
                             pyb.resetBasePositionAndOrientation(
                                 device.pyb_sim.ftps_Ids[i, j], pos[:, 0].tolist(), [0, 0, 0, 1])
                         else:
-                            pyb.resetBasePositionAndOrientation(device.pyb_sim.ftps_Ids[i, j], [
-                                                                0.0, 0.0, -0.1], [0, 0, 0, 1])
+                            pyb.resetBasePositionAndOrientation(device.pyb_sim.ftps_Ids[i, j], [0.0, 0.0, -0.1], [0, 0, 0, 1])
                         j += 1
 
                 # Hide unused spheres underground
@@ -578,7 +575,7 @@ class Controller:
                 self.error = False
 
         for i in range(12):
-            if self.clamp(self.result.q_des[i], device.joints.positions[i] - 1., device.joints.positions[i] + 1.):
+            if self.clamp(self.result.q_des[i], device.joints.positions[i] - 4., device.joints.positions[i] + 4.):
                 print("Clamping position difference of motor n " + str(i))
                 self.error = False
 
@@ -600,10 +597,3 @@ class Controller:
         self.result.v_des[:] = np.zeros(12)
         self.result.FF = np.zeros(12)
         self.result.tau_ff[:] = np.zeros(12)
-
-    def log_misc(self, tic, t_filter, t_planner, t_mpc, t_wbc):
-        self.t_filter = t_filter - tic
-        self.t_planner = t_planner - t_filter
-        self.t_mpc = t_mpc - t_planner
-        self.t_wbc = t_wbc - t_mpc
-        self.t_loop = time.time() - tic

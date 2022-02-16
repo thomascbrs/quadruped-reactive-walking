@@ -144,7 +144,7 @@ class Params {
   std::string environment_heightmap;  // Path to the heightmap
   double heightmap_fit_length;        // Size of the heightmap around the robot
   int heightmap_fit_size;             // Number of points used in the heightmap QP
-  int number_steps;                   // Number of steps to ptimize with the MIP
+  int number_steps;                   // Number of steps to optimize with the MIP
   std::vector<double> max_velocity;   // Maximum velocity of the base
 
   // Not defined in yaml
