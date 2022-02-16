@@ -237,6 +237,10 @@ class Controller:
         dDevice.joints.positions = q_init
         self.compute(dDevice)
 
+        self.last_q_perfect = np.zeros(6)
+        self.last_b_vel = np.zeros(3)
+        self.n_nan = 0
+
     def compute(self, device, qc=None):
         """Run one iteration of the main control loop
 
@@ -257,23 +261,31 @@ class Controller:
             if self.k <= 1:
                 # self.initial_pos = qc.getPosition()
                 # self.initial_pos[2] = self.initial_pos[2] - 0.22
-                self.initial_pos = [0.419, 0.009, -0.047]
+                self.initial_pos = [-0.323, -0.187, -0.046]
                 # self.initial_rot = quaternionToRPY(qc.getOrientationQuat())
                 # self.initial_matrix = pin.rpy.rpyToMatrix(0., 0., self.initial_rot[2, 0]).transpose()
                 self.initial_matrix = pin.rpy.rpyToMatrix(0., 0., 0.).transpose()
 
             q_perfect[:3] = self.initial_matrix @ (qc.getPosition() - self.initial_pos)
-            q_perfect[3:] = quaternionToRPY(qc.getOrientationQuat())
+            q_perfect[3:] = quaternionToRPY(qc.getOrientationQuat())[:, 0]
             b_baseVel_perfect[:] = (qc.getOrientationMat9().reshape((3, 3)).transpose() @ qc.getVelocity().reshape((3, 1))).ravel()
 
         if np.isnan(np.sum(q_perfect)):
             print("Error: nan values in perfect position of the robot")
-            q_perfect = self.q[6:]
-            self.error = True
+            q_perfect = self.last_q_perfect
+            self.n_nan += 1
+            if self.n_nan >= 5:
+                self.error = True
         elif np.isnan(np.sum(b_baseVel_perfect)):
             print("Error: nan values in perfect velocity of the robot")
-            b_baseVel_perfect = self.v[6:]
-            self.error = True
+            b_baseVel_perfect = self.last_b_vel
+            self.n_nan += 1
+            if self.n_nan >= 5:
+                self.error = True
+        else:
+            self.last_q_perfect = q_perfect
+            self.last_b_vel = b_baseVel_perfect
+            self.n_nan = 0
 
         self.estimator.run_filter(self.gait.getCurrentGait(),
                                   self.footTrajectoryGenerator.getFootPosition(),
@@ -557,7 +569,7 @@ class Controller:
             clamped = True
         return clamped
 
-    def clamp_result(self, device, set_error=False):
+    def clamp_result(self, device, set_error=True):
         """
         Clamp the result
         """
