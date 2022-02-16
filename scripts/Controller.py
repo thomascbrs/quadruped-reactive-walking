@@ -250,7 +250,7 @@ class Controller:
         b_baseVel_perfect = np.zeros(3)
         if self.solo3D and qc == None:
             q_perfect[:3] = device.dummyPos
-            q_perfect[3:] = device.imu.attitude_euler  # Yaw only used for solo3D
+            q_perfect[3:] = device.imu.attitude_euler
             b_baseVel_perfect = device.b_baseVel
         elif self.solo3D and qc != None:
             if self.k <= 1:
