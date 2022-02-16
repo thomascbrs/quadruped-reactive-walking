@@ -94,7 +94,7 @@ class SurfacePlanner_Wrapper():
             self.running = Value('b', True)
             self.data_out = Value(DataOutCtype)
             self.data_in = Value(DataInCtype)
-            p = Process(target=self.asynchronous_process)
+            p = Process(target=self.asynchronous_process, args=(self.new_data, self.new_result, self.running, self.data_in, self.data_out))
             p.start()
         else:
             self.planner = SurfacePlanner(params)
@@ -149,59 +149,59 @@ class SurfacePlanner_Wrapper():
             contact[:, :] = current_contacts[:, :]
         self.new_data.value = True
 
-    def asynchronous_process(self):
+    def asynchronous_process(self, new_data, new_result, running, data_in, data_out):
         ''' 
         Asynchronous process created during initialization 
         '''
         planner = SurfacePlanner(self.params)
-        while self.running.value:
-            if self.new_data.value:
-                self.new_data.value = False
+        while running.value:
+            if new_data.value:
+                new_data.value = False
                 t_start = time.time()
 
-                with self.data_in.get_lock():
-                    configs = [np.frombuffer(config) for config in self.data_in.configs]
-                    gait = np.frombuffer(self.data_in.gait).reshape((self.n_gait, 4))
-                    b_v_ref = np.frombuffer(self.data_in.b_v_ref).reshape((3))
-                    contacts = np.frombuffer(self.data_in.contacts).reshape((3, 4))
+                with data_in.get_lock():
+                    configs = [np.frombuffer(config) for config in data_in.configs]
+                    gait = np.frombuffer(data_in.gait).reshape((self.n_gait, 4))
+                    b_v_ref = np.frombuffer(data_in.b_v_ref).reshape((3))
+                    contacts = np.frombuffer(data_in.contacts).reshape((3, 4))
 
                 vertices, inequalities, indices, _, success = planner.run(configs, gait, contacts, b_v_ref)
                 
                 t = time.time() - t_start
-                self.compress_result(vertices, inequalities, indices, success, t)
-                self.new_result.value = True
+                self.compress_result(vertices, inequalities, indices, success, t, data_out)
+                new_result.value = True
 
 
-    def compress_result(self, vertices, inequalities, indices, success, t):
+    def compress_result(self, vertices, inequalities, indices, success, t, data_out):
         ''' 
         Store the planner result in data_out
         '''
-        with self.data_out.get_lock():
-            self.data_out.success = success
-            self.data_out.t_mip = t
+        with data_out.get_lock():
+            data_out.success = success
+            data_out.t_mip = t
             for foot, foot_inequalities in enumerate(inequalities):
                 i=0
                 for i, (S, s) in enumerate(foot_inequalities):
-                    A = np.frombuffer(self.data_out.potentialSurfaces[foot][i].A).reshape((N_ROWS, 3))
+                    A = np.frombuffer(data_out.potentialSurfaces[foot][i].A).reshape((N_ROWS, 3))
                     A[:, :] = S[:, :]
-                    b = np.frombuffer(self.data_out.potentialSurfaces[foot][i].b)
+                    b = np.frombuffer(data_out.potentialSurfaces[foot][i].b)
                     b[:] = s[:]
-                    v = np.frombuffer(self.data_out.potentialSurfaces[foot][i].vertices).reshape((N_VERTICES_MAX, 3))
+                    v = np.frombuffer(data_out.potentialSurfaces[foot][i].vertices).reshape((N_VERTICES_MAX, 3))
                     v[:, :] = vertices[foot][i].T[:, :]
-                    self.data_out.potentialSurfaces[foot][i].on = True
+                    data_out.potentialSurfaces[foot][i].on = True
 
                 for j in range(i + 1, N_POTENTIAL_SURFACE):
-                    self.data_out.potentialSurfaces[foot][j].on = False
+                    data_out.potentialSurfaces[foot][j].on = False
 
             if success:
                 for foot, index in enumerate(indices):
-                    A = np.frombuffer(self.data_out.selectedSurfaces[foot].A).reshape((N_ROWS, 3))
+                    A = np.frombuffer(data_out.selectedSurfaces[foot].A).reshape((N_ROWS, 3))
                     A[:, :] = inequalities[foot][index][0][:, :]
-                    b = np.frombuffer(self.data_out.selectedSurfaces[foot].b)
+                    b = np.frombuffer(data_out.selectedSurfaces[foot].b)
                     b[:] = inequalities[foot][index][1][:]
-                    v = np.frombuffer(self.data_out.selectedSurfaces[foot].vertices).reshape((N_VERTICES_MAX, 3))
+                    v = np.frombuffer(data_out.selectedSurfaces[foot].vertices).reshape((N_VERTICES_MAX, 3))
                     v = vertices[foot][index].T[:, :]
-                    self.data_out.selectedSurfaces[foot].on = True
+                    data_out.selectedSurfaces[foot].on = True
 
     def get_latest_results(self):
         ''' 
