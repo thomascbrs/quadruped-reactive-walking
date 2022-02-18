@@ -80,6 +80,7 @@ class StatePlanner3D {
   MatrixN getReferenceStates() { return referenceStates_; }
   int getNumberStates() { return nStates_; }
   MatrixN getConfigurations() { return configs_; }
+  VectorN getFit() { return fit_; }
 
  private:
   int nStates_;             // Number of timesteps in the prediction horizon
@@ -96,7 +97,7 @@ class StatePlanner3D {
   VectorN dtVector_;     // Vector containing all time steps in the prediction horizon
   Heightmap heightmap_;  // Environment heightmap
   Vector3 rpyMap_;       // Rotation of the heightmap in RPY
-  Vector3 fit_;  // Vector3 such as [a,b,c], such as ax + by -z + c = 0 locally fits the heightmap
+  Vector3 fit_;          // Vector3 such as [a,b,c], such as ax + by -z + c = 0 locally fits the heightmap
 
   int nSteps_;         // number of steps to optimize with the MIP
   double stepDuration_;     // Duration of a step

@@ -650,6 +650,7 @@ struct StatePlanner3DPythonVisitor : public bp::def_visitor<StatePlanner3DPython
         // Run StatePlanner3D from Python
         .def("computeReferenceStates", &StatePlanner3D::computeReferenceStates,
              bp::args("q", "v", "b_vref"), "Run StatePlanner from Python.\n")
+        .def("getFit", &StatePlanner3D::getFit, "Get the fitted surface.\n")
         .def("updateSurface", &StatePlanner3D::updateSurface,
              bp::args("q", "b_vref"), "Update the average surface from heightmap and positions.\n");
   }

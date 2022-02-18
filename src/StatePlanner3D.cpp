@@ -36,8 +36,9 @@ void StatePlanner3D::initialize(Params& params) {
 
 void StatePlanner3D::updateSurface(VectorN const& q, Vector6 const& vRef) {
     fit_ = heightmap_.fitSurface_(q(0), q(1));  // Update surface equality before new step
-    rpyMap_(0) = -std::atan2(fit_(1), 1.);
+    rpyMap_(0) = std::atan2(fit_(1), 1.);
     rpyMap_(1) = -std::atan2(fit_(0), 1.);
+
     computeConfigurations(q, vRef);
 }
 

@@ -78,40 +78,19 @@ def draw_whole_scene(surface_dict, ax=None, title=None, color_id=5):
         plot_surface(np.array(surface_dict[key][0]).T, ax, color_id)
     return ax
 
-def plot_heightmap(heightmap, alpha=1., ax=None):
-    """
-    Plot the heightmap
-    """
-    if ax is None:
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection="3d")
-    i = 0
-    if alpha != 1.:
-        i = 1
-
-    xv, yv = np.meshgrid(heightmap.x, heightmap.y, sparse=False, indexing='ij')
-    ax.plot_surface(xv, yv, heightmap.z, color=COLORS[i], alpha=alpha)
-
-    ax.set_xlabel("x")
-    ax.set_ylabel("y")
-    ax.set_zlabel("z")
-    ax.set_zlim([np.min(heightmap.z), np.max(heightmap.z) + 1.])
-
-    return ax
-
-
 # --------------------------------- MAIN ---------------------------------------------------------------
 if __name__ == "__main__":
     afftool = init_afftool()
     affordances = afftool.getAffordancePoints('Support')
     all_surfaces = getAllSurfacesDict(afftool)
-    new_surfaces = getAllSurfacesDict_inner(all_surfaces, 0.01)
+    new_surfaces = getAllSurfacesDict_inner(all_surfaces, 0.03)
 
     heightmap = Heightmap(N_X, N_Y, X_BOUNDS, Y_BOUNDS)
     heightmap.build(affordances)
     heightmap.save_binary(os.environ["SOLO3D_ENV_DIR"] + params.environment_heightmap)
+    heightmap.save_pickle(os.environ["SOLO3D_ENV_DIR"] + params.environment_heightmap + ".pickle")
 
-    ax_heightmap = plot_heightmap(heightmap)
+    heightmap.plot()
     ax = draw_whole_scene(all_surfaces)
     draw_whole_scene(new_surfaces, ax, color_id=0)
     plt.show(block=True)

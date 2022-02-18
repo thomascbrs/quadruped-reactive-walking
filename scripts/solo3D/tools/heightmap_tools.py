@@ -2,7 +2,10 @@ import numpy as np
 import hppfcl
 import pickle
 import ctypes
+import libquadruped_reactive_walking as lqrw
 
+
+COLORS = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
 
 class MapHeader(ctypes.Structure):
     _fields_ = [
@@ -13,7 +16,6 @@ class MapHeader(ctypes.Structure):
         ("y_init", ctypes.c_double),
         ("y_end", ctypes.c_double),
     ]
-
 
 class Heightmap:
 
@@ -52,6 +54,17 @@ class Heightmap:
             f.write(h_bytes)
             f.write(arr_bytes)
 
+    def build_from_fit(self, fit):
+        """
+        Build the heightmap and return it
+        For each slot in the grid create a vertical segment and check its collisions with the 
+        affordances until one is found
+        :param affordances list of affordances
+        """
+        for i in range(2):
+            for j in range(2):
+                self.z[i, j] = fit[0] * self.x[i] + fit[1] * self.y[j] + fit[2]
+
     def build(self, affordances):
         """
         Build the heightmap and return it
@@ -81,6 +94,30 @@ class Heightmap:
                     last_z = self.z[i, j]
                 else:
                     self.z[i, j] = last_z
+
+    def plot(self, alpha=1., ax=None):
+        """
+        Plot the heightmap
+        """
+        import matplotlib.pyplot as plt
+
+        if ax is None:
+            fig = plt.figure()
+            ax = fig.add_subplot(111, projection="3d")
+        i = 0
+        if alpha != 1.:
+            i = 1
+
+        xv, yv = np.meshgrid(self.x, self.y, sparse=False, indexing='ij')
+        ax.plot_surface(xv, yv, self.z, color=COLORS[i], alpha=alpha)
+
+        ax.set_xlabel("x")
+        ax.set_ylabel("y")
+        ax.set_zlabel("z")
+        ax.set_zlim([np.min(self.z), np.max(self.z) + 1.])
+
+        return ax
+
 
 
 def affordance_to_convex(affordance):

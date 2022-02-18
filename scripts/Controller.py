@@ -1,4 +1,3 @@
-from cmath import nan
 import numpy as np
 import utils_mpc
 import time
