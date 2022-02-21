@@ -39,8 +39,8 @@ robot:
     # Parameters of Joystick
     gp_alpha_vel: 0.003  # Coefficient of the low pass filter applied to gamepad velocity
     gp_alpha_pos: 0.005  # Coefficient of the low pass filter applied to gamepad position
-    t_switch: [0, 1, 7, 24, 26]
-    v_switch: [0.0, 0.23, 0.1, 0.2, 0.0, 
+    t_switch: [0, 1, 7, 22, 20]
+    v_switch: [0.0, 0.2, 0.1, 0.2, 0.0, 
                0.0, 0.0, 0.0, 0.0, 0.0,
                0.0, 0.0, 0.0, 0.0, 0.0,
                0.0, 0.0, 0.0, 0.0, 0.0,

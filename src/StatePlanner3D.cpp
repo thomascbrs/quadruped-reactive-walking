@@ -35,11 +35,11 @@ void StatePlanner3D::initialize(Params& params) {
 }
 
 void StatePlanner3D::updateSurface(VectorN const& q, Vector6 const& vRef) {
-    fit_ = heightmap_.fitSurface_(q(0), q(1));  // Update surface equality before new step
-    rpyMap_(0) = std::atan2(fit_(1), 1.);
-    rpyMap_(1) = -std::atan2(fit_(0), 1.);
+  fit_ = heightmap_.fitSurface_(q(0), q(1));  // Update surface equality before new step
+  rpyMap_(0) = std::atan2(fit_(1), 1.);
+  rpyMap_(1) = -std::atan2(fit_(0), 1.);
 
-    computeConfigurations(q, vRef);
+  computeConfigurations(q, vRef);
 }
 
 void StatePlanner3D::computeReferenceStates(VectorN const& q, Vector6 const& v, Vector6 const& vRef) {
@@ -115,19 +115,18 @@ void StatePlanner3D::computeConfigurations(VectorN const& q, Vector6 const& vRef
   for (int i = 0; i < nSteps_; i++) {
     double dt_config = stepDuration_ * (i + 2);  // Delay of 2 phase of contact for MIP
 
-    if (std::abs(vRef(5)) >= 0.001) {
-      configs_(0, i) =
-          (vRef(0) * std::sin(vRef(5) * dt_config) + vRef(1) * (std::cos(vRef(5) * dt_config) - 1.0)) / vRef(5);
-      configs_(1, i) =
-          (vRef(1) * std::sin(vRef(5) * dt_config) - vRef(0) * (std::cos(vRef(5) * dt_config) - 1.0)) / vRef(5);
-    } else {
-      configs_(0, i) = vRef(0) * dt_config;
-      configs_(1, i) = vRef(1) * dt_config;
-    }
+    Vector2 dxdy;
 
-    configs_(0, i) = std::cos(q(5)) * configs_(0, i) - std::sin(q(5)) * configs_(1, i);  // Yaw rotation for dx
-    configs_(1, i) = std::sin(q(5)) * configs_(0, i) + std::cos(q(5)) * configs_(1, i);  // Yaw rotation for dy
-    configs_.block(0, i, 2, 1) += q.head(2);                                             // Add initial position
+    if (std::abs(vRef(5)) >= 0.001) {
+      dxdy(0) = (vRef(0) * std::sin(vRef(5) * dt_config) + vRef(1) * (std::cos(vRef(5) * dt_config) - 1.0)) / vRef(5);
+      dxdy(1) = (vRef(1) * std::sin(vRef(5) * dt_config) - vRef(0) * (std::cos(vRef(5) * dt_config) - 1.0)) / vRef(5);
+    } else {
+      dxdy(0) = vRef(0) * dt_config;
+      dxdy(1) = vRef(1) * dt_config;
+    }
+    configs_(0, i) = std::cos(q(5)) * dxdy(0) - std::sin(q(5)) * dxdy(1);  // Yaw rotation for dx
+    configs_(1, i) = std::sin(q(5)) * dxdy(0) + std::cos(q(5)) * dxdy(1);  // Yaw rotation for dy
+    configs_.block(0, i, 2, 1) += q.head(2);  // Add initial position
 
     configs_(2, i) = fit_(0) * configs_(0, i) + fit_(1) * configs_(1, i) + fit_(2) + referenceHeight_;
     rpyConfig_(2) = q(5) + vRef(5) * dt_config;
