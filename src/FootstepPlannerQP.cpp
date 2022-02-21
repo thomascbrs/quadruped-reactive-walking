@@ -1,5 +1,6 @@
 #include "qrw/FootstepPlannerQP.hpp"
 
+
 FootstepPlannerQP::FootstepPlannerQP()
     : gait_(NULL),
       g(9.81),
@@ -422,8 +423,11 @@ Surface FootstepPlannerQP::selectSurfaceFromPoint(Vector3 const& point, int phas
   bool surfaceFound = false;
 
   Surface sf;
+  if (surfaceIteration_ > 0) {
+    sf = initialSurface_;
+  }
 
-  if (surfaceIteration_) {
+  if (surfaceIteration_ > 0) {
     SurfaceVector potentialSurfaces = potentialSurfaces_[moving_foot_index];
     sf = potentialSurfaces[0];
     for (uint i = 0; i < potentialSurfaces.size(); i++) {
@@ -436,30 +440,33 @@ Surface FootstepPlannerQP::selectSurfaceFromPoint(Vector3 const& point, int phas
         }
       }
     }
+  }
 
-    if (not surfaceFound) {
-      // TODO
-
-      // obj1 = simple_object(np.array([[point[0], point[1], 0.]]),  [[0, 0, 0]])
-      // o1 = fclObj_trimesh(obj1)
-      // t1 = hppfcl.Transform3f()
-      // t2 = hppfcl.Transform3f()
-      // distance = 100
-
-      // for sf in potential_surfaces:
-      //     vert = np.zeros(sf.vertices.shape)
-      //     vert[:, :2] = sf.vertices[:, :2]
-      //     tri = Delaunay(vert[:, :2])
-      //     obj2 = simple_object(vert,  tri.simplices.tolist())
-      //     o2 = fclObj_trimesh(obj2)
-      //     gg = gjk(o1, o2, t1, t2)
-
-      //     if gg.distance <= distance:
-      //         surface_selected = sf
-      //         distance = gg.distance
+  // The vertices has been ordered previously counter-clock wise, using qHull methods.
+  // We could use hpp_fcl for this distance computation.
+  Pair A = {0., 0.};
+  Pair B = {0., 0.};
+  Pair E = {point(0), point(1)};
+  double distance = 100.0;
+  double distance_tmp = 0.;
+  if (not surfaceFound) {
+    if (surfaceIteration_ > 0) {
+      SurfaceVector potentialSurfaces = potentialSurfaces_[moving_foot_index];
+      for (uint i = 0; i < potentialSurfaces.size(); i++) {
+        MatrixN vertices = potentialSurfaces[i].getVertices();
+        for (uint j = 0; j < vertices.rows(); j++) {
+          A.F = vertices(j, 0);
+          A.S = vertices(j, 1);
+          B.F = vertices((j + 1) % vertices.rows(), 0);
+          B.S = vertices((j + 1) % vertices.rows(), 1);
+          distance_tmp = minDistance(A, B, E);
+          if (distance_tmp < distance) {
+            distance = distance_tmp;
+            sf = potentialSurfaces[i];
+          }
+        }
+      }
     }
-  } else {
-    sf = initialSurface_;
   }
   return sf;
 }
@@ -488,4 +495,61 @@ MatrixN FootstepPlannerQP::vectorToMatrix(std::vector<Matrix34> const& array) {
     }
   }
   return M;
+}
+
+// Function to return the minimum distance
+// between a line segment AB and a point E
+// https://www.geeksforgeeks.org/minimum-distance-from-a-point-to-the-line-segment-using-vectors/
+double FootstepPlannerQP::minDistance(Pair const& A, Pair const& B, Pair const& E) {
+  // vector AB
+  Pair AB = {B.F - A.F,B.S - A.S };
+  // AB.F = B.F - A.F;
+  // AB.S = B.S - A.S;
+
+  // vector BP
+  Pair BE = {E.F - B.F, E.S - B.S };
+  // BE.F = E.F - B.F;
+  // BE.S = E.S - B.S;
+
+  // vector AP
+  Pair AE = {E.F - A.F, E.S - A.S};
+  // AE.F = E.F - A.F, AE.S = E.S - A.S;
+
+  // Variables to store dot product
+  double AB_BE, AB_AE;
+
+  // Calculating the dot product
+  AB_BE = (AB.F * BE.F + AB.S * BE.S);
+  AB_AE = (AB.F * AE.F + AB.S * AE.S);
+
+  // Minimum distance from
+  // point E to the line segment
+  double reqAns = 0;
+
+  // Case 1
+  if (AB_BE > 0) {
+    // Finding the magnitude
+    double y = E.S - B.S;
+    double x = E.F - B.F;
+    reqAns = sqrt(x * x + y * y);
+  }
+
+  // Case 2
+  else if (AB_AE < 0) {
+    double y = E.S - A.S;
+    double x = E.F - A.F;
+    reqAns = sqrt(x * x + y * y);
+  }
+
+  // Case 3
+  else {
+    // Finding the perpendicular distance
+    double x1 = AB.F;
+    double y1 = AB.S;
+    double x2 = AE.F;
+    double y2 = AE.S;
+    double mod = sqrt(x1 * x1 + y1 * y1);
+    reqAns = abs(x1 * y2 - y1 * x2) / mod;
+  }
+  return reqAns;
 }

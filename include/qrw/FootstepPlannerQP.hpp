@@ -31,6 +31,11 @@ using namespace eiquadprog::solvers;
 typedef std::vector<Surface> SurfaceVector;
 typedef std::vector<std::vector<Surface>> SurfaceVectorVector;
 
+struct Pair {
+  double F;  // First
+  double S;  // Second
+};
+
 struct optimData {
   int phase;
   int foot;
@@ -189,6 +194,13 @@ class FootstepPlannerQP {
   ///
   ////////////////////////////////////////////////////////////////////////////////////////////////
   MatrixN vectorToMatrix(std::vector<Matrix34> const& array);
+
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  ///
+  /// \brief Compute a distance from a point to a segment.
+  ///
+  ////////////////////////////////////////////////////////////////////////////////////////////////
+  double minDistance(Pair const& A, Pair const& B, Pair const& E);
 
   Params* params_;  // Params object to store parameters
   Gait* gait_;      // Gait object to hold the gait informations
