@@ -43,7 +43,7 @@ class SurfacePlanner:
         """
         self.plot = False
 
-        self.use_heuristique = True
+        self.use_heuristique = params.use_heuristic
         self.step_duration = params.T_gait/2
         self.k_feedback = params.k_feedback
         self.shoulders = np.reshape(params.footsteps_under_shoulders, (3, 4), order="F")

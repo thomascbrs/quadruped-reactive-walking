@@ -91,3 +91,4 @@ robot:
     max_velocity: [0.4, 0.4, 0.1] # Maximum velocity of the base
     use_bezier: True # Use Bezier to plan trajectories, otherwise use simple 6d polynomial curve.
     use_sl1m: True # Use SL1M to select the surfaces, otherwise use Raibert heuristic projection in 2D.
+    use_heuristic: True # Use heuristic as SL1M cost.

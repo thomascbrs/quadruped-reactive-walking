@@ -507,7 +507,10 @@ struct ParamsPythonVisitor : public bp::def_visitor<ParamsPythonVisitor<Params>>
             .def_readwrite("heightmap_fit_length", &Params::heightmap_fit_length)
             .def_readwrite("heightmap_fit_size", &Params::heightmap_fit_size)
             .def_readwrite("number_steps", &Params::number_steps)
-            .def_readwrite("max_velocity", &Params::max_velocity);
+            .def_readwrite("max_velocity", &Params::max_velocity)
+            .def_readwrite("use_bezier", &Params::use_bezier)
+            .def_readwrite("use_sl1m", &Params::use_sl1m)
+            .def_readwrite("use_heuristic", &Params::max_velocity);
     }
 
     static void expose()

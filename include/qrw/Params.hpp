@@ -147,7 +147,8 @@ class Params {
   int number_steps;                   // Number of steps to optimize with the MIP
   std::vector<double> max_velocity;   // Maximum velocity of the base
   bool use_bezier;                    // Use Bezier to plan trajectories, otherwise use simple 6d polynomial curve.
-  bool use_sl1m;  // Use SL1M to select the surfaces, otherwise use Raibert heuristic projection in 2D.
+  bool use_sl1m;       // Use SL1M to select the surfaces, otherwise use Raibert heuristic projection in 2D.
+  bool use_heuristic;  // Use heuristic as SL1M cost.
 
   // Not defined in yaml
   MatrixN gait;                           // Initial gait matrix (Eigen)

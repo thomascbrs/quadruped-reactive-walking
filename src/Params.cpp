@@ -254,6 +254,9 @@ void Params::initialize(const std::string& file_path) {
 
   assert_yaml_parsing(robot_node, "robot", "use_sl1m");
   use_sl1m = robot_node["use_sl1m"].as<bool>();
+
+  assert_yaml_parsing(robot_node, "robot", "use_heuristic");
+  use_sl1m = robot_node["use_heuristic"].as<bool>();
 }
 
 void Params::convert_gait_vec() {
