@@ -32,12 +32,11 @@ class SurfacePlanner:
         Initialize the affordance tool and save the solo abstract rbprm builder, and surface dictionary
         """
         self.plot = False
+        
         self.use_heuristique = True
-
         self.step_duration = params.T_gait/2
-        shoulders = [0.1946, 0.14695, 0.1946, -0.14695, -0.1946, 0.14695, -0.1946, -0.14695]
-        self.shoulders = np.zeros((3, 4))
-        self.shoulders[:2, :] = np.reshape(shoulders, (2, 4), order="F")
+        self.k_feedback = params.k_feedback
+        self.shoulders = np.reshape(params.footsteps_under_shoulders, (3, 4), order="F")
 
         self.solo_abstract = SoloAbstract()
         self.solo_abstract.setJointBounds("root_joint", [-5., 5., -5., 5., 0.241, 1.5])
@@ -53,7 +52,7 @@ class SurfacePlanner:
         self.afftool.loadObstacleModel(os.environ["SOLO3D_ENV_DIR"] + params.environment_URDF, "environment", self.vf)
         self.ps.selectPathValidation("RbprmPathValidation", 0.05)
 
-        self.all_surfaces = getAllSurfacesDict_inner(getAllSurfacesDict(self.afftool), margin=0.03)
+        self.all_surfaces = getAllSurfacesDict_inner(getAllSurfacesDict(self.afftool), margin=0.01)
 
         self.potential_surfaces = []
 
@@ -90,26 +89,26 @@ class SurfacePlanner:
         step_length = o_v_ref * self.step_duration
         return np.array([step_length[i] for i in range(2)])
 
-    def compute_effector_positions(self, configs, b_v_ref):
+    def compute_effector_positions(self, configs, h_v, h_v_ref):
         """
         Compute the desired effector positions in 2D
         :param configs the list of configurations
-        :param b_v_ref, Array (x3) the desired velocity in base frame
+        :param h_v_ref, Array (x3) the desired velocity in base frame
         """
-        effector_positions = np.zeros((4, self.pb.n_phases, 2))
+        effector_positions = [[] for i in range(4)]
         for phase in self.pb.phaseData:
-            for foot in phase.moving:
-                rpy = pin.rpy.matrixToRpy(pin.Quaternion(configs[phase.id][3:7]).toRotationMatrix())
-                yaw = rpy[2]
-                rpy[2] = 0.
-                Rp = pin.rpy.rpyToMatrix(rpy)[:2, :2]
-                heuristic = 0.5 * self.step_duration * Rp @ b_v_ref[:2] + Rp @ self.shoulders[:2, foot]
-
-                # Compute heuristic in world frame, rotation
-                shoulders = np.zeros(2)
-                shoulders[0] = heuristic[0] * np.cos(yaw) - heuristic[1] * np.sin(yaw)
-                shoulders[1] = heuristic[0] * np.sin(yaw) + heuristic[1] * np.cos(yaw)
-                effector_positions[foot][phase.id] = np.array(configs[phase.id][:2] + shoulders)
+            for foot in range(4):
+                if foot in phase.moving:
+                    rpy = pin.rpy.matrixToRpy(pin.Quaternion(configs[phase.id][3:7]).toRotationMatrix())
+                    rpy[0] = 0.
+                    rpy[1] = 0.
+                    Rz = pin.rpy.rpyToMatrix(rpy)
+                    heuristic = 0.5 * self.step_duration * h_v + self.k_feedback * (h_v - h_v_ref) + self.shoulders[:, foot]
+                    heuristic[2] = 0.
+                    heuristic = Rz @ heuristic
+                    effector_positions[foot].append(np.array(configs[phase.id][:2] + heuristic[:2]))
+                else:
+                    effector_positions[foot].append(None)
 
         return effector_positions
 
@@ -194,13 +193,14 @@ class SurfacePlanner:
 
         return vertices, inequalities, selected_surfaces_indices
 
-    def run(self, configs, gait_in, current_contacts, b_v_ref):
+    def run(self, configs, gait_in, current_contacts, h_v, h_v_ref):
         """
         Select the next surfaces to use
         :param configs: successive states
         :param gait_in: a gait matrix
         :param current_contacts: the initial_contacts to use in the computation
-        :param b_v_ref: Array (x3) the desired velocity for the cost, in base frame
+        :param h_v: Array (x3) the current velocity for the cost, in horizontal frame
+        :param h_v_ref: Array (x3) the desired velocity for the cost, in horizontal frame
         :return: the selected surfaces for the first phase
         """
         R = [pin.XYZQUATToSE3(np.array(config)).rotation for config in configs]
@@ -215,12 +215,14 @@ class SurfacePlanner:
 
         self.pb.generate_problem(R, surfaces, gait, initial_contacts, c0=None, com=False)
 
+        print(self.shoulders)
+
         shoulder_positions = self.compute_shoulder_positions(configs)
         if self.use_heuristique:
-            effector_positions = self.compute_effector_positions(configs, b_v_ref)
+            effector_positions = self.compute_effector_positions(configs, h_v, h_v_ref)
             costs = {"effector_positions": [1.0, effector_positions], "effector_positions_3D": [0.1, shoulder_positions]}
         else:
-            step_length = self.compute_step_length(b_v_ref[:2])
+            step_length = self.compute_step_length(h_v_ref[:2])
             costs = {"step_length": [1.0, step_length], "effector_positions_3D": [0.1, shoulder_positions]}
         result = solve_MIP(self.pb, costs=costs, com=False)
 
@@ -229,7 +231,7 @@ class SurfacePlanner:
                 import matplotlib.pyplot as plt
                 import sl1m.tools.plot_tools as plot
                 ax = plot.draw_whole_scene(self.all_surfaces)
-                plot.plot_planner_result(result.all_feet_pos, ax=ax, show=True)
+                plot.plot_planner_result(result.all_feet_pos, effector_positions=effector_positions, ax=ax, show=True)
 
             vertices, inequalities, indices = self.retrieve_surfaces(surfaces, result.surface_indices)
             return vertices, inequalities, indices, result.all_feet_pos, True

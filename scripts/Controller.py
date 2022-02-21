@@ -352,7 +352,7 @@ class Controller:
 
         if self.update_mip and self.solo3D:
             configs = self.statePlanner.getConfigurations().transpose()
-            self.surfacePlanner.run(configs, cgait, self.o_targetFootstep, self.vref_filt_mpc[:3, 0].copy())
+            self.surfacePlanner.run(configs, cgait, self.o_targetFootstep, self.h_v_windowed[:3, 0].copy(), self.v_ref[:3, 0].copy())
             self.surfacePlanner.initialized = True
             if not self.enable_multiprocessing_mip and self.SIMULATION:
                 self.pybEnvironment3D.update_target_SL1M(self.surfacePlanner.all_feet_pos)

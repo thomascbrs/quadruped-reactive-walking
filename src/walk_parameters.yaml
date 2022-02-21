@@ -82,7 +82,7 @@ robot:
 
     # Parameters fro solo3D simulation
     solo3D: true  # Activation of the 3D environment, and corresponding planner blocks
-    enable_multiprocessing_mip: true  # Enable/disable running the MIP in another process in parallel of the main loop
+    enable_multiprocessing_mip: false  # Enable/disable running the MIP in another process in parallel of the main loop
     environment_URDF: "/round_stairs/round_stairs.urdf"
     environment_heightmap: "/round_stairs/round_stairs.bin"
     heightmap_fit_length: 0.3 # Length of half the heightmap fit in a direction

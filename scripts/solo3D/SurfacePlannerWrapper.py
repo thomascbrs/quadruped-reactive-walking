@@ -51,7 +51,7 @@ class DataInCtype(ctypes.Structure):
     params = lqrw.Params()                  # Object that holds all controller parameters
     n_gait = int(params.gait.shape[0])
     _fields_ = [('gait', ctypes.c_int64 * 4 * n_gait), ('configs', ctypes.c_double * 7 * N_SURFACE_CONFIG),
-                ('b_v_ref', ctypes.c_double * 3), ('contacts', ctypes.c_double * 12)]
+                ('h_v', ctypes.c_double * 3), ('h_v_ref', ctypes.c_double * 3), ('contacts', ctypes.c_double * 12)]
 
 
 class SurfacePlanner_Wrapper():
@@ -101,21 +101,21 @@ class SurfacePlanner_Wrapper():
 
         self.initialized = False
 
-    def run(self, configs, gait_in, current_contacts, b_v_ref):
+    def run(self, configs, gait_in, current_contacts, h_v, h_v_ref):
         ''' 
         Either call synchronous or asynchronous planner
         '''
         if self.multiprocessing:
-            self.run_asynchronous(configs, gait_in, current_contacts, b_v_ref)
+            self.run_asynchronous(configs, gait_in, current_contacts, h_v, h_v_ref)
         else:
-            self.run_synchronous(configs, gait_in, current_contacts, b_v_ref)
+            self.run_synchronous(configs, gait_in, current_contacts, h_v, h_v_ref)
 
-    def run_synchronous(self, configs, gait, current_contacts, b_v_ref):
+    def run_synchronous(self, configs, gait, current_contacts, h_v, h_v_ref):
         ''' 
         Call the planner and store the result in syn variables
         '''
         t_start = time.time()
-        vertices, inequalities, indices, self.all_feet_pos, success = self.planner.run(configs, gait, current_contacts, b_v_ref)
+        vertices, inequalities, indices, self.all_feet_pos, success = self.planner.run(configs, gait, current_contacts, h_v, h_v_ref)
         self.mip_iteration_syn += 1
         self.mip_success_syn = success
 
@@ -133,7 +133,7 @@ class SurfacePlanner_Wrapper():
                 self.selected_surfaces_syn.append(lqrw.Surface(S, s, vertices[foot][indices[foot]].T))
         self.t_mip = time.time() - t_start
 
-    def run_asynchronous(self, configs, gait_in, current_contacts, b_v_ref):
+    def run_asynchronous(self, configs, gait_in, current_contacts, h_v_in, h_v_ref_in):
         ''' 
         Compress the data and send them for asynchronous process 
         '''
@@ -143,8 +143,10 @@ class SurfacePlanner_Wrapper():
                 data_config[:] = config[:]
             gait = np.frombuffer(self.data_in.gait).reshape((self.n_gait, 4))
             gait[:, :] = gait_in
-            b_v_ref = np.frombuffer(self.data_in.b_v_ref)
-            b_v_ref[:] = b_v_ref[:]
+            h_v_ref = np.frombuffer(self.data_in.h_v_ref)
+            h_v_ref[:] = h_v_ref_in[:]
+            h_v = np.frombuffer(self.data_in.h_v)
+            h_v[:] = h_v_in[:]
             contact = np.frombuffer(self.data_in.contacts).reshape((3, 4))
             contact[:, :] = current_contacts[:, :]
         self.new_data.value = True
@@ -162,10 +164,11 @@ class SurfacePlanner_Wrapper():
                 with data_in.get_lock():
                     configs = [np.frombuffer(config) for config in data_in.configs]
                     gait = np.frombuffer(data_in.gait).reshape((self.n_gait, 4))
-                    b_v_ref = np.frombuffer(data_in.b_v_ref).reshape((3))
+                    h_v_ref = np.frombuffer(data_in.h_v_ref).reshape((3))
+                    h_v = np.frombuffer(data_in.h_v).reshape((3))
                     contacts = np.frombuffer(data_in.contacts).reshape((3, 4))
 
-                vertices, inequalities, indices, _, success = planner.run(configs, gait, contacts, b_v_ref)
+                vertices, inequalities, indices, _, success = planner.run(configs, gait, contacts, h_v, h_v_ref)
                 
                 t = time.time() - t_start
                 self.compress_result(vertices, inequalities, indices, success, t, data_out)
