@@ -156,6 +156,7 @@ class FootTrajectoryGeneratorBezier {
   typedef optimization::problem_definition<pointX_t, double> problem_definition_t;
   typedef optimization::problem_data<pointX_t, double> problem_data_t;
   static const bool safe = true;
+  bool useBezier;
 
   // Number of points in the least square problem
   int N_samples;

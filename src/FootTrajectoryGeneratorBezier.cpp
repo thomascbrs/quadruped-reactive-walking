@@ -30,6 +30,7 @@ FootTrajectoryGeneratorBezier::FootTrajectoryGeneratorBezier()
       acceleration_base_(Matrix34::Zero()),
       intersectionPoint_(Vector2::Zero()),
       ineq_vector_{Vector4::Zero()},
+      useBezier(true),
       x_margin_{Vector4::Zero()} {
   for (int i = 0; i < 4; i++) {
     pDefs.push_back(optimization::problem_definition<pointX_t, double>(3));
@@ -54,6 +55,7 @@ void FootTrajectoryGeneratorBezier::initialize(Params& params, Gait& gaitIn, Sur
   N_samples_ineq = N_samples_ineq_in;
   degree = degree_in;
   res_size = dim * (degree + 1 - 6);
+  useBezier = params.use_bezier;
 
   P_ = MatrixN::Zero(res_size, res_size);
   q_ = VectorN::Zero(res_size);
@@ -483,12 +485,15 @@ void FootTrajectoryGeneratorBezier::updateFootPosition(int const& k, int const& 
     acceleration_(1, i_foot) = 0.0;
     acceleration_(2, i_foot) = evaluatePoly(i_foot, 2, ev)[2];
   } else {
-    position_.col(i_foot) = fitBeziers[i_foot](t_b);
-    velocity_.col(i_foot) = fitBeziers[i_foot].derivate(t_b, 1) / delta_t;
-    acceleration_.col(i_foot) = fitBeziers[i_foot].derivate(t_b, 2) / std::pow(delta_t, 2);
-    // position_.col(i_foot) = evaluatePoly(i_foot, 0, ev);
-    // velocity_.col(i_foot) = evaluatePoly(i_foot, 1, ev);
-    // acceleration_.col(i_foot) = evaluatePoly(i_foot, 2, ev);
+    if (useBezier) {
+      position_.col(i_foot) = fitBeziers[i_foot](t_b);
+      velocity_.col(i_foot) = fitBeziers[i_foot].derivate(t_b, 1) / delta_t;
+      acceleration_.col(i_foot) = fitBeziers[i_foot].derivate(t_b, 2) / std::pow(delta_t, 2);
+    } else {
+      position_.col(i_foot) = evaluatePoly(i_foot, 0, ev);
+      velocity_.col(i_foot) = evaluatePoly(i_foot, 1, ev);
+      acceleration_.col(i_foot) = evaluatePoly(i_foot, 2, ev);
+    }
   }
 }
 

@@ -34,12 +34,14 @@ FootstepPlannerQP::FootstepPlannerQP()
       d_{VectorN::Zero(0)},
       x{VectorN::Zero(N)},
       surfaceStatus_(false),
+      useSL1M(true),
       surfaceIteration_(0) {
   // Empty
 }
 
 void FootstepPlannerQP::initialize(Params& params, Gait& gaitIn, Surface initialSurface_in) {
   params_ = &params;
+  useSL1M = params.use_sl1m;
   dt = params.dt_mpc;
   dt_wbc = params.dt_wbc;
   h_ref = params.h_ref;
@@ -238,7 +240,7 @@ void FootstepPlannerQP::computeFootsteps(int k, Vector6 const& b_v, Vector6 cons
         {
           if (t0s[j] < 10e-4 and k % k_mpc == 0)  // Beginning of flying phase
           {
-            if (surfaceStatus_) {
+            if (surfaceStatus_ && useSL1M) {
               selectedSurfaces_[j] = surfaces_[j];
             } else {
               selectedSurfaces_[j] = selectSurfaceFromPoint(heuristic_fb_, phase, j);
@@ -248,7 +250,7 @@ void FootstepPlannerQP::computeFootsteps(int k, Vector6 const& b_v, Vector6 cons
           optimVector_.push_back(optim_data);
         } else {
           Surface sf_ = Surface();
-          if (surfaceStatus_) {
+          if (surfaceStatus_ && useSL1M ) {
             sf_ = surfaces_[j];
           } else {
             sf_ = selectSurfaceFromPoint(heuristic_fb_, phase, j);
@@ -422,14 +424,10 @@ Surface FootstepPlannerQP::selectSurfaceFromPoint(Vector3 const& point, int phas
   double sfHeight = 0.;
   bool surfaceFound = false;
 
-  Surface sf;
-  if (surfaceIteration_ > 0) {
-    sf = initialSurface_;
-  }
+  Surface sf = initialSurface_;
 
   if (surfaceIteration_ > 0) {
     SurfaceVector potentialSurfaces = potentialSurfaces_[moving_foot_index];
-    sf = potentialSurfaces[0];
     for (uint i = 0; i < potentialSurfaces.size(); i++) {
       if (potentialSurfaces[i].hasPoint(point.head(2))) {
         double height = sf.getHeight(point.head(2));
@@ -443,7 +441,7 @@ Surface FootstepPlannerQP::selectSurfaceFromPoint(Vector3 const& point, int phas
   }
 
   // The vertices has been ordered previously counter-clock wise, using qHull methods.
-  // We could use hpp_fcl for this distance computation.
+  // We could use hpp_fcl to compute this distance.
   Pair A = {0., 0.};
   Pair B = {0., 0.};
   Pair E = {point(0), point(1)};

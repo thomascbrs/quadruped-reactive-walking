@@ -278,6 +278,7 @@ class FootstepPlannerQP {
   VectorN x;
   EiquadprogFast qp;
 
+  bool useSL1M;
   bool surfaceStatus_;
   int surfaceIteration_;
   SurfaceVector surfaces_;
