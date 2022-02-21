@@ -1,6 +1,7 @@
 import pinocchio as pin
 import numpy as np
 import os
+import copy
 
 from sl1m.problem_definition import Problem
 from sl1m.generic_solver import solve_MIP
@@ -32,7 +33,7 @@ class SurfacePlanner:
         Initialize the affordance tool and save the solo abstract rbprm builder, and surface dictionary
         """
         self.plot = False
-        
+
         self.use_heuristique = True
         self.step_duration = params.T_gait/2
         self.k_feedback = params.k_feedback
@@ -89,23 +90,21 @@ class SurfacePlanner:
         step_length = o_v_ref * self.step_duration
         return np.array([step_length[i] for i in range(2)])
 
-    def compute_effector_positions(self, configs, h_v, h_v_ref):
+    def compute_effector_positions(self, configs, h_v_ref):
         """
         Compute the desired effector positions in 2D
         :param configs the list of configurations
-        :param h_v_ref, Array (x3) the desired velocity in base frame
+        :param h_v_ref, Array (x3) the desired velocity in horizontal frame
+        :param yaw, Array (x3) yaw of the horizontal frame wrt the world frame
         """
-        effector_positions = [[] for i in range(4)]
+        effector_positions = [[] for _ in range(4)]
         for phase in self.pb.phaseData:
             for foot in range(4):
                 if foot in phase.moving:
-                    rpy = pin.rpy.matrixToRpy(pin.Quaternion(configs[phase.id][3:7]).toRotationMatrix())
-                    rpy[0] = 0.
-                    rpy[1] = 0.
-                    Rz = pin.rpy.rpyToMatrix(rpy)
-                    heuristic = 0.5 * self.step_duration * h_v + self.k_feedback * (h_v - h_v_ref) + self.shoulders[:, foot]
-                    heuristic[2] = 0.
-                    heuristic = Rz @ heuristic
+                    rpy = pin.rpy.matrixToRpy(pin.Quaternion(configs[phase.id][3:7].copy()).toRotationMatrix())
+                    hRb = pin.rpy.rpyToMatrix(np.array([rpy[0], rpy[1], 0.]))
+                    wRh = pin.rpy.rpyToMatrix(np.array([0., 0., rpy[2]]))
+                    heuristic = wRh @ (0.5 * self.step_duration * copy.deepcopy(h_v_ref)) + wRh @ hRb @ copy.deepcopy(self.shoulders[:, foot])
                     effector_positions[foot].append(np.array(configs[phase.id][:2] + heuristic[:2]))
                 else:
                     effector_positions[foot].append(None)
@@ -193,7 +192,7 @@ class SurfacePlanner:
 
         return vertices, inequalities, selected_surfaces_indices
 
-    def run(self, configs, gait_in, current_contacts, h_v, h_v_ref):
+    def run(self, configs, gait_in, current_contacts, h_v_ref):
         """
         Select the next surfaces to use
         :param configs: successive states
@@ -215,12 +214,10 @@ class SurfacePlanner:
 
         self.pb.generate_problem(R, surfaces, gait, initial_contacts, c0=None, com=False)
 
-        print(self.shoulders)
-
         shoulder_positions = self.compute_shoulder_positions(configs)
         if self.use_heuristique:
-            effector_positions = self.compute_effector_positions(configs, h_v, h_v_ref)
-            costs = {"effector_positions": [1.0, effector_positions], "effector_positions_3D": [0.1, shoulder_positions]}
+            effector_positions = self.compute_effector_positions(configs, h_v_ref)
+            costs = {"effector_positions_xy": [1.0, effector_positions], "effector_positions_3D": [0.1, shoulder_positions]}
         else:
             step_length = self.compute_step_length(h_v_ref[:2])
             costs = {"step_length": [1.0, step_length], "effector_positions_3D": [0.1, shoulder_positions]}
@@ -231,7 +228,7 @@ class SurfacePlanner:
                 import matplotlib.pyplot as plt
                 import sl1m.tools.plot_tools as plot
                 ax = plot.draw_whole_scene(self.all_surfaces)
-                plot.plot_planner_result(result.all_feet_pos, effector_positions=effector_positions, ax=ax, show=True)
+                plot.plot_planner_result(result.all_feet_pos, effector_positions=effector_positions, coms=configs, ax=ax, show=True)
 
             vertices, inequalities, indices = self.retrieve_surfaces(surfaces, result.surface_indices)
             return vertices, inequalities, indices, result.all_feet_pos, True
