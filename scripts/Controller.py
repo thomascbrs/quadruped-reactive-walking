@@ -167,9 +167,6 @@ class Controller:
                                                     degree)
             if self.SIMULATION:
                 self.pybEnvironment3D = PybEnvironment3D(params, self.gait, self.statePlanner, self.footstepPlanner,
-<<<<<<< HEAD
-                                                         self.footTrajectoryGenerator)
-=======
                                                          self.footTrajectoryGenerator, self.solo.model)
 
             self.q_mes_3d = np.zeros((18, 1))
@@ -181,7 +178,6 @@ class Controller:
             self.filter_v_3d = lqrw.Filter()
             self.filter_v_3d.initialize(params)
 
->>>>>>> Cleaning pyb visualization tool, new tools to check and display CoM constraints
         else:
             self.statePlanner = lqrw.StatePlanner()
             self.statePlanner.initialize(params)
@@ -345,7 +341,6 @@ class Controller:
 
         self.update_mip = self.k % self.k_mpc == 0 and self.gait.isNewPhase()
         if self.solo3D:
-<<<<<<< HEAD
             if self.update_mip:
                 self.statePlanner.updateSurface(self.q_filter[:6, :1], self.vref_filt_mpc[:6, :1])
                 if self.surfacePlanner.initialized:
@@ -361,34 +356,6 @@ class Controller:
 
         self.statePlanner.computeReferenceStates(self.q_filter[:6, :1], self.h_v_filt_mpc[:6, :1].copy(), self.vref_filt_mpc[:6, :1])
 
-=======
-            if is_new_step:
-                if self.surfacePlanner.first_iteration:
-                    self.surfacePlanner.first_iteration = False
-                else:
-                    self.surfacePlanner.update_latest_results()
-
-            # Compute target footstep based on current and reference velocities
-            o_targetFootstep = self.footstepPlanner.updateFootsteps(
-                self.k % self.k_mpc == 0 and self.k != 0, int(self.k_mpc - self.k % self.k_mpc), self.q_filt_3d[:, 0],
-                self.h_v_windowed[0:6, 0:1].copy(), self.v_ref[0:6, 0:1], self.surfacePlanner.potential_surfaces,
-                self.surfacePlanner.selected_surfaces, self.surfacePlanner.mip_success,
-                self.surfacePlanner.mip_iteration)
-            # Run state planner (outputs the reference trajectory of the base)
-            self.statePlanner.computeReferenceStates(self.q_filt_3d[:6, :1], self.h_v_filt_mpc[:6, :1].copy(),
-                                                     self.vref_filt_mpc[:6, :1], is_new_step)
-        else:
-            # Compute target footstep based on current and reference velocities
-            o_targetFootstep = self.footstepPlanner.updateFootsteps(self.k % self.k_mpc == 0 and self.k != 0,
-                                                                    int(self.k_mpc - self.k % self.k_mpc),
-                                                                    self.q[:, 0], self.h_v_windowed[:6, :1].copy(),
-                                                                    self.v_ref[:6, :1])
-            # Run state planner (outputs the reference trajectory of the base)
-            self.statePlanner.computeReferenceStates(self.q_filt_mpc[:6, :1], self.h_v_filt_mpc[:6, :1].copy(),
-                                                     self.vref_filt_mpc[:6, :1])
-
-        # Result can be retrieved with self.statePlanner.getReferenceStates()
->>>>>>> Cleaning pyb visualization tool, new tools to check and display CoM constraints
         xref = self.statePlanner.getReferenceStates()
         fsteps = self.footstepPlanner.getFootsteps()
         cgait = self.gait.getCurrentGait()
@@ -502,7 +469,7 @@ class Controller:
             self.pyb_camera(device, 0.0)
         else:  # Update 3D Environment
             if self.SIMULATION and self.k >= 1:
-                self.pybEnvironment3D.update(self.k, self.surfacePlanner.all_feet_pos, is_new_step,
+                self.pybEnvironment3D.update(self.k, self.surfacePlanner.all_feet_pos, self.update_mip,
                                              self.footTrajectoryGenerator.getFootPosition(), cgait[0, :],
                                              self.q_filt_3d)
 

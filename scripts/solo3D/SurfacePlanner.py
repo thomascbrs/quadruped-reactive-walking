@@ -13,11 +13,20 @@ from hpp.corbaserver.rbprm.tools.surfaces_from_path import getAllSurfacesDict
 from solo3D.tools.utils import getAllSurfacesDict_inner
 from hpp.corbaserver.problem_solver import ProblemSolver
 from hpp.gepetto import ViewerFactory
+import matplotlib.pyplot as plt
 
+import sl1m.tools.plot_tools as plot
+
+from sl1m.constants_and_tools import default_transform_from_pos_normal
+from sl1m.tools.obj_to_constraints import load_obj, rotate_inequalities, as_inequalities
 # --------------------------------- PROBLEM DEFINITION ---------------------------------------------------------------
 
-paths = [os.environ["INSTALL_HPP_DIR"] + "/solo-rbprm/com_inequalities/feet_quasi_flat/",
+# paths = [os.environ["INSTALL_HPP_DIR"] + "/solo-rbprm/com_inequalities/feet_quasi_flat/",
+#          os.environ["INSTALL_HPP_DIR"] + "/solo-rbprm/relative_effector_positions/"]
+# suffix_com = "_effector_frame_quasi_static_reduced.obj"
+paths = [os.environ["SOLO3D_ENV_DIR"] + "/com_inequalities/",
          os.environ["INSTALL_HPP_DIR"] + "/solo-rbprm/relative_effector_positions/"]
+suffix_com = "_effector_frame.obj"
 limbs = ['FLleg', 'FRleg', 'HLleg', 'HRleg']
 others = ['FL_FOOT', 'FR_FOOT', 'HL_FOOT', 'HR_FOOT']
 rom_names = ['solo_LFleg_rom', 'solo_RFleg_rom', 'solo_LHleg_rom', 'solo_RHleg_rom']
@@ -57,7 +66,10 @@ class SurfacePlanner:
 
         self.potential_surfaces = []
 
-        self.pb = Problem(limb_names=limbs, other_names=others, constraint_paths=paths)
+        self.pb = Problem(limb_names=limbs, other_names=others, constraint_paths=paths, suffix_com= suffix_com)
+
+        # from IPython import embed
+        # embed()
 
 
     def compute_gait(self, gait_in):
@@ -122,6 +134,18 @@ class SurfacePlanner:
                 R = pin.Quaternion(configs[phase.id][3:7]).toRotationMatrix()
                 shoulder_positions[foot][phase.id] = R @ self.shoulders[:, foot] + configs[phase.id][:3]
         return shoulder_positions
+
+    def compute_com_positions(self, configs):
+        """
+        Compute the com positions
+        :param configs the list of configurations
+        """
+        com_positions = []
+        for phase in self.pb.phaseData:
+            com = configs[phase.id][:3]
+            com_positions.append(configs[phase.id][:3])
+
+        return com_positions
 
     def get_potential_surfaces(self, configs, gait):
         """
