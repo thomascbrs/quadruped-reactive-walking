@@ -62,10 +62,13 @@ class PybEnvironment3D():
     def update(self, k, all_feet_pos, is_new_step, o_feet, gait, q):
         ''' Update position of the objects in pybullet environment.
         Args :
-        - k (int) : step of the simulation.
-        -  all_feet_pos (list): List of optimized position such as : [[Foot 1 next_pos, None , Foot1 next_pos] ,
-                                                                [Foot 2 next_pos, None , Foot2 next_pos] ...]
-        - is_new_step (int): Boolean if a new flying phase has just started.
+            - k (int) : step of the simulation.
+            - all_feet_pos (list): List of optimized position such as : [[Foot 1 next_pos, None , Foot1 next_pos] ,
+                                                                    [Foot 2 next_pos, None , Foot2 next_pos] ...]
+            - is_new_step (int): Boolean if a new flying phase has just started.
+            - o_feet : (Array 3x4), Position of the feet in world frame
+            - gait : (Array x4), Current gait matrix.
+            - q : (Array 18x1), State of the robot in world frame.
         '''
         # On iteration 0, PyBullet env has not been started
         if k == 1:

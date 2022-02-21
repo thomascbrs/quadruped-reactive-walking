@@ -471,7 +471,7 @@ class Controller:
             if self.SIMULATION and self.k >= 1:
                 self.pybEnvironment3D.update(self.k, self.surfacePlanner.all_feet_pos, self.update_mip,
                                              self.footTrajectoryGenerator.getFootPosition(), cgait[0, :],
-                                             self.q_filt_3d)
+                                             self.q_filter)
 
         self.pyb_debug(device, fsteps, cgait, xref)
 
