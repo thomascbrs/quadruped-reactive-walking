@@ -44,6 +44,7 @@ class SurfacePlanner:
         self.plot = False
 
         self.use_heuristique = params.use_heuristic
+        self._COM = True
         self.step_duration = params.T_gait/2
         self.k_feedback = params.k_feedback
         self.shoulders = np.reshape(params.footsteps_under_shoulders, (3, 4), order="F")
@@ -62,15 +63,11 @@ class SurfacePlanner:
         self.afftool.loadObstacleModel(os.environ["SOLO3D_ENV_DIR"] + params.environment_URDF, "environment", self.vf)
         self.ps.selectPathValidation("RbprmPathValidation", 0.05)
 
-        self.all_surfaces = getAllSurfacesDict_inner(getAllSurfacesDict(self.afftool), margin=0.01)
+        self.all_surfaces = getAllSurfacesDict_inner(getAllSurfacesDict(self.afftool), margin=0.005)
 
         self.potential_surfaces = []
 
         self.pb = Problem(limb_names=limbs, other_names=others, constraint_paths=paths, suffix_com= suffix_com)
-
-        # from IPython import embed
-        # embed()
-
 
     def compute_gait(self, gait_in):
         """
@@ -236,16 +233,22 @@ class SurfacePlanner:
             vertices, inequalities, _ = self.retrieve_surfaces(surfaces)
             return vertices, inequalities, None, None, False
 
-        self.pb.generate_problem(R, surfaces, gait, initial_contacts, c0=None, com=False)
+        self.pb.generate_problem(R, surfaces, gait, initial_contacts, c0=configs[0][:3], com=self._COM)
 
         shoulder_positions = self.compute_shoulder_positions(configs)
+        coms = self.compute_com_positions(configs)
+
         if self.use_heuristique:
             effector_positions = self.compute_effector_positions(configs, h_v_ref)
             costs = {"effector_positions_xy": [1.0, effector_positions], "effector_positions_3D": [0.1, shoulder_positions]}
         else:
             step_length = self.compute_step_length(h_v_ref[:2])
             costs = {"step_length": [1.0, step_length], "effector_positions_3D": [0.1, shoulder_positions]}
-        result = solve_MIP(self.pb, costs=costs, com=False)
+
+        if self._COM:
+            costs["coms_xy"] = [1.0, coms]
+            costs["coms_z"] = [0.1, coms]
+        result = solve_MIP(self.pb, costs=costs, com=self._COM)
 
         if result.success:
             if self.plot:
